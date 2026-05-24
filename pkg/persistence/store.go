@@ -5107,7 +5107,7 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 			cheater_mmr,
 			cheater_rd,
 			case
-				when winner_user_id = $1 then (snapshot_json->'ratingPreview'->(::text)opponent_user_id->>'lose')::int
+				when winner_user_id = $1 then nullif(snapshot_json->'ratingPreview'->(opponent_user_id::text)->>'lose', '')::int
 				else 0
 			end as original_delta
 		from candidate_matches
