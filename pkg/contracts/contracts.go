@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -655,8 +656,13 @@ type ModerationCaseSummary struct {
 	TargetUserID         string         `json:"targetUserId"`
 	TargetDisplayName    string         `json:"targetDisplayName"`
 	Status               string         `json:"status"`
+	Queue                string         `json:"queue,omitempty"`
+	Source               string         `json:"source,omitempty"`
 	Priority             string         `json:"priority"`
 	Score                float64        `json:"score"`
+	RiskScore            float64        `json:"riskScore,omitempty"`
+	RiskBreakdown        map[string]any `json:"riskBreakdown,omitempty"`
+	Confidence           float64        `json:"confidence,omitempty"`
 	ReporterScore        float64        `json:"reporterScore,omitempty"`
 	RecentReportPressure float64        `json:"recentReportPressure,omitempty"`
 	GameplayEvidence     float64        `json:"gameplayEvidence,omitempty"`
@@ -665,9 +671,15 @@ type ModerationCaseSummary struct {
 	Categories           map[string]int `json:"categories"`
 	Summary              string         `json:"summary,omitempty"`
 	AssignedTo           string         `json:"assignedTo,omitempty"`
+	ClaimedAt            time.Time      `json:"claimedAt,omitempty"`
+	ClaimExpiresAt       time.Time      `json:"claimExpiresAt,omitempty"`
 	LatestActivityAt     time.Time      `json:"latestActivityAt"`
 	CreatedAt            time.Time      `json:"createdAt"`
 	NotificationSentAt   time.Time      `json:"notificationSentAt,omitempty"`
+	ResolvedAt           time.Time      `json:"resolvedAt,omitempty"`
+	ResolvedBy           string         `json:"resolvedBy,omitempty"`
+	ResolutionCode       string         `json:"resolutionCode,omitempty"`
+	ResolutionNote       string         `json:"resolutionNote,omitempty"`
 }
 
 type ModerationReportSummary struct {
@@ -703,12 +715,69 @@ type ModerationActionSummary struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
+type ModerationEvidenceSummary struct {
+	ID              int64           `json:"id"`
+	CaseID          int64           `json:"caseId"`
+	EvidenceType    string          `json:"evidenceType"`
+	MatchID         string          `json:"matchId,omitempty"`
+	RoundID         string          `json:"roundId,omitempty"`
+	SubjectUserID   string          `json:"subjectUserId,omitempty"`
+	DetectorVersion string          `json:"detectorVersion,omitempty"`
+	RuleID          string          `json:"ruleId,omitempty"`
+	Score           float64         `json:"score"`
+	Weight          float64         `json:"weight"`
+	Payload         json.RawMessage `json:"payload,omitempty"`
+	OccurredAt      time.Time       `json:"occurredAt,omitempty"`
+	CreatedAt       time.Time       `json:"createdAt"`
+}
+
+type ModerationCaseLogEntry struct {
+	ID          int64           `json:"id"`
+	CaseID      int64           `json:"caseId"`
+	ActorUserID string          `json:"actorUserId,omitempty"`
+	EventType   string          `json:"eventType"`
+	ReasonCode  string          `json:"reasonCode,omitempty"`
+	Body        string          `json:"body,omitempty"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt   time.Time       `json:"createdAt"`
+}
+
 type ModerationCaseDetail struct {
-	Case         ModerationCaseSummary     `json:"case"`
-	TargetPlayer *AdminPlayerSummary       `json:"targetPlayer,omitempty"`
-	Reports      []ModerationReportSummary `json:"reports"`
-	Events       []ModerationCaseEvent     `json:"events"`
-	Actions      []ModerationActionSummary `json:"actions"`
+	Case         ModerationCaseSummary       `json:"case"`
+	TargetPlayer *AdminPlayerSummary         `json:"targetPlayer,omitempty"`
+	Reports      []ModerationReportSummary   `json:"reports"`
+	Events       []ModerationCaseEvent       `json:"events"`
+	Actions      []ModerationActionSummary   `json:"actions"`
+	Evidence     []ModerationEvidenceSummary `json:"evidence,omitempty"`
+	Timeline     []ModerationCaseLogEntry    `json:"timeline,omitempty"`
+}
+
+type EnforcementActionSummary struct {
+	ID           int64           `json:"id"`
+	TargetUserID string          `json:"targetUserId"`
+	TargetName   string          `json:"targetName,omitempty"`
+	ActorUserID  string          `json:"actorUserId,omitempty"`
+	ActorName    string          `json:"actorName,omitempty"`
+	SourceCaseID int64           `json:"sourceCaseId,omitempty"`
+	ActionType   string          `json:"actionType"`
+	ReasonCode   string          `json:"reasonCode,omitempty"`
+	ReasonNote   string          `json:"reasonNote,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	StartsAt     time.Time       `json:"startsAt"`
+	EndsAt       time.Time       `json:"endsAt,omitempty"`
+	RevokedAt    time.Time       `json:"revokedAt,omitempty"`
+	CreatedAt    time.Time       `json:"createdAt"`
+}
+
+type UserRoleGrant struct {
+	UserID      string    `json:"userId"`
+	DisplayName string    `json:"displayName,omitempty"`
+	Email       string    `json:"email,omitempty"`
+	Role        string    `json:"role"`
+	GrantedBy   string    `json:"grantedBy,omitempty"`
+	GrantedAt   time.Time `json:"grantedAt"`
+	RevokedAt   time.Time `json:"revokedAt,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
 }
 
 type ModerationReportCreated struct {

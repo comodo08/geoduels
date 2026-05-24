@@ -135,11 +135,25 @@ func (a *api) adminPlayers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) adminModerationCases(w http.ResponseWriter, r *http.Request) {
-	if _, err := a.moderatorIdentity(r); err != nil {
+	identity, err := a.moderatorIdentity(r)
+	if err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	cases, err := a.store.ListModerationCases(strings.TrimSpace(r.URL.Query().Get("status")), 50)
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	view := strings.TrimSpace(r.URL.Query().Get("view"))
+	if view != "" {
+		status = view
+	}
+	switch status {
+	case "active":
+		status = "active:" + identity.Sub
+	case "archive":
+		status = "archived"
+	case "mine":
+		status = "mine:" + identity.Sub
+	}
+	cases, err := a.store.ListModerationCases(status, 50)
 	if err != nil {
 		http.Error(w, "moderation cases unavailable", http.StatusInternalServerError)
 		return
@@ -207,6 +221,52 @@ func (a *api) adminModerationCase(w http.ResponseWriter, r *http.Request) {
 	if !identity.IsAdmin {
 		sanitizeModerationCaseDetailForModerator(&detail)
 	}
+	_ = json.NewEncoder(w).Encode(detail)
+}
+
+func (a *api) adminModerationCaseClaim(w http.ResponseWriter, r *http.Request) {
+	identity, err := a.moderatorIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	caseID, err := strconv.ParseInt(strings.TrimSpace(mux.Vars(r)["id"]), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid case id", http.StatusBadRequest)
+		return
+	}
+	detail, err := a.store.ClaimModerationCase(caseID, identity.Sub)
+	if err != nil {
+		http.Error(w, "failed to claim moderation case", http.StatusInternalServerError)
+		return
+	}
+	if !identity.IsAdmin {
+		sanitizeModerationCaseDetailForModerator(&detail)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(detail)
+}
+
+func (a *api) adminModerationCaseRelease(w http.ResponseWriter, r *http.Request) {
+	identity, err := a.moderatorIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	caseID, err := strconv.ParseInt(strings.TrimSpace(mux.Vars(r)["id"]), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid case id", http.StatusBadRequest)
+		return
+	}
+	detail, err := a.store.ReleaseModerationCase(caseID, identity.Sub)
+	if err != nil {
+		http.Error(w, "failed to release moderation case", http.StatusInternalServerError)
+		return
+	}
+	if !identity.IsAdmin {
+		sanitizeModerationCaseDetailForModerator(&detail)
+	}
+	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(detail)
 }
 
@@ -376,6 +436,76 @@ func (a *api) adminDemoteModerator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) adminListRoles(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	roles, err := a.store.ListUserRoles()
+	if err != nil {
+		http.Error(w, "roles unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"roles": roles})
+}
+
+func (a *api) adminGrantRole(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		UserID string `json:"userId"`
+		Role   string `json:"role"`
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if err := a.store.GrantUserRole(req.UserID, req.Role, admin.Sub, req.Reason); err != nil {
+		http.Error(w, "failed to grant role", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) adminRevokeRole(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if err := a.store.RevokeUserRole(strings.TrimSpace(mux.Vars(r)["id"]), strings.TrimSpace(mux.Vars(r)["role"]), admin.Sub, req.Reason); err != nil {
+		http.Error(w, "failed to revoke role", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) adminEnforcementActions(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	actions, err := a.store.ListEnforcementActions(100)
+	if err != nil {
+		http.Error(w, "enforcement actions unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"actions": actions})
 }
 
 func (a *api) adminListSignupIPBans(w http.ResponseWriter, r *http.Request) {

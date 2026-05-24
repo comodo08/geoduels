@@ -219,6 +219,30 @@ func (s *recoverTestStore) AddModerationCaseAction(params persistence.Moderation
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) ClaimModerationCase(caseID int64, actorUserID string) (persistence.ModerationCaseDetail, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ReleaseModerationCase(caseID int64, actorUserID string) (persistence.ModerationCaseDetail, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ListEnforcementActions(limit int) ([]persistence.EnforcementActionSummary, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ListUserRoles() ([]persistence.UserRoleGrant, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GrantUserRole(userID, role, grantedBy, reason string) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) RevokeUserRole(userID, role, revokedBy, reason string) error {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) IssueEloRefundsForCheater(userID string, lookback time.Duration) (persistence.EloRefundSummary, error) {
 	panic("unexpected call")
 }

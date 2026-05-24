@@ -131,12 +131,42 @@ export async function requestAdminModerationCases(
   accessToken: string,
   status = "",
 ) {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  const qs = status ? `?view=${encodeURIComponent(status)}` : "";
   const resp = await fetch(`${config.apiURL}/v1/admin/moderation/cases${qs}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load moderation cases"));
+  }
+  return resp.json();
+}
+
+export async function requestAdminClaimModerationCase(
+  config: RuntimeConfig,
+  accessToken: string,
+  caseId: number,
+) {
+  const resp = await fetch(
+    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/claim`,
+    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to claim moderation case"));
+  }
+  return resp.json();
+}
+
+export async function requestAdminReleaseModerationCase(
+  config: RuntimeConfig,
+  accessToken: string,
+  caseId: number,
+) {
+  const resp = await fetch(
+    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/release`,
+    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to release moderation case"));
   }
   return resp.json();
 }
@@ -199,6 +229,73 @@ export async function requestAdminModerationCaseAction(
     throw new Error(await readError(resp, "Failed to update moderation case"));
   }
   return resp.json();
+}
+
+export async function requestAdminEnforcementActions(
+  config: RuntimeConfig,
+  accessToken: string,
+) {
+  const resp = await fetch(`${config.apiURL}/v1/admin/enforcement/actions`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to load enforcement actions"));
+  }
+  return resp.json();
+}
+
+export async function requestAdminRoles(
+  config: RuntimeConfig,
+  accessToken: string,
+) {
+  const resp = await fetch(`${config.apiURL}/v1/admin/roles`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to load roles"));
+  }
+  return resp.json();
+}
+
+export async function requestAdminGrantRole(
+  config: RuntimeConfig,
+  accessToken: string,
+  payload: { userId: string; role: string; reason?: string },
+) {
+  const resp = await fetch(`${config.apiURL}/v1/admin/roles`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to grant role"));
+  }
+}
+
+export async function requestAdminRevokeRole(
+  config: RuntimeConfig,
+  accessToken: string,
+  userId: string,
+  role: string,
+  reason = "",
+) {
+  const resp = await fetch(
+    `${config.apiURL}/v1/admin/roles/${encodeURIComponent(userId)}/${encodeURIComponent(role)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to revoke role"));
+  }
 }
 
 export async function requestAdminDebugTestReports(
