@@ -8,6 +8,7 @@ export function createRuntimeConfigFixture(overrides: Partial<RuntimeConfig> = {
     googleClientId: '',
     googleAllowedOrigins: [],
     discordClientId: '',
+    turnstileSiteKey: '',
     googleEmbedKey: 'NO_KEY_DEFINED',
     appVersion: 'dev',
     roundDurationMs: 45_000,

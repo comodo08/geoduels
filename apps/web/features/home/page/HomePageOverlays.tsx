@@ -1,5 +1,6 @@
 import EndMatchOverlay from "../../../components/ui/EndMatchOverlay";
 import NicknameOnboardingModal from "../../../components/home/NicknameOnboardingModal";
+import GuestVerificationOverlay from "./GuestVerificationOverlay";
 import type {
   HomeActions,
   HomeAuthView,
@@ -17,6 +18,9 @@ type HomePageOverlaysProps = {
     | "reportPlayer"
     | "startSingleplayer"
     | "dismissNotification"
+    | "submitGuestVerificationToken"
+    | "markGuestVerificationExpired"
+    | "cancelGuestVerification"
   >;
 };
 
@@ -35,6 +39,12 @@ export default function HomePageOverlays({
         nicknameSaving={auth.nicknameSaving}
         onChangeNickname={actions.setNicknameInput}
         onSubmit={() => void actions.submitOnboardingNickname()}
+      />
+      <GuestVerificationOverlay
+        verification={overlays.guestVerification}
+        onToken={actions.submitGuestVerificationToken}
+        onExpired={actions.markGuestVerificationExpired}
+        onCancel={actions.cancelGuestVerification}
       />
       {activeNotification?.type === "mmr_refund" ? (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">

@@ -123,6 +123,13 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
       overlays: {
         onboardingOpen: true,
         notifications: [],
+        guestVerification: {
+          open: false,
+          siteKey: "",
+          status: "checking",
+          error: "",
+          resetKey: 0,
+        },
         endMatch: {
           open: true,
           mode: "duel",
@@ -219,6 +226,9 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
       selectBadge: vi.fn(async () => {}),
       setNicknameInput: vi.fn(),
       dismissNotification: vi.fn(async () => {}),
+      submitGuestVerificationToken: vi.fn(),
+      markGuestVerificationExpired: vi.fn(),
+      cancelGuestVerification: vi.fn(),
     },
   };
 }

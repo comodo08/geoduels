@@ -99,6 +99,21 @@ func getenvInt(k string, fallback int) int {
 	return n
 }
 
+func getenvBool(k string, fallback bool) bool {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return fallback
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
 func getenvSameSite(k string, fallback http.SameSite) http.SameSite {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(k))) {
 	case "strict":

@@ -60,6 +60,10 @@ function normalizeLobbySnapshot(next: LobbySnapshot): LobbySnapshot {
   return next;
 }
 
+export function jitteredLobbyDelay(baseMs = 5000): number {
+  return Math.max(1000, Math.round(baseMs * (0.8 + Math.random() * 0.4)));
+}
+
 export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   private readonly config: RuntimeConfig;
   private readonly sessionController: SessionController;
@@ -478,6 +482,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   private startPresenceLoop() {
     if (this.presenceInterval) return;
     const tick = () => {
+      this.presenceInterval = window.setTimeout(tick, jitteredLobbyDelay());
       const session = this.streamSession || this.sessionController.getSessionSnapshot();
       const lobbyId = this.state.lobbyId;
       if (!session?.accessToken || !lobbyId || !this.isCurrentUserMember(this.state.snapshot)) return;
@@ -486,17 +491,17 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       });
     };
     tick();
-    this.presenceInterval = window.setInterval(tick, 5000);
   }
 
   private stopPresenceLoop() {
-    if (this.presenceInterval) window.clearInterval(this.presenceInterval);
+    if (this.presenceInterval) window.clearTimeout(this.presenceInterval);
     this.presenceInterval = null;
   }
 
   private startPollLoop() {
     if (this.pollInterval) return;
     const poll = () => {
+      this.pollInterval = window.setTimeout(poll, jitteredLobbyDelay());
       const code = this.state.inviteCode || this.state.snapshot?.inviteCode || "";
       if (!code) return;
       void fetchLobby(this.config, code)
@@ -506,11 +511,10 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         .catch(() => {});
     };
     poll();
-    this.pollInterval = window.setInterval(poll, 5000);
   }
 
   private stopPollLoop() {
-    if (this.pollInterval) window.clearInterval(this.pollInterval);
+    if (this.pollInterval) window.clearTimeout(this.pollInterval);
     this.pollInterval = null;
   }
 

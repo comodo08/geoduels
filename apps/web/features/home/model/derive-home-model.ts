@@ -606,6 +606,13 @@ export function deriveHomeModel({
     overlays: {
       onboardingOpen: auth.onboardingRequired && !!auth.userId,
       notifications: [],
+      guestVerification: {
+        open: false,
+        siteKey: "",
+        status: "checking",
+        error: "",
+        resetKey: 0,
+      },
       endMatch:
         uiPhase === "match_end" && game.showMatchEndPage
           ? {

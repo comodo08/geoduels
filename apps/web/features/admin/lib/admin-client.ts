@@ -36,6 +36,23 @@ export async function requestAdminPlayers(
   return resp.json();
 }
 
+export async function requestAdminPlayerDetail(
+  config: RuntimeConfig,
+  accessToken: string,
+  userId: string,
+) {
+  const resp = await fetch(
+    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to load player detail"));
+  }
+  return resp.json();
+}
+
 export async function requestAdminBanPlayer(
   config: RuntimeConfig,
   accessToken: string,

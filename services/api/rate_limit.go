@@ -11,18 +11,33 @@ import (
 )
 
 const guestSignupRateLimitKeyPrefix = "api:ratelimit:guest_signup:ip:"
+const guestSignupDailyRateLimitKeyPrefix = "api:ratelimit:guest_signup:daily:ip:"
 
 var guestSignupRateLimitScript = redis.NewScript(`
-local count = redis.call("INCR", KEYS[1])
-if count == 1 then
-  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+local function bump(key, ttl_ms, limit)
+  if limit <= 0 then
+    return {1, 0}
+  end
+  local count = redis.call("INCR", key)
+  if count == 1 then
+    redis.call("PEXPIRE", key, ttl_ms)
+  end
+  local ttl = redis.call("PTTL", key)
+  if count <= limit then
+    return {1, 0}
+  end
+  return {0, ttl}
 end
-local ttl = redis.call("PTTL", KEYS[1])
-return {count, ttl}
+
+local short = bump(KEYS[1], tonumber(ARGV[1]), tonumber(ARGV[2]))
+if short[1] == 0 then
+  return short
+end
+return bump(KEYS[2], tonumber(ARGV[3]), tonumber(ARGV[4]))
 `)
 
 func (a *api) checkGuestSignupRateLimit(r *http.Request) (bool, time.Duration, error) {
-	if a.guestSignupIPLimit <= 0 {
+	if a.guestSignupIPLimit <= 0 && a.guestSignupDailyLimit <= 0 {
 		return true, 0, nil
 	}
 	if a.redis == nil {
@@ -36,18 +51,31 @@ func (a *api) checkGuestSignupRateLimit(r *http.Request) (bool, time.Duration, e
 	if ip == "" {
 		ip = "unknown"
 	}
+	dailyWindow := a.guestSignupDailyWindow
+	if dailyWindow <= 0 {
+		dailyWindow = 24 * time.Hour
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
 	defer cancel()
 
 	key := guestSignupRateLimitKeyPrefix + ip
-	result, err := guestSignupRateLimitScript.Run(ctx, a.redis, []string{key}, window.Milliseconds()).Slice()
+	dailyKey := guestSignupDailyRateLimitKeyPrefix + ip
+	result, err := guestSignupRateLimitScript.Run(
+		ctx,
+		a.redis,
+		[]string{key, dailyKey},
+		window.Milliseconds(),
+		a.guestSignupIPLimit,
+		dailyWindow.Milliseconds(),
+		a.guestSignupDailyLimit,
+	).Slice()
 	if err != nil {
 		return false, 0, err
 	}
 	if len(result) != 2 {
 		return false, 0, errors.New("unexpected guest signup rate limit response")
 	}
-	count, err := redisInt64(result[0])
+	allowed, err := redisInt64(result[0])
 	if err != nil {
 		return false, 0, err
 	}
@@ -55,12 +83,12 @@ func (a *api) checkGuestSignupRateLimit(r *http.Request) (bool, time.Duration, e
 	if err != nil {
 		return false, 0, err
 	}
-	if count <= int64(a.guestSignupIPLimit) {
+	if allowed == 1 {
 		return true, 0, nil
 	}
 	retryAfter := time.Duration(ttlMillis) * time.Millisecond
 	if retryAfter <= 0 {
-		retryAfter = window
+		retryAfter = dailyWindow
 	}
 	return false, retryAfter, nil
 }

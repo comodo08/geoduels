@@ -20,6 +20,13 @@ func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(payload)
 		return
 	}
+	var req struct {
+		TurnstileToken string `json:"turnstileToken"`
+	}
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
 	if banned, err := a.store.IsSignupIPBanned(a.clientIP(r)); err != nil {
 		http.Error(w, "signup unavailable (101)", http.StatusInternalServerError)
 		return
@@ -32,6 +39,14 @@ func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if !ok {
 		writeRateLimited(w, retryAfter)
+		return
+	}
+	if err := a.verifyGuestTurnstile(r.Context(), req.TurnstileToken, a.clientIP(r)); err != nil {
+		if errors.Is(err, errTurnstileRejected) {
+			http.Error(w, "verification failed", http.StatusForbidden)
+			return
+		}
+		http.Error(w, "verification unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	identity, err := a.store.CreateGuestIdentity()

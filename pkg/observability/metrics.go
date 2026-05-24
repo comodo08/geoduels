@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -109,10 +110,30 @@ func (m *APIMetrics) Middleware(next http.Handler) http.Handler {
 		start := time.Now()
 		rw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		path := r.URL.Path
+		path := requestMetricPath(next, r)
 		m.Requests.WithLabelValues(path, r.Method, statusCode(rw.status)).Inc()
 		m.Latency.WithLabelValues(path, r.Method).Observe(time.Since(start).Seconds())
 	})
+}
+
+func requestMetricPath(next http.Handler, r *http.Request) string {
+	if route := mux.CurrentRoute(r); route != nil {
+		if template, err := route.GetPathTemplate(); err == nil && template != "" {
+			return template
+		}
+	}
+	if router, ok := next.(*mux.Router); ok {
+		var match mux.RouteMatch
+		if router.Match(r, &match) && match.Route != nil {
+			if template, err := match.Route.GetPathTemplate(); err == nil && template != "" {
+				return template
+			}
+		}
+	}
+	if r.URL != nil && r.URL.Path != "" {
+		return r.URL.Path
+	}
+	return "unmatched"
 }
 
 type statusRecorder struct {

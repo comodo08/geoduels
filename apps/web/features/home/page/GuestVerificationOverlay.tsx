@@ -1,0 +1,175 @@
+import { useEffect, useRef, useState } from "react";
+import type { HomeOverlaysView } from "../model/types";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          theme?: "dark" | "light" | "auto";
+          action?: string;
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+        },
+      ) => string;
+      remove?: (widgetId: string) => void;
+      reset?: (widgetId: string) => void;
+    };
+  }
+}
+
+type GuestVerificationOverlayProps = {
+  verification: HomeOverlaysView["guestVerification"];
+  onToken: (token: string) => void;
+  onExpired: (message?: string) => void;
+  onCancel: () => void;
+};
+
+let turnstileScriptPromise: Promise<void> | null = null;
+
+function loadTurnstileScript() {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+  if (window.turnstile) {
+    return Promise.resolve();
+  }
+  if (!turnstileScriptPromise) {
+    turnstileScriptPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>(
+        'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+      );
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("load failed")), {
+          once: true,
+        });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      script.addEventListener("load", () => resolve(), { once: true });
+      script.addEventListener("error", () => reject(new Error("load failed")), {
+        once: true,
+      });
+      document.head.appendChild(script);
+    });
+  }
+  return turnstileScriptPromise;
+}
+
+export default function GuestVerificationOverlay({
+  verification,
+  onToken,
+  onExpired,
+  onCancel,
+}: GuestVerificationOverlayProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+  const callbacksRef = useRef({ onToken, onExpired });
+  const [scriptReady, setScriptReady] = useState(false);
+
+  useEffect(() => {
+    callbacksRef.current = { onToken, onExpired };
+  }, [onExpired, onToken]);
+
+  useEffect(() => {
+    if (!verification.open || !verification.siteKey) return;
+    let cancelled = false;
+    setScriptReady(false);
+    loadTurnstileScript()
+      .then(() => {
+        if (!cancelled) setScriptReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          callbacksRef.current.onExpired("Verification could not load. Try again.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [verification.open, verification.siteKey, verification.resetKey]);
+
+  useEffect(() => {
+    if (
+      !verification.open ||
+      !verification.siteKey ||
+      !scriptReady ||
+      !containerRef.current ||
+      !window.turnstile
+    ) {
+      return;
+    }
+    if (widgetIdRef.current && window.turnstile.remove) {
+      window.turnstile.remove(widgetIdRef.current);
+      widgetIdRef.current = null;
+    }
+    containerRef.current.innerHTML = "";
+    widgetIdRef.current = window.turnstile.render(containerRef.current, {
+      sitekey: verification.siteKey,
+      theme: "dark",
+      action: "guest_signup",
+      callback: (token) => callbacksRef.current.onToken(token),
+      "expired-callback": () =>
+        callbacksRef.current.onExpired("Verification expired. Try again."),
+      "error-callback": () =>
+        callbacksRef.current.onExpired("Verification failed. Try again."),
+    });
+    return () => {
+      if (widgetIdRef.current && window.turnstile?.remove) {
+        window.turnstile.remove(widgetIdRef.current);
+      }
+      widgetIdRef.current = null;
+    };
+  }, [
+    scriptReady,
+    verification.open,
+    verification.resetKey,
+    verification.siteKey,
+  ]);
+
+  if (!verification.open) {
+    return null;
+  }
+
+  const title =
+    verification.status === "creating"
+      ? "Starting guest session..."
+      : "Checking your connection...";
+  const canCancel = verification.status !== "creating";
+
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-white/15 bg-[#08111b]/95 p-6 text-center text-white shadow-2xl">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#2ad18f]" />
+        <h2 className="mt-4 text-lg font-black">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-[#b9c9d8]">
+          Guest play needs a quick one-time check.
+        </p>
+        <div className="mt-5 min-h-[70px] w-full">
+          <div ref={containerRef} className="flex justify-center" />
+        </div>
+        {verification.error ? (
+          <p className="mt-3 text-sm font-bold text-[#ffb4b4]">
+            {verification.error}
+          </p>
+        ) : null}
+        {canCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-5 text-xs font-black uppercase tracking-[0.14em] text-white/60 transition hover:text-white"
+          >
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}

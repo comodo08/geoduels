@@ -166,6 +166,29 @@ type CheatingBanSummary struct {
 	ArchivedCaseIDs []int64          `json:"archivedCaseIds,omitempty"`
 }
 
+type AdminPlayerStats struct {
+	TotalMatches     int `json:"totalMatches"`
+	RankedMatches    int `json:"rankedMatches"`
+	DuelMatches      int `json:"duelMatches"`
+	SingleplayerRuns int `json:"singleplayerRuns"`
+	Wins             int `json:"wins"`
+	Losses           int `json:"losses"`
+}
+
+type AdminPlayerEloPoint struct {
+	Date   time.Time `json:"date"`
+	MMR    int       `json:"mmr"`
+	Delta  int       `json:"delta"`
+	Played int       `json:"played"`
+}
+
+type AdminPlayerDetail struct {
+	Player     AdminPlayerSummary    `json:"player"`
+	Stats      AdminPlayerStats      `json:"stats"`
+	EloHistory []AdminPlayerEloPoint `json:"eloHistory"`
+	Matches    []MatchHistorySummary `json:"matches"`
+}
+
 type UserNotification struct {
 	ID        int64           `json:"id"`
 	Type      string          `json:"type"`
@@ -244,6 +267,7 @@ type Store interface {
 	SetUserAdmin(userID string, isAdmin bool) error
 	SetUserModerator(userID string, isModerator bool) error
 	SearchPlayers(query string, limit int) ([]AdminPlayerSummary, error)
+	GetAdminPlayerDetail(userID string) (AdminPlayerDetail, error)
 	SetPlayerBan(userID, reason string, banned bool) error
 	BanPlayerForCheating(userID, reason, actorUserID string) (CheatingBanSummary, error)
 	ClearReporterMute(userID string) error
@@ -260,6 +284,7 @@ type Store interface {
 	RevokeAuthSession(sessionID string) error
 	RevokeAuthSessionsForUser(userID string) error
 	DeleteAccount(userID string) error
+	DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error)
 	UpsertUser(userID, email, displayName string) error
 	GetProfile(userID string) (Profile, error)
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
@@ -1436,6 +1461,131 @@ func (s *pgStore) getAdminPlayerSummary(ctx context.Context, userID string) (Adm
 	return items[0], nil
 }
 
+func (s *pgStore) GetAdminPlayerDetail(userID string) (AdminPlayerDetail, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return AdminPlayerDetail{}, errors.New("userID required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	player, err := s.getAdminPlayerSummary(ctx, userID)
+	if err != nil {
+		return AdminPlayerDetail{}, err
+	}
+	stats, err := s.adminPlayerStats(ctx, userID)
+	if err != nil {
+		return AdminPlayerDetail{}, err
+	}
+	eloHistory, err := s.adminPlayerEloHistory(ctx, userID, 7)
+	if err != nil {
+		return AdminPlayerDetail{}, err
+	}
+	matches, err := s.ListPlayerMatchHistory(userID, 25)
+	if err != nil {
+		return AdminPlayerDetail{}, err
+	}
+	return AdminPlayerDetail{
+		Player:     player,
+		Stats:      stats,
+		EloHistory: eloHistory,
+		Matches:    matches,
+	}, nil
+}
+
+func (s *pgStore) adminPlayerStats(ctx context.Context, userID string) (AdminPlayerStats, error) {
+	var stats AdminPlayerStats
+	err := s.pool.QueryRow(ctx, `
+		select
+			count(*)::int,
+			count(*) filter (where h.ranked)::int,
+			count(*) filter (where h.mode = $2)::int,
+			count(*) filter (where h.mode = 'singleplayer')::int,
+			count(*) filter (where h.winner_user_id = $1)::int,
+			count(*) filter (where h.mode = $2 and nullif(h.winner_user_id, '') is not null and h.winner_user_id <> $1)::int
+		from match_history h
+		join match_players p on p.match_id = h.match_id
+		where p.user_id = $1
+	`, userID, modeDuel).Scan(
+		&stats.TotalMatches,
+		&stats.RankedMatches,
+		&stats.DuelMatches,
+		&stats.SingleplayerRuns,
+		&stats.Wins,
+		&stats.Losses,
+	)
+	return stats, err
+}
+
+func (s *pgStore) adminPlayerEloHistory(ctx context.Context, userID string, days int) ([]AdminPlayerEloPoint, error) {
+	if days <= 0 {
+		days = 7
+	}
+	since := time.Now().AddDate(0, 0, -days)
+	rows, err := s.pool.Query(ctx, `
+		with ranked_matches as (
+			select
+				h.ended_at,
+				coalesce(
+					p.rating_after,
+					p.rating_before + case
+						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
+						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
+						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
+					end,
+					p.mmr + case
+						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
+						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
+						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
+					end,
+					p.rating_before,
+					p.mmr
+				)::int as rating_after,
+				coalesce(
+					p.final_ranked_delta,
+					case
+						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
+						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
+						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
+					end,
+					0
+				)::int as delta
+			from match_history h
+			join match_players p on p.match_id = h.match_id
+			where p.user_id = $1
+			  and h.mode = $2
+			  and h.ranked
+			  and h.ended_at >= $3
+		),
+		latest_per_day as (
+			select distinct on (date_trunc('day', ended_at))
+				date_trunc('day', ended_at) as day,
+				rating_after,
+				sum(delta) over (partition by date_trunc('day', ended_at))::int as delta,
+				count(*) over (partition by date_trunc('day', ended_at))::int as played,
+				ended_at
+			from ranked_matches
+			order by date_trunc('day', ended_at), ended_at desc
+		)
+		select day, rating_after, delta, played
+		from latest_per_day
+		order by day asc
+	`, userID, modeDuel, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AdminPlayerEloPoint{}
+	for rows.Next() {
+		var point AdminPlayerEloPoint
+		if err := rows.Scan(&point.Date, &point.MMR, &point.Delta, &point.Played); err != nil {
+			return nil, err
+		}
+		out = append(out, point)
+	}
+	return out, rows.Err()
+}
+
 func (s *pgStore) populateAdminPlayerIdentities(ctx context.Context, players []AdminPlayerSummary) error {
 	if len(players) == 0 {
 		return nil
@@ -2176,6 +2326,70 @@ func (s *pgStore) DeleteAccount(userID string) error {
 	return tx.Commit(ctx)
 }
 
+func (s *pgStore) DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error) {
+	if ttl <= 0 || limit <= 0 {
+		return 0, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
+		with batch as materialized (
+			select id
+			from users
+			where account_type = 'guest'
+			  and deleted_at is null
+			  and created_at < now() - ($1::double precision * interval '1 second')
+			order by created_at asc
+			limit $2
+		),
+		del_ranked as (
+			delete from ranked_stats
+			using batch
+			where ranked_stats.user_id = batch.id
+		),
+		del_ranks as (
+			delete from ranks
+			using batch
+			where ranks.user_id = batch.id
+		),
+		del_stats as (
+			delete from user_stats
+			using batch
+			where user_stats.user_id = batch.id
+		)
+		delete from users
+		using batch
+		where users.id = batch.id
+		returning users.id
+	`, ttl.Seconds(), limit)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		deleted++
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
 func (s *pgStore) Close() {
 	if s.pool != nil {
 		s.pool.Close()
@@ -2896,6 +3110,28 @@ func (s *pgStore) RecordMatchResult(snap contracts.MatchSnapshot) error {
 				updated_at = now()
 			where user_id = $1 and mode = $3 and season_id = $4
 		`, p2.UserID, winner, modeDuel, seasonID); err != nil {
+			return err
+		}
+	}
+	if ratedMatch {
+		if _, err := tx.Exec(ctx, `
+			update match_players
+			set
+				rating_before = $2,
+				rating_after = $3,
+				final_ranked_delta = $3 - $2
+			where match_id = $1 and user_id = $4 and $5 = false
+		`, snap.MatchID, p1Rating.MMR, p1Update.MMR, p1.UserID, p1Guest); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			update match_players
+			set
+				rating_before = $2,
+				rating_after = $3,
+				final_ranked_delta = $3 - $2
+			where match_id = $1 and user_id = $4 and $5 = false
+		`, snap.MatchID, p2Rating.MMR, p2Update.MMR, p2.UserID, p2Guest); err != nil {
 			return err
 		}
 	}
@@ -4871,7 +5107,7 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 			cheater_mmr,
 			cheater_rd,
 			case
-				when winner_user_id = $1 then (snapshot_json->'ratingPreview'->opponent_user_id->>'lose')::int
+				when winner_user_id = $1 then (snapshot_json->'ratingPreview'->(::text)opponent_user_id->>'lose')::int
 				else 0
 			end as original_delta
 		from candidate_matches

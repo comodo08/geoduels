@@ -11,6 +11,7 @@ export type WindowRuntimeConfig = {
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: string;
   NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: string;
   NEXT_PUBLIC_DISCORD_CLIENT_ID: string;
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: string;
   NEXT_PUBLIC_GOOGLE_EMBED_KEY: string;
   NEXT_PUBLIC_APP_VERSION: string;
 };
@@ -22,6 +23,7 @@ export type RuntimeConfig = {
   googleClientId: string;
   googleAllowedOrigins: string[];
   discordClientId: string;
+  turnstileSiteKey: string;
   googleEmbedKey: string;
   appVersion: string;
   roundDurationMs: number;
@@ -60,6 +62,7 @@ export function createRuntimeConfig(source?: Partial<WindowRuntimeConfig>): Runt
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
     NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: process.env.NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS || '',
     NEXT_PUBLIC_DISCORD_CLIENT_ID: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '',
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
     NEXT_PUBLIC_GOOGLE_EMBED_KEY: process.env.NEXT_PUBLIC_GOOGLE_EMBED_KEY || 'NO_KEY_DEFINED',
     NEXT_PUBLIC_APP_VERSION:
       process.env.NEXT_PUBLIC_APP_VERSION || (process.env.NEXT_PUBLIC_GIT_SHA || 'dev').slice(0, 12)
@@ -75,6 +78,7 @@ export function createRuntimeConfig(source?: Partial<WindowRuntimeConfig>): Runt
     googleClientId: publicRuntimeConfig.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
     googleAllowedOrigins: splitOrigins(publicRuntimeConfig.NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS),
     discordClientId: publicRuntimeConfig.NEXT_PUBLIC_DISCORD_CLIENT_ID,
+    turnstileSiteKey: publicRuntimeConfig.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
     googleEmbedKey: publicRuntimeConfig.NEXT_PUBLIC_GOOGLE_EMBED_KEY,
     appVersion: publicRuntimeConfig.NEXT_PUBLIC_APP_VERSION,
     roundDurationMs: 45_000,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5"
 
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/maintenance"
@@ -132,6 +133,28 @@ func (a *api) adminPlayers(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"players": players})
+}
+
+func (a *api) adminPlayerDetail(w http.ResponseWriter, r *http.Request) {
+	identity, err := a.moderatorIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	detail, err := a.store.GetAdminPlayerDetail(strings.TrimSpace(mux.Vars(r)["id"]))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "player not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "player detail unavailable", http.StatusInternalServerError)
+		return
+	}
+	if !identity.IsAdmin {
+		sanitizeAdminPlayerSummaryForModerator(&detail.Player)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(detail)
 }
 
 func (a *api) adminModerationCases(w http.ResponseWriter, r *http.Request) {
@@ -330,10 +353,17 @@ func sanitizeModerationCaseDetailForModerator(detail *persistence.ModerationCase
 
 func sanitizeAdminPlayerSummariesForModerator(players []persistence.AdminPlayerSummary) {
 	for i := range players {
-		players[i].Email = ""
-		players[i].LastIPAddress = ""
-		players[i].Identities = nil
+		sanitizeAdminPlayerSummaryForModerator(&players[i])
 	}
+}
+
+func sanitizeAdminPlayerSummaryForModerator(player *persistence.AdminPlayerSummary) {
+	if player == nil {
+		return
+	}
+	player.Email = ""
+	player.LastIPAddress = ""
+	player.Identities = nil
 }
 
 func (a *api) adminDebugTestReports(w http.ResponseWriter, r *http.Request) {

@@ -173,6 +173,9 @@ const initialState: SessionState = {
   discordClientId: "",
 };
 
+const guestSessionExpiredMessage =
+  "Guest session expired. Please start again or sign in.";
+
 export class SessionController extends ObservableStore<SessionState> {
   private readonly config: RuntimeConfig;
   private state: SessionState = initialState;
@@ -338,8 +341,15 @@ export class SessionController extends ObservableStore<SessionState> {
     }
     this.bootstrapPromise = (async () => {
       try {
-        return await this.networkHandlers.bootstrapSession();
+        const session = await this.networkHandlers.bootstrapSession();
+        if (!session && this.state.isGuest) {
+          this.clearAuthSession(guestSessionExpiredMessage);
+        }
+        return session;
       } catch {
+        if (this.state.isGuest) {
+          this.clearAuthSession(guestSessionExpiredMessage);
+        }
         return null;
       } finally {
         this.bootstrapPromise = null;
@@ -354,8 +364,15 @@ export class SessionController extends ObservableStore<SessionState> {
     }
     this.refreshPromise = (async () => {
       try {
-        return await this.networkHandlers.refreshSession();
+        const session = await this.networkHandlers.refreshSession();
+        if (!session && this.state.isGuest) {
+          this.clearAuthSession(guestSessionExpiredMessage);
+        }
+        return session;
       } catch {
+        if (this.state.isGuest) {
+          this.clearAuthSession(guestSessionExpiredMessage);
+        }
         return null;
       } finally {
         this.refreshPromise = null;
@@ -493,7 +510,9 @@ export class SessionController extends ObservableStore<SessionState> {
 
   getPlayableSession = async (): Promise<AuthSessionSnapshot | null> => {
     if (hasPlayableSession(this.session)) {
-      const fresh = await this.ensureFreshSession();
+      const fresh = await this.ensureFreshSession(60_000, {
+        forceRefresh: this.state.isGuest,
+      });
       if (fresh && hasPlayableSession(fresh)) {
         return fresh;
       }

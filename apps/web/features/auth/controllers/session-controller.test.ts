@@ -77,6 +77,62 @@ describe('SessionController', () => {
     controller.destroy();
   });
 
+  it('clears an expired guest session when refresh cannot restore it', async () => {
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.applySessionSnapshot(
+      {
+        userId: 'guest-1',
+        accessToken: tokenWithExp(Date.now() - 60_000),
+        onboardingRequired: false,
+        nicknameInput: 'Guest'
+      },
+      {
+        displayName: 'Guest',
+        isGuest: true
+      }
+    );
+    controller.setNetworkHandlers({
+      refreshSession: vi.fn(async () => null)
+    });
+    controller.start();
+
+    const session = await controller.ensureFreshSession();
+
+    expect(session).toBeNull();
+    expect(controller.getState().userId).toBe('');
+    expect(controller.getState().authError).toBe('Guest session expired. Please start again or sign in.');
+
+    controller.destroy();
+  });
+
+  it('keeps registered session state generic when refresh cannot restore it', async () => {
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.applySessionSnapshot(
+      {
+        userId: 'user-1',
+        accessToken: tokenWithExp(Date.now() - 60_000),
+        onboardingRequired: false,
+        nicknameInput: 'Player'
+      },
+      {
+        displayName: 'Player',
+        isGuest: false
+      }
+    );
+    controller.setNetworkHandlers({
+      refreshSession: vi.fn(async () => null)
+    });
+    controller.start();
+
+    const session = await controller.ensureFreshSession();
+
+    expect(session).toBeNull();
+    expect(controller.getState().userId).toBe('user-1');
+    expect(controller.getState().authError).toBe('');
+
+    controller.destroy();
+  });
+
   it('updates leaderboard state separately from profile state', () => {
     const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
 

@@ -141,6 +141,13 @@ export type HomeGameView = {
 export type HomeOverlaysView = {
   onboardingOpen: boolean;
   notifications: UserNotification[];
+  guestVerification: {
+    open: boolean;
+    siteKey: string;
+    status: "checking" | "creating" | "error";
+    error: string;
+    resetKey: number;
+  };
   endMatch:
     | {
         open: true;
@@ -237,6 +244,9 @@ export type HomeActions = {
   selectBadge: (badgeId: string) => Promise<void>;
   setNicknameInput: (value: string) => void;
   dismissNotification: (notificationId: number) => Promise<void>;
+  submitGuestVerificationToken: (token: string) => void;
+  markGuestVerificationExpired: (message?: string) => void;
+  cancelGuestVerification: () => void;
 };
 
 export type HomeModel = {

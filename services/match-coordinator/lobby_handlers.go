@@ -669,7 +669,10 @@ func (q *matchCoordinator) touchLobbyPresence(lobbyID, userID, connID string) bo
 		return true
 	}
 	prevMS, err := strconv.ParseInt(previous, 10, 64)
-	return err != nil || now-prevMS > lobbyPresenceOnlineTTL.Milliseconds()
+	if err != nil {
+		return true
+	}
+	return lobbyPresenceStatus(now, prevMS) != contracts.LobbyPresenceOnline
 }
 
 func (q *matchCoordinator) clearLobbyPresence(lobbyID, userID, connID string) {
@@ -697,34 +700,64 @@ func (q *matchCoordinator) applyLobbyPresence(snap *contracts.LobbySnapshot) {
 	if snap == nil || q.redis == nil {
 		return
 	}
-	values, err := q.redis.HGetAll(context.Background(), lobbyPresenceKey(snap.ID)).Result()
+	fields := make([]string, 0, len(snap.Members))
+	for _, member := range snap.Members {
+		userID := strings.TrimSpace(member.UserID)
+		if userID != "" {
+			fields = append(fields, lobbyPresenceField(userID, ""))
+		}
+	}
+	if len(fields) == 0 {
+		return
+	}
+	values, err := q.redis.HMGet(context.Background(), lobbyPresenceKey(snap.ID), fields...).Result()
 	if err != nil {
 		return
 	}
 	now := time.Now().UnixMilli()
 	seen := map[string]int64{}
-	for field, raw := range values {
-		if ms, err := strconv.ParseInt(raw, 10, 64); err == nil && now-ms <= lobbyPresenceTTL.Milliseconds() {
-			userID := lobbyPresenceUserID(field)
-			if userID != "" && ms > seen[userID] {
-				seen[userID] = ms
-			}
+	for i, raw := range values {
+		rawString, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		ms, err := strconv.ParseInt(rawString, 10, 64)
+		if err != nil {
+			continue
+		}
+		userID := lobbyPresenceUserID(fields[i])
+		if userID != "" {
+			seen[userID] = ms
 		}
 	}
 	for i := range snap.Members {
 		lastSeen := seen[snap.Members[i].UserID]
-		age := now - lastSeen
-		switch {
-		case lastSeen > 0 && age <= lobbyPresenceOnlineTTL.Milliseconds():
+		switch lobbyPresenceStatus(now, lastSeen) {
+		case contracts.LobbyPresenceOnline:
 			snap.Members[i].Connected = true
 			snap.Members[i].PresenceStatus = contracts.LobbyPresenceOnline
-		case lastSeen > 0 && age <= lobbyPresenceAwayTTL.Milliseconds():
+		case contracts.LobbyPresenceAway:
 			snap.Members[i].Connected = false
 			snap.Members[i].PresenceStatus = contracts.LobbyPresenceAway
 		default:
 			snap.Members[i].Connected = false
 			snap.Members[i].PresenceStatus = contracts.LobbyPresenceOffline
 		}
+	}
+}
+
+func lobbyPresenceStatus(now, lastSeen int64) contracts.LobbyPresenceStatus {
+	if lastSeen <= 0 {
+		return contracts.LobbyPresenceOffline
+	}
+	age := now - lastSeen
+	switch {
+	case age <= lobbyPresenceOnlineTTL.Milliseconds():
+		return contracts.LobbyPresenceOnline
+	case age <= lobbyPresenceAwayTTL.Milliseconds():
+		return contracts.LobbyPresenceAway
+	default:
+		return contracts.LobbyPresenceOffline
 	}
 }
 
@@ -817,15 +850,11 @@ func normalizeLobbyTeam(teamID string) string {
 }
 
 func lobbyPresenceField(userID, connID string) string {
-	connID = strings.TrimSpace(connID)
-	if connID == "" {
-		return userID
-	}
-	return userID + "|" + connID
+	return strings.TrimSpace(userID)
 }
 
 func lobbyPresenceKey(lobbyID string) string {
-	return "lobby:presence:" + strings.TrimSpace(lobbyID)
+	return "lobby:presence:v2:" + strings.TrimSpace(lobbyID)
 }
 
 func lobbyPresenceUserID(field string) string {

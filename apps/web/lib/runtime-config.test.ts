@@ -32,6 +32,7 @@ describe('runtime-config', () => {
       NEXT_PUBLIC_API_URL: 'https://api.example.com',
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: 'google-client',
       NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: 'https://one.test, https://two.test',
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'turnstile-site-key',
       NEXT_PUBLIC_GOOGLE_EMBED_KEY: 'embed-key',
       NEXT_PUBLIC_APP_VERSION: 'sha-123'
     });
@@ -41,6 +42,7 @@ describe('runtime-config', () => {
     expect(config.apiURL).toBe('https://api.example.com');
     expect(config.googleClientId).toBe('google-client');
     expect(config.googleAllowedOrigins).toEqual(['https://one.test', 'https://two.test']);
+    expect(config.turnstileSiteKey).toBe('turnstile-site-key');
     expect(config.googleEmbedKey).toBe('embed-key');
     expect(config.appVersion).toBe('sha-123');
   });

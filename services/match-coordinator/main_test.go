@@ -156,6 +156,10 @@ func (s *recoverTestStore) DeleteAccount(userID string) error {
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) UpsertUser(userID, email, displayName string) error {
 	panic("unexpected call")
 }
@@ -192,6 +196,10 @@ func (s *recoverTestStore) GetFinalMatchSnapshot(matchID string) ([]byte, bool, 
 }
 
 func (s *recoverTestStore) ListPlayerMatchHistory(userID string, limit int) ([]persistence.MatchHistorySummary, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetAdminPlayerDetail(userID string) (persistence.AdminPlayerDetail, error) {
 	panic("unexpected call")
 }
 
@@ -619,7 +627,7 @@ func TestApplyLobbyPresenceComputesStatuses(t *testing.T) {
 	if err := rdb.HSet(context.Background(), lobbyPresenceKey("lob-1"), map[string]any{
 		"u1":        now,
 		"u2":        now - 30_000,
-		"u3|conn-1": now - 70_000,
+		"u3|conn-1": now,
 	}).Err(); err != nil {
 		t.Fatalf("set presence: %v", err)
 	}
@@ -642,6 +650,26 @@ func TestApplyLobbyPresenceComputesStatuses(t *testing.T) {
 	}
 	if snap.Members[2].Connected || snap.Members[2].PresenceStatus != contracts.LobbyPresenceOffline {
 		t.Fatalf("u3 presence = %+v", snap.Members[2])
+	}
+}
+
+func TestTouchLobbyPresencePublishesOnlyOnVisibleStatusChange(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	q := &matchCoordinator{redis: rdb}
+	if !q.touchLobbyPresence("lob-1", "u1", "conn-1") {
+		t.Fatal("first touch should publish because the user becomes online")
+	}
+	if q.touchLobbyPresence("lob-1", "u1", "conn-2") {
+		t.Fatal("second online touch should not publish")
+	}
+	if err := rdb.HSet(context.Background(), lobbyPresenceKey("lob-1"), "u1", time.Now().Add(-30*time.Second).UnixMilli()).Err(); err != nil {
+		t.Fatalf("age presence: %v", err)
+	}
+	if !q.touchLobbyPresence("lob-1", "u1", "conn-3") {
+		t.Fatal("away to online touch should publish")
 	}
 }
 

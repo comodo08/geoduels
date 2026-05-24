@@ -17,10 +17,19 @@ export async function requestSession(config: RuntimeConfig) {
   return resp.json();
 }
 
-export async function requestGuestSession(config: RuntimeConfig) {
+export async function requestGuestSession(
+  config: RuntimeConfig,
+  turnstileToken?: string,
+) {
   const resp = await fetch(`${config.apiURL}/v1/auth/guest`, {
     method: "POST",
     credentials: "include",
+    headers: turnstileToken
+      ? { "Content-Type": "application/json" }
+      : undefined,
+    body: turnstileToken
+      ? JSON.stringify({ turnstileToken })
+      : undefined,
   });
   if (!resp.ok) {
     throw new Error(await readError(resp, "Guest login failed"));

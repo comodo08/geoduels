@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +150,98 @@ func TestGuestLoginIgnoresNicknamePayload(t *testing.T) {
 	}
 }
 
+func TestGuestLoginRequiresTurnstileWhenEnabled(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	store := &guestAuthTestStore{}
+	a := &api{
+		store:                  store,
+		redis:                  rdb,
+		appAuthSecret:          []byte("01234567890123456789012345678901"),
+		accessTokenTTL:         15 * time.Minute,
+		refreshTokenTTL:        30 * 24 * time.Hour,
+		refreshCookieName:      "geoduels_refresh",
+		refreshCookieSameSite:  http.SameSiteLaxMode,
+		guestSignupIPLimit:     10,
+		guestSignupIPWindow:    time.Minute,
+		guestTurnstileRequired: true,
+		turnstileSecret:        "secret",
+		httpClient:             http.DefaultClient,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
+	rec := httptest.NewRecorder()
+	a.guestLogin(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("guest login status = %d", rec.Code)
+	}
+	if store.createdGuests != 0 {
+		t.Fatalf("guest should not be created, created guests = %d", store.createdGuests)
+	}
+}
+
+func TestGuestLoginValidatesTurnstileToken(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	var sawRemoteIP string
+	verifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		values, err := url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatalf("parse verify body: %v", err)
+		}
+		if values.Get("secret") != "secret" {
+			t.Fatalf("secret = %q", values.Get("secret"))
+		}
+		if values.Get("response") != "token-123" {
+			t.Fatalf("response = %q", values.Get("response"))
+		}
+		sawRemoteIP = values.Get("remoteip")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success":  true,
+			"hostname": "play.example.com",
+			"action":   guestTurnstileAction,
+		})
+	}))
+	defer verifyServer.Close()
+
+	store := &guestAuthTestStore{}
+	a := &api{
+		store:                  store,
+		redis:                  rdb,
+		appAuthSecret:          []byte("01234567890123456789012345678901"),
+		accessTokenTTL:         15 * time.Minute,
+		refreshTokenTTL:        30 * 24 * time.Hour,
+		refreshCookieName:      "geoduels_refresh",
+		refreshCookieSameSite:  http.SameSiteLaxMode,
+		guestSignupIPLimit:     10,
+		guestSignupIPWindow:    time.Minute,
+		guestTurnstileRequired: true,
+		turnstileSecret:        "secret",
+		turnstileVerifyURL:     verifyServer.URL,
+		turnstileHostname:      "play.example.com",
+		httpClient:             verifyServer.Client(),
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", strings.NewReader(`{"turnstileToken":"token-123"}`))
+	req.RemoteAddr = "203.0.113.44:12345"
+	rec := httptest.NewRecorder()
+	a.guestLogin(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("guest login status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if store.createdGuests != 1 {
+		t.Fatalf("created guests = %d", store.createdGuests)
+	}
+	if sawRemoteIP != "203.0.113.44" {
+		t.Fatalf("remoteip = %q", sawRemoteIP)
+	}
+}
+
 func TestSessionUserIncludesProfileFields(t *testing.T) {
 	user := sessionUser(persistence.Identity{
 		Sub:          "user-1",
@@ -218,5 +313,50 @@ func TestGuestLoginRateLimitsNewGuestsByIP(t *testing.T) {
 	}
 	if store.createdGuests != 2 {
 		t.Fatalf("rate-limited request should not create a guest, created guests = %d", store.createdGuests)
+	}
+}
+
+func TestGuestLoginDailyRateLimitsNewGuestsByIP(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	store := &guestAuthTestStore{}
+	a := &api{
+		store:                  store,
+		redis:                  rdb,
+		appAuthSecret:          []byte("01234567890123456789012345678901"),
+		accessTokenTTL:         15 * time.Minute,
+		refreshTokenTTL:        30 * 24 * time.Hour,
+		refreshCookieName:      "geoduels_refresh",
+		refreshCookieSameSite:  http.SameSiteLaxMode,
+		guestSignupIPLimit:     100,
+		guestSignupIPWindow:    time.Minute,
+		guestSignupDailyLimit:  2,
+		guestSignupDailyWindow: 24 * time.Hour,
+	}
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
+		req.RemoteAddr = "203.0.113.20:12345"
+		rec := httptest.NewRecorder()
+		a.guestLogin(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("guest login %d status = %d", i+1, rec.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
+	req.RemoteAddr = "203.0.113.20:12345"
+	rec := httptest.NewRecorder()
+	a.guestLogin(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("third daily guest login status = %d", rec.Code)
+	}
+	if retryAfter := rec.Header().Get("Retry-After"); retryAfter == "" {
+		t.Fatal("expected Retry-After header")
+	}
+	if store.createdGuests != 2 {
+		t.Fatalf("daily rate-limited request should not create a guest, created guests = %d", store.createdGuests)
 	}
 }

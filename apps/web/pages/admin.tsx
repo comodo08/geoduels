@@ -4,19 +4,23 @@ import { useRouter } from "next/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  ArrowLeft,
   Ban,
   Bell,
   Bug,
   ChevronRight,
   ClipboardList,
+  ExternalLink,
   FileText,
   Gavel,
   History,
   KeyRound,
+  LineChart,
   Map,
   PlayCircle,
   Search,
   Shield,
+  ShieldAlert,
   UserCog,
   Users,
   Wrench,
@@ -42,6 +46,7 @@ import {
   requestAdminModerationCaseAction,
   requestAdminModerationCases,
   requestAdminModerationSettings,
+  requestAdminPlayerDetail,
   requestAdminPlayerMatches,
   requestAdminPlayers,
   requestAdminPutChangelog,
@@ -64,15 +69,29 @@ type Player = {
   userId: string;
   email?: string;
   displayName: string;
+  avatarUrl?: string;
   mmr: number;
   gamesPlayed: number;
   wins: number;
   rankedGamesPlayed: number;
+  isGuest?: boolean;
   isAdmin: boolean;
   isModerator: boolean;
   isBanned: boolean;
   banReason?: string;
+  bannedAt?: string;
   lastIpAddress?: string;
+  reportMutedUntil?: string;
+  identities?: AdminUserIdentity[];
+};
+
+type AdminUserIdentity = {
+  provider: string;
+  providerUserId: string;
+  email?: string;
+  providerName?: string;
+  lastSeenAt?: string;
+  deletedAt?: string;
 };
 
 type ModerationCase = {
@@ -129,8 +148,28 @@ type ModerationTimelineItem = {
 type MatchHistory = {
   matchId: string;
   mode: string;
+  startedAt?: string;
   endedAt: string;
   winnerUserId?: string;
+};
+
+type PlayerDetail = {
+  player: Player;
+  stats: {
+    totalMatches: number;
+    rankedMatches: number;
+    duelMatches: number;
+    singleplayerRuns: number;
+    wins: number;
+    losses: number;
+  };
+  eloHistory: Array<{
+    date: string;
+    mmr: number;
+    delta: number;
+    played: number;
+  }>;
+  matches: MatchHistory[];
 };
 
 type EnforcementAction = {
@@ -270,6 +309,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-moderation-cases"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-moderation-case"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-player-matches"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-player-detail"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-ip-signup-bans"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-changelog"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-maintenance"] }),
@@ -347,10 +387,14 @@ export default function AdminPage() {
                     refreshAdminData={refreshAdminData}
                   />
                 ) : null}
-                {section === "players" ? (
-                  <PlayersRoute
+                {section === "players" && !leaf ? (
+                  <PlayersRoute config={config} accessToken={accessToken} canManageAdmin={canManageAdmin} />
+                ) : null}
+                {section === "players" && leaf ? (
+                  <PlayerDetailRoute
                     config={config}
                     accessToken={accessToken}
+                    userId={leaf}
                     canManageAdmin={canManageAdmin}
                     refreshAdminData={refreshAdminData}
                   />
@@ -649,32 +693,15 @@ function PlayersRoute(props: {
   config: ReturnType<typeof getRuntimeConfig>;
   accessToken: string;
   canManageAdmin: boolean;
-  refreshAdminData: () => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
-  const [banReason, setBanReason] = useState("");
   const playersQuery = useQuery({
     queryKey: ["admin-players", query, props.accessToken],
     enabled: !!props.accessToken,
     queryFn: () => requestAdminPlayers(props.config, props.accessToken, query),
     staleTime: 5_000,
   });
-  const matchesQuery = useQuery({
-    queryKey: ["admin-player-matches", selectedUser, props.accessToken],
-    enabled: !!props.accessToken && !!selectedUser,
-    queryFn: () => requestAdminPlayerMatches(props.config, props.accessToken, selectedUser),
-  });
-  const banMutation = useMutation({
-    mutationFn: (userId: string) => requestAdminBanPlayer(props.config, props.accessToken, userId, banReason),
-    onSuccess: props.refreshAdminData,
-  });
-  const unbanMutation = useMutation({
-    mutationFn: (userId: string) => requestAdminUnbanPlayer(props.config, props.accessToken, userId),
-    onSuccess: props.refreshAdminData,
-  });
   const players = (playersQuery.data?.players || []) as Player[];
-  const matches = (matchesQuery.data?.matches || []) as MatchHistory[];
 
   return (
     <div className="space-y-4">
@@ -685,62 +712,282 @@ function PlayersRoute(props: {
       <Panel className="p-4">
         <div className="flex flex-col gap-3 sm:flex-row">
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user ID, name, email, OAuth ID" className="w-full" />
-          <Input value={banReason} onChange={(event) => setBanReason(event.target.value)} placeholder="Enforcement reason" className="w-full sm:max-w-sm" />
         </div>
       </Panel>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Panel className="overflow-x-auto">
-          <table className="w-full min-w-[840px] text-left text-sm">
-            <thead className="border-b border-slate-800 text-xs uppercase tracking-[0.12em] text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Player</th>
-                <th className="px-4 py-3">MMR</th>
-                <th className="px-4 py-3">Record</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+      <Panel className="overflow-x-auto">
+        <table className="w-full min-w-[840px] text-left text-sm">
+          <thead className="border-b border-slate-800 text-xs uppercase tracking-[0.12em] text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Player</th>
+              <th className="px-4 py-3">MMR</th>
+              <th className="px-4 py-3">Record</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Open</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-900">
+            {players.map((player) => (
+              <tr key={player.userId}>
+                <td className="px-4 py-3">
+                  <Link className="text-left font-bold text-white hover:text-emerald-300" href={`/admin/players/${encodeURIComponent(player.userId)}`}>
+                    {player.displayName || player.userId}
+                  </Link>
+                  <p className="mt-1 text-xs text-slate-500">{props.canManageAdmin ? player.email || player.userId : player.userId}</p>
+                </td>
+                <td className="px-4 py-3">{player.mmr}</td>
+                <td className="px-4 py-3 text-slate-400">{player.wins}W / {player.gamesPlayed}G</td>
+                <td className="px-4 py-3">{player.isBanned ? "Banned" : "Active"}</td>
+                <td className="px-4 py-3 text-right">
+                  <Link className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 font-semibold text-slate-100 hover:border-emerald-400 hover:text-emerald-200" href={`/admin/players/${encodeURIComponent(player.userId)}`}>
+                    Details
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-900">
-              {players.map((player) => (
-                <tr key={player.userId}>
-                  <td className="px-4 py-3">
-                    <button type="button" className="text-left font-bold text-white hover:text-emerald-300" onClick={() => setSelectedUser(player.userId)}>
-                      {player.displayName || player.userId}
-                    </button>
-                    <p className="mt-1 text-xs text-slate-500">{props.canManageAdmin ? player.email || player.userId : player.userId}</p>
-                  </td>
-                  <td className="px-4 py-3">{player.mmr}</td>
-                  <td className="px-4 py-3 text-slate-400">{player.wins}W / {player.gamesPlayed}G</td>
-                  <td className="px-4 py-3">{player.isBanned ? "Banned" : "Active"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <Button onClick={() => setSelectedUser(player.userId)}>History</Button>
-                      {player.isBanned ? (
-                        <Button onClick={() => void unbanMutation.mutateAsync(player.userId)}>Unban</Button>
-                      ) : (
-                        <Button className="border-red-500/50 bg-red-500/15 text-red-100" onClick={() => void banMutation.mutateAsync(player.userId)}>
-                          Ban
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))}
+          </tbody>
+        </table>
+        {!players.length ? <p className="p-4 text-sm text-slate-400">No players found.</p> : null}
+      </Panel>
+    </div>
+  );
+}
+
+function PlayerDetailRoute(props: {
+  config: ReturnType<typeof getRuntimeConfig>;
+  accessToken: string;
+  userId: string;
+  canManageAdmin: boolean;
+  refreshAdminData: () => Promise<void>;
+}) {
+  const [banReason, setBanReason] = useState("");
+  const detailQuery = useQuery({
+    queryKey: ["admin-player-detail", props.userId, props.accessToken],
+    enabled: !!props.accessToken && !!props.userId,
+    queryFn: () => requestAdminPlayerDetail(props.config, props.accessToken, props.userId),
+  });
+  const legacyMatchesQuery = useQuery({
+    queryKey: ["admin-player-matches", props.userId, props.accessToken],
+    enabled: !!props.accessToken && !!props.userId && !detailQuery.data?.matches,
+    queryFn: () => requestAdminPlayerMatches(props.config, props.accessToken, props.userId),
+  });
+  const banMutation = useMutation({
+    mutationFn: () => requestAdminBanPlayer(props.config, props.accessToken, props.userId, banReason),
+    onSuccess: props.refreshAdminData,
+  });
+  const unbanMutation = useMutation({
+    mutationFn: () => requestAdminUnbanPlayer(props.config, props.accessToken, props.userId),
+    onSuccess: props.refreshAdminData,
+  });
+  const detail = detailQuery.data as PlayerDetail | undefined;
+  const player = detail?.player;
+  const matches = detail?.matches || ((legacyMatchesQuery.data?.matches || []) as MatchHistory[]);
+  const winRate = player?.gamesPlayed ? Math.round((player.wins / player.gamesPlayed) * 100) : 0;
+
+  if (detailQuery.isLoading) {
+    return <Panel className="p-5 text-slate-300">Loading player details...</Panel>;
+  }
+  if (!player) {
+    return <Panel className="p-5 text-slate-300">Player detail unavailable.</Panel>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <Link href="/admin/players" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-white">
+            <ArrowLeft className="h-4 w-4" />
+            Player Search
+          </Link>
+          <div className="mt-4 flex items-center gap-4">
+            <div className="grid h-16 w-16 place-items-center rounded-md border border-slate-700 bg-slate-900 text-2xl font-black text-emerald-200">
+              {(player.displayName || player.userId || "?").slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">Player Detail</p>
+              <h2 className="mt-1 break-all text-3xl font-black text-white">{player.displayName || player.userId}</h2>
+              <p className="mt-1 break-all text-sm text-slate-400">{props.canManageAdmin ? player.email || player.userId : player.userId}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Input value={banReason} onChange={(event) => setBanReason(event.target.value)} placeholder="Enforcement reason" className="w-full sm:w-80" />
+          {player.isBanned ? (
+            <Button onClick={() => void unbanMutation.mutateAsync()}>Unban</Button>
+          ) : (
+            <Button className="border-red-500/50 bg-red-500/15 text-red-100" onClick={() => void banMutation.mutateAsync()}>
+              <Ban className="h-4 w-4" />
+              Ban
+            </Button>
+          )}
+        </div>
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric label="MMR" value={`${player.mmr}`} />
+        <Metric label="Win Rate" value={`${winRate}%`} />
+        <Metric label="Total Games" value={`${player.gamesPlayed}`} />
+        <Metric label="Ranked Games" value={`${player.rankedGamesPlayed}`} />
+        <Metric label="Status" value={player.isBanned ? "Banned" : "Active"} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+        <Panel className="p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Past 7 Days</p>
+              <h3 className="mt-1 font-black text-white">ELO History</h3>
+            </div>
+            <LineChart className="h-5 w-5 text-emerald-300" />
+          </div>
+          <EloHistoryChart points={detail.eloHistory} fallbackMmr={player.mmr} />
         </Panel>
         <Panel className="p-4">
-          <p className="font-bold text-white">Recent Matches</p>
-          <div className="mt-3 space-y-2">
-            {matches.map((match) => (
-              <Link key={match.matchId} href={`/match/${encodeURIComponent(match.matchId)}`} className="block rounded-md border border-slate-800 bg-slate-900/60 p-3 text-sm hover:bg-slate-900">
-                <p className="font-semibold text-white">{match.matchId}</p>
-                <p className="mt-1 text-slate-500">{match.mode}</p>
-              </Link>
-            ))}
-            {!selectedUser ? <p className="text-sm text-slate-400">Select a player to view match history.</p> : null}
+          <div className="flex items-center gap-2">
+            <ShieldAlert className={`h-5 w-5 ${player.isBanned ? "text-red-300" : "text-emerald-300"}`} />
+            <h3 className="font-black text-white">Account Signals</h3>
+          </div>
+          <div className="mt-4 space-y-3 text-sm">
+            <DetailRow label="User ID" value={player.userId} />
+            <DetailRow label="Account" value={player.isGuest ? "Guest" : "Registered"} />
+            <DetailRow label="Role" value={player.isAdmin ? "Admin" : player.isModerator ? "Moderator" : "Player"} />
+            <DetailRow label="Ban Reason" value={player.banReason || "None"} />
+            <DetailRow label="Report Mute" value={player.reportMutedUntil ? formatDate(player.reportMutedUntil) : "None"} />
+            {props.canManageAdmin ? <DetailRow label="Last IP" value={player.lastIpAddress || "Unknown"} /> : null}
           </div>
         </Panel>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <Panel className="p-4">
+          <h3 className="font-black text-white">Stats</h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Metric label="Tracked Matches" value={`${detail.stats.totalMatches}`} />
+            <Metric label="Ranked Matches" value={`${detail.stats.rankedMatches}`} />
+            <Metric label="Duels" value={`${detail.stats.duelMatches}`} />
+            <Metric label="Singleplayer" value={`${detail.stats.singleplayerRuns}`} />
+            <Metric label="Wins" value={`${detail.stats.wins}`} />
+            <Metric label="Losses" value={`${detail.stats.losses}`} />
+          </div>
+        </Panel>
+        <Panel className="p-4">
+          <h3 className="font-black text-white">Recent Matches</h3>
+          <div className="mt-3 space-y-2">
+            {matches.map((match) => (
+              <Link key={match.matchId} href={`/match/${encodeURIComponent(match.matchId)}`} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-900/60 p-3 text-sm hover:bg-slate-900">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-white">{match.matchId}</p>
+                  <p className="mt-1 text-slate-500">{match.mode} · {formatDate(match.endedAt)}</p>
+                </div>
+                <ExternalLink className="h-4 w-4 shrink-0 text-slate-500" />
+              </Link>
+            ))}
+            {!matches.length ? <p className="text-sm text-slate-400">No persisted match history yet.</p> : null}
+          </div>
+        </Panel>
+      </div>
+
+      {props.canManageAdmin ? (
+        <Panel className="p-4">
+          <h3 className="font-black text-white">Linked Identity History</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b border-slate-800 text-xs uppercase tracking-[0.12em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Provider</th>
+                  <th className="px-3 py-2">Provider User</th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Last Seen</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-900">
+                {(player.identities || []).map((identity) => (
+                  <tr key={`${identity.provider}:${identity.providerUserId}:${identity.lastSeenAt || ""}`}>
+                    <td className="px-3 py-2 text-white">{identity.provider}</td>
+                    <td className="px-3 py-2 text-slate-400">{identity.providerUserId}</td>
+                    <td className="px-3 py-2 text-slate-400">{identity.email || "None"}</td>
+                    <td className="px-3 py-2 text-slate-400">{identity.providerName || "None"}</td>
+                    <td className="px-3 py-2 text-slate-400">{formatDate(identity.lastSeenAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!player.identities?.length ? <p className="mt-3 text-sm text-slate-400">No linked identity history.</p> : null}
+          </div>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow(props: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-slate-900 pb-2 last:border-0 last:pb-0">
+      <span className="shrink-0 text-slate-500">{props.label}</span>
+      <span className="break-all text-right font-semibold text-slate-200">{props.value}</span>
+    </div>
+  );
+}
+
+function formatDate(value?: string) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
+}
+
+function EloHistoryChart(props: { points: PlayerDetail["eloHistory"]; fallbackMmr: number }) {
+  const points = props.points || [];
+  if (!points.length) {
+    return (
+      <div className="grid h-64 place-items-center rounded-md border border-slate-800 bg-slate-900/40 text-sm text-slate-400">
+        No ranked ELO changes in the last 7 days.
+      </div>
+    );
+  }
+  const width = 720;
+  const height = 260;
+  const padX = 42;
+  const padY = 28;
+  const values = points.map((point) => point.mmr);
+  const min = Math.min(...values, props.fallbackMmr);
+  const max = Math.max(...values, props.fallbackMmr);
+  const spread = Math.max(1, max - min);
+  const xStep = points.length === 1 ? 0 : (width - padX * 2) / (points.length - 1);
+  const coords = points.map((point, index) => {
+    const x = points.length === 1 ? width / 2 : padX + index * xStep;
+    const y = height - padY - ((point.mmr - min) / spread) * (height - padY * 2);
+    return { x, y, point };
+  });
+  const polyline = coords.map((coord) => `${coord.x},${coord.y}`).join(" ");
+
+  return (
+    <div className="overflow-hidden rounded-md border border-slate-800 bg-slate-900/40">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Seven day ELO history" className="h-64 w-full">
+        <line x1={padX} y1={padY} x2={padX} y2={height - padY} stroke="#334155" strokeWidth="1" />
+        <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} stroke="#334155" strokeWidth="1" />
+        <text x={padX} y={18} fill="#94a3b8" fontSize="12">{max}</text>
+        <text x={padX} y={height - 8} fill="#94a3b8" fontSize="12">{min}</text>
+        <polyline fill="none" stroke="#34d399" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" points={polyline} />
+        {coords.map(({ x, y, point }) => (
+          <g key={point.date}>
+            <circle cx={x} cy={y} r="5" fill="#34d399" />
+            <text x={x} y={height - 10} textAnchor="middle" fill="#94a3b8" fontSize="11">
+              {new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="grid divide-y divide-slate-800 border-t border-slate-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        {points.slice(-3).map((point) => (
+          <div key={point.date} className="p-3 text-sm">
+            <p className="font-bold text-white">{point.mmr} MMR</p>
+            <p className={point.delta >= 0 ? "text-emerald-300" : "text-red-300"}>
+              {point.delta >= 0 ? "+" : ""}{point.delta} across {point.played} ranked
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );

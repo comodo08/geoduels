@@ -57,6 +57,8 @@ type AuthResponse = {
   user?: AuthResponseUser;
 };
 
+type GuestVerificationView = HomeModel["view"]["overlays"]["guestVerification"];
+
 function currentReturnTo() {
   if (typeof window === "undefined") return "/";
   const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -109,6 +111,18 @@ export function useHomeModel(options?: {
   const { sessionController, matchController, matchRouteController, gameController, lobbyController, chatController, sfxController } =
     runtimeRef.current;
   const [homeResumeMatchId, setHomeResumeMatchId] = useState("");
+  const [guestVerification, setGuestVerification] =
+    useState<GuestVerificationView>({
+      open: false,
+      siteKey: "",
+      status: "checking",
+      error: "",
+      resetKey: 0,
+    });
+  const guestVerificationResolverRef = useRef<{
+    resolve: (token: string) => void;
+    reject: (error: Error) => void;
+  } | null>(null);
   const routeMatchId = options?.routeMatchId ?? null;
   const routeContext = options?.routeContext ?? "home";
   const lobbyInviteCode = options?.lobbyInviteCode?.trim().toUpperCase() ?? "";
@@ -161,7 +175,8 @@ export function useHomeModel(options?: {
     mutationFn: () => requestSession(config),
   });
   const guestSessionMutation = useMutation({
-    mutationFn: () => requestGuestSession(config),
+    mutationFn: ({ turnstileToken }: { turnstileToken?: string }) =>
+      requestGuestSession(config, turnstileToken),
   });
   const completeOnboardingMutation = useMutation({
     mutationFn: ({
@@ -308,6 +323,61 @@ export function useHomeModel(options?: {
     return nextSession;
   }
 
+  function requestGuestVerificationToken(): Promise<string> {
+    if (!config.turnstileSiteKey) {
+      return Promise.resolve("");
+    }
+    guestVerificationResolverRef.current?.reject(
+      new Error("Guest verification restarted."),
+    );
+    return new Promise((resolve, reject) => {
+      guestVerificationResolverRef.current = { resolve, reject };
+      setGuestVerification((current) => ({
+        open: true,
+        siteKey: config.turnstileSiteKey,
+        status: "checking",
+        error: "",
+        resetKey: current.resetKey + 1,
+      }));
+    });
+  }
+
+  function submitGuestVerificationToken(token: string) {
+    const resolver = guestVerificationResolverRef.current;
+    if (!resolver) return;
+    guestVerificationResolverRef.current = null;
+    setGuestVerification((current) => ({
+      ...current,
+      status: "creating",
+      error: "",
+    }));
+    resolver.resolve(token);
+  }
+
+  function markGuestVerificationExpired(
+    message = "Verification expired. Try again.",
+  ) {
+    setGuestVerification((current) => ({
+      ...current,
+      status: "error",
+      error: message,
+      resetKey: current.resetKey + 1,
+    }));
+  }
+
+  function cancelGuestVerification() {
+    guestVerificationResolverRef.current?.reject(
+      new Error("Guest verification cancelled."),
+    );
+    guestVerificationResolverRef.current = null;
+    setGuestVerification((current) => ({
+      ...current,
+      open: false,
+      status: "checking",
+      error: "",
+    }));
+  }
+
   async function ensurePlayableSession() {
     const currentSession = sessionController.getSessionSnapshot();
     if (currentSession) {
@@ -328,7 +398,8 @@ export function useHomeModel(options?: {
         sessionController.setAuthPending({ authLoading: false, authError: "" });
         return bootstrapped;
       }
-      const data = await guestSessionMutation.mutateAsync();
+      const turnstileToken = await requestGuestVerificationToken();
+      const data = await guestSessionMutation.mutateAsync({ turnstileToken });
       const name = data.suggestedNickname || "Guest";
       const nextSession: AuthSessionSnapshot = {
         userId: data.user?.id || "",
@@ -351,11 +422,27 @@ export function useHomeModel(options?: {
         authLoading: false,
         authError: "",
       });
+      setGuestVerification((current) => ({
+        ...current,
+        open: false,
+        status: "checking",
+        error: "",
+      }));
       return nextSession;
     } catch (error) {
+      const message = getErrorMessage(error, "Guest login failed");
+      if (config.turnstileSiteKey) {
+        setGuestVerification((current) => ({
+          ...current,
+          open: false,
+          status: "error",
+          error: message,
+          resetKey: current.resetKey + 1,
+        }));
+      }
       sessionController.setAuthPending({
         authLoading: false,
-        authError: getErrorMessage(error, "Guest login failed"),
+        authError: message,
       });
       return null;
     }
@@ -647,6 +734,7 @@ export function useHomeModel(options?: {
     overlays: {
       ...baseView.overlays,
       notifications,
+      guestVerification,
     },
     lobby: {
       ...baseView.lobby,
@@ -1173,6 +1261,9 @@ export function useHomeModel(options?: {
       selectBadge,
       setNicknameInput: sessionController.setNicknameInputAndClearError,
       dismissNotification,
+      submitGuestVerificationToken,
+      markGuestVerificationExpired,
+      cancelGuestVerification,
     },
   };
 }
