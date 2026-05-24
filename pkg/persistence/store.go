@@ -3116,21 +3116,21 @@ func (s *pgStore) RecordMatchResult(snap contracts.MatchSnapshot) error {
 	if ratedMatch {
 		if _, err := tx.Exec(ctx, `
 			update match_players
-			set
-				rating_before = $2,
-				rating_after = $3,
-				final_ranked_delta = $3 - $2
-			where match_id = $1 and user_id = $4 and $5 = false
+				set
+					rating_before = $2,
+					rating_after = $3,
+					final_ranked_delta = $3::integer - $2::integer
+				where match_id = $1 and user_id = $4 and $5 = false
 		`, snap.MatchID, p1Rating.MMR, p1Update.MMR, p1.UserID, p1Guest); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
 			update match_players
-			set
-				rating_before = $2,
-				rating_after = $3,
-				final_ranked_delta = $3 - $2
-			where match_id = $1 and user_id = $4 and $5 = false
+				set
+					rating_before = $2,
+					rating_after = $3,
+					final_ranked_delta = $3::integer - $2::integer
+				where match_id = $1 and user_id = $4 and $5 = false
 		`, snap.MatchID, p2Rating.MMR, p2Update.MMR, p2.UserID, p2Guest); err != nil {
 			return err
 		}
