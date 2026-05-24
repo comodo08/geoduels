@@ -1,4 +1,4 @@
-<img src="apps/web/public/icon.png" height=64 />
+<img src="apps/web/public/icon.v1.png" height=64 />
 
 # GeoDuels
 
@@ -146,6 +146,5 @@ Triggered by git tag push.
 - `infra/k3s/base` - base k8s manifests
 - `infra/k3s/overlays/k3d` - local 3-node k3d overlay for routing/scaling tests
 - production overlays and Flux cluster state live in the private ops repository
-- `infra/k3s/overlays/k3d` - local 3-node k3d overlay for routing/scaling tests
 - `services/*/Dockerfile`, `apps/web/Dockerfile`, `workers/location-ingest/Dockerfile` - production image definitions
 - `docs/architecture.md` - current runtime architecture
