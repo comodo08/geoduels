@@ -96,6 +96,49 @@ describe('LobbyScreen', () => {
     expect(playButton).toBeDisabled();
   });
 
+  it('opens centered sign-in instead of queueing when signed out players press ranked play', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({
+      userId: '',
+      userEmail: '',
+      displayName: '',
+      googleClientId: 'google-client',
+      joinQueue
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    const dialog = screen.getByRole('dialog', { name: 'Sign In' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.parentElement).toHaveClass('items-center');
+    expect(dialog.parentElement).not.toHaveClass('items-end');
+    expect(joinQueue).not.toHaveBeenCalled();
+  });
+
+  it('opens sign-in instead of queueing when guest players press ranked play', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({
+      isGuest: true,
+      googleClientId: 'google-client',
+      joinQueue
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(screen.getByRole('dialog', { name: 'Sign In' })).toBeInTheDocument();
+    expect(joinQueue).not.toHaveBeenCalled();
+  });
+
+  it('queues registered players with the selected ranked rulesets', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({ joinQueue });
+
+    fireEvent.click(screen.getByRole('button', { name: 'NMPZ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(joinQueue).toHaveBeenCalledWith(['moving', 'nmpz']);
+  });
+
   it('shows singleplayer as loading while a start is connecting', () => {
     renderLobbyScreen({ status: 'matched_connecting' });
 

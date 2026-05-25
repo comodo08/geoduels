@@ -165,11 +165,9 @@ func (q *matchCoordinator) runMatchmakingLoop(interval time.Duration, batchSize 
 		if err == nil && status.QueueBlocked() {
 			continue
 		}
-		for _, pool := range matchstore.AllQueuePools() {
-			for _, ruleset := range []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ} {
-				if _, err := q.store.RunMatchmaking(pool, ruleset, batchSize); err != nil {
-					observability.Log("warn", "matchmaking tick failed", map[string]any{"pool": string(pool), "ruleset": string(ruleset), "error": err.Error()})
-				}
+		for _, ruleset := range []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ} {
+			if _, err := q.store.RunMatchmaking(matchstore.QueuePoolRegistered, ruleset, batchSize); err != nil {
+				observability.Log("warn", "matchmaking tick failed", map[string]any{"pool": string(matchstore.QueuePoolRegistered), "ruleset": string(ruleset), "error": err.Error()})
 			}
 		}
 	}
@@ -205,6 +203,10 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	}
 	if !identity.Onboarded {
 		http.Error(w, "onboarding incomplete", http.StatusForbidden)
+		return
+	}
+	if identity.AccountType == "guest" {
+		http.Error(w, "account required", http.StatusForbidden)
 		return
 	}
 	userID := claims.Sub
@@ -270,7 +272,7 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	if profile.DisplayName == "" {
 		profile.DisplayName = userID
 	}
-	queuePool := matchstore.PoolForGuest(profile.IsGuest)
+	queuePool := matchstore.QueuePoolRegistered
 	selectedRulesets := parseQueueRulesets(r.URL.Query().Get("rulesets"))
 
 	if err := q.store.LeaveAllRulesets(queuePool, userID); err != nil {
@@ -394,9 +396,13 @@ func (q *matchCoordinator) heartbeat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "onboarding incomplete", http.StatusForbidden)
 		return
 	}
+	if identity.AccountType == "guest" {
+		http.Error(w, "account required", http.StatusForbidden)
+		return
+	}
 	q.touchPresence(claims.Sub)
 
-	status, err := q.store.Heartbeat(matchstore.PoolForGuest(identity.AccountType == "guest"), []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ}, claims.Sub)
+	status, err := q.store.Heartbeat(matchstore.QueuePoolRegistered, []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ}, claims.Sub)
 	if err != nil {
 		http.Error(w, "queue unavailable", http.StatusBadGateway)
 		return

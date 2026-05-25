@@ -26,6 +26,7 @@ type recoverTestStore struct {
 	runtimeMatches map[string]persistence.RuntimeMatch
 	profiles       map[string]persistence.Profile
 	lobbies        map[string]contracts.LobbySnapshot
+	accountTypes   map[string]string
 }
 
 func (s *recoverTestStore) UpsertIdentity(sub, email, googleName, avatarURL string) error {
@@ -65,10 +66,14 @@ func (s *recoverTestStore) CreateGuestIdentity() (persistence.Identity, error) {
 }
 
 func (s *recoverTestStore) GetIdentity(sub string) (persistence.Identity, error) {
+	accountType := "registered"
+	if s.accountTypes != nil && s.accountTypes[sub] != "" {
+		accountType = s.accountTypes[sub]
+	}
 	return persistence.Identity{
 		Sub:         sub,
 		Onboarded:   true,
-		AccountType: "registered",
+		AccountType: accountType,
 	}, nil
 }
 
@@ -528,6 +533,7 @@ func (s *staleQueuePollStore) RunMatchmaking(pool matchstore.QueuePool, ruleset 
 
 type heartbeatTestStore struct {
 	status string
+	pool   matchstore.QueuePool
 }
 
 func (s *heartbeatTestStore) Join(pool matchstore.QueuePool, ruleset contracts.GameRuleset, req contracts.QueueJoinRequest) (contracts.QueueJoinResponse, *contracts.MatchFound, error) {
@@ -535,6 +541,7 @@ func (s *heartbeatTestStore) Join(pool matchstore.QueuePool, ruleset contracts.G
 }
 
 func (s *heartbeatTestStore) Heartbeat(pool matchstore.QueuePool, rulesets []contracts.GameRuleset, userID string) (string, error) {
+	s.pool = pool
 	return s.status, nil
 }
 
@@ -848,6 +855,49 @@ func TestQueueAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	}
 }
 
+func TestQueueRejectsGuestAccount(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	q := &matchCoordinator{
+		store: &recoverTestMatchStore{},
+		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
+		persist: &recoverTestStore{
+			accountTypes: map[string]string{"guest-1": "guest"},
+		},
+		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
+		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
+		internal:   "secret",
+		metrics:    observability.NewAPIMetrics(),
+	}
+
+	token, err := auth.IssueAppAccessToken(q.appSecret, "guest-1", "sess-1", 15*time.Minute)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(q.queue))
+	t.Cleanup(srv.Close)
+
+	conn, resp, err := websocket.DefaultDialer.Dial(queueWSURL(srv.URL)+"/queue", http.Header{
+		"Authorization": []string{"Bearer " + token},
+	})
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if err == nil {
+		t.Fatal("guest queue dial succeeded, want forbidden")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("status = %d, want %d", status, http.StatusForbidden)
+	}
+}
+
 func TestStartLobbyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -1116,8 +1166,9 @@ func TestHeartbeatReturnsQueueStatus(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
+	heartbeatStore := &heartbeatTestStore{status: matchstore.QueuePresenceMissing}
 	q := &matchCoordinator{
-		store: &heartbeatTestStore{status: matchstore.QueuePresenceMissing},
+		store: heartbeatStore,
 		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
 		persist: &recoverTestStore{
 			profiles: map[string]persistence.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
@@ -1148,5 +1199,41 @@ func TestHeartbeatReturnsQueueStatus(t *testing.T) {
 	}
 	if payload["status"] != matchstore.QueuePresenceMissing {
 		t.Fatalf("status = %q", payload["status"])
+	}
+	if heartbeatStore.pool != matchstore.QueuePoolRegistered {
+		t.Fatalf("heartbeat pool = %q, want %q", heartbeatStore.pool, matchstore.QueuePoolRegistered)
+	}
+}
+
+func TestHeartbeatRejectsGuestAccount(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	q := &matchCoordinator{
+		store: &heartbeatTestStore{status: matchstore.QueuePresenceMissing},
+		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
+		persist: &recoverTestStore{
+			accountTypes: map[string]string{"guest-1": "guest"},
+		},
+		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
+		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
+		internal:   "secret",
+		metrics:    observability.NewAPIMetrics(),
+	}
+
+	token, err := auth.IssueAppAccessToken(q.appSecret, "guest-1", "sess-1", 15*time.Minute)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/queue/heartbeat", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	q.heartbeat(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
 	}
 }

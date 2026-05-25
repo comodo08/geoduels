@@ -189,17 +189,6 @@ const (
 var allQueuePools = []QueuePool{QueuePoolGuest, QueuePoolRegistered}
 var allQueueRulesets = []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ}
 
-func AllQueuePools() []QueuePool {
-	return append([]QueuePool(nil), allQueuePools...)
-}
-
-func PoolForGuest(isGuest bool) QueuePool {
-	if isGuest {
-		return QueuePoolGuest
-	}
-	return QueuePoolRegistered
-}
-
 func QueueMatchKeysForUsers(users []string) []string {
 	keys := make([]string, 0, len(users)*len(allQueuePools)*len(allQueueRulesets))
 	seen := map[string]struct{}{}

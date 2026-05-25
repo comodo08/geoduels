@@ -382,10 +382,12 @@ function LobbyModalShell({
   title,
   onClose,
   children,
+  placement = "responsive",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  placement?: "responsive" | "center";
 }) {
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -401,7 +403,11 @@ function LobbyModalShell({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="fixed inset-0 z-[2200] flex items-end justify-center bg-black/60 p-0 backdrop-blur-md sm:items-center sm:p-4"
+      className={`fixed inset-0 z-[2200] flex justify-center bg-black/60 backdrop-blur-md ${
+        placement === "center"
+          ? "items-center p-4"
+          : "items-end p-0 sm:items-center sm:p-4"
+      }`}
       onClick={onClose}
     >
       <motion.div
@@ -548,6 +554,7 @@ export default function LobbyScreen({
 
   const isQueueing = status === "queueing";
   const isSingleplayerLoading = status === "matched_connecting";
+  const canUseRankedQueue = !!userId && !isGuest;
   const toggleQueueRuleset = (ruleset: GameRuleset) => {
     setQueueRulesets((current) => {
       if (current.includes(ruleset)) {
@@ -559,14 +566,13 @@ export default function LobbyScreen({
   const queueElapsedLabel = formatQueueElapsed(
     queueStartedAt ? nowMs - queueStartedAt : 0,
   );
-  const isRankedAccount = !!userId && !isGuest;
   const showConnectionError =
     !connected && queueError.toLowerCase() === "connection error";
   const primaryButtonLabel = showConnectionError ? "Connection Error" : "Play";
   const userAvatarFallback = !userEmail
     ? "?"
     : (displayName || userEmail || "P").slice(0, 1).toUpperCase();
-  const duelModeLabel = isQueueing ? "Searching..." : isRankedAccount ? "Ranked" : "Unranked";
+  const duelModeLabel = isQueueing ? "Searching..." : "Ranked";
   const showGoogleButton = !!googleClientId;
   const showDiscordButton = !!discordClientId;
   const hasGoogleProvider = linkedProviders.includes("google");
@@ -616,6 +622,13 @@ export default function LobbyScreen({
     nicknameSaving ||
     playPaused ||
     maintenanceIsActive;
+  const onRankedPlay = () => {
+    if (!canUseRankedQueue) {
+      setOpenModal("signin");
+      return;
+    }
+    joinQueue(queueRulesets);
+  };
 
   const discordProviderButton = showDiscordButton ? (
     <button
@@ -1482,7 +1495,11 @@ export default function LobbyScreen({
   };
 
   const renderSignInModal = () => (
-    <LobbyModalShell title="Sign In" onClose={() => setOpenModal(null)}>
+    <LobbyModalShell
+      title="Sign In"
+      onClose={() => setOpenModal(null)}
+      placement="center"
+    >
       <div className="space-y-3">
         {googleProviderButton ? (
           <div
@@ -2083,12 +2100,6 @@ export default function LobbyScreen({
                         {queueError}
                       </p>
                     )}
-                    {!userId && authError ? (
-                      <p className="mb-3 text-center text-xs font-semibold text-red-300">
-                        {authError}
-                      </p>
-                    ) : null}
-
                     {!isQueueing ? (
                       <div className="mb-3 overflow-hidden rounded-[14px] border border-white/10 bg-black/25">
                         {([
@@ -2123,7 +2134,7 @@ export default function LobbyScreen({
 
                     {!isQueueing ? (
                       <button
-                        onClick={() => joinQueue(queueRulesets)}
+                        onClick={onRankedPlay}
                         disabled={duelDisabled}
                         className="w-full flex items-center justify-center rounded-[16px] bg-[#22d385] py-[14px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#2ae091] hover:shadow-[0_6px_24px_rgba(34,211,133,0.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 disabled:hover:bg-[#22d385] disabled:hover:shadow-[0_4px_16px_rgba(34,211,133,0.3)]"
                       >

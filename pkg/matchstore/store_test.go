@@ -380,42 +380,6 @@ func TestMemoryStoreHeartbeatReflectsQueueState(t *testing.T) {
 	}
 }
 
-func TestMemoryStoreKeepsGuestsAndRegisteredPlayersSeparate(t *testing.T) {
-	store := newMemory()
-
-	if _, match, err := store.Join(QueuePoolGuest, contracts.RulesetMoving, contracts.QueueJoinRequest{UserID: "guest", DisplayName: "guest", MMR: 1000, IsGuest: true}); err != nil {
-		t.Fatalf("guest join failed: %v", err)
-	} else if match != nil {
-		t.Fatalf("expected guest to queue")
-	}
-
-	if _, match, err := store.Join(QueuePoolRegistered, contracts.RulesetMoving, contracts.QueueJoinRequest{UserID: "registered", DisplayName: "registered", MMR: 1000}); err != nil {
-		t.Fatalf("registered join failed: %v", err)
-	} else if match != nil {
-		t.Fatalf("guest and registered player should not match across pools")
-	}
-}
-
-func TestRedisStoreKeepsGuestsAndRegisteredPlayersSeparate(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	store := &redisStore{rdb: rdb}
-
-	if _, match, err := store.Join(QueuePoolGuest, contracts.RulesetMoving, contracts.QueueJoinRequest{UserID: "guest", DisplayName: "guest", MMR: 1000, IsGuest: true}); err != nil {
-		t.Fatalf("guest join failed: %v", err)
-	} else if match != nil {
-		t.Fatalf("expected guest to queue")
-	}
-
-	if _, match, err := store.Join(QueuePoolRegistered, contracts.RulesetMoving, contracts.QueueJoinRequest{UserID: "registered", DisplayName: "registered", MMR: 1000}); err != nil {
-		t.Fatalf("registered join failed: %v", err)
-	} else if match != nil {
-		t.Fatalf("guest and registered player should not match across redis pools")
-	}
-}
-
 func ageRedisTicket(t *testing.T, rdb *redis.Client, pool QueuePool, userID string, ageMS int64) {
 	t.Helper()
 	ctx := context.Background()
