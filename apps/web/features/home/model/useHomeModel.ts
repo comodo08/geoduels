@@ -714,6 +714,8 @@ export function useHomeModel(options?: {
     changelogEyebrow: lobbyData.changelogEyebrow,
     changelogTitle: lobbyData.changelogTitle,
     changelogMarkdown: lobbyData.changelogMarkdown,
+    changelogSlug: lobbyData.changelogSlug,
+    changelogUpdatedAt: lobbyData.changelogUpdatedAt,
   });
   const privateLobbyMember = lobbyState.snapshot?.members.find(
     (member) => member.userId === auth.userId,

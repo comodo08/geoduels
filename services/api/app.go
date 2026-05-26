@@ -174,6 +174,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/me/notifications", a.userNotifications).Methods(http.MethodGet)
 	r.HandleFunc("/v1/me/notifications/{id}/read", a.markUserNotificationRead).Methods(http.MethodPost)
 	r.HandleFunc("/v1/content/lobby-changelog", a.publicLobbyChangelog).Methods(http.MethodGet)
+	r.HandleFunc("/v1/content/changelog", a.publicChangelogPosts).Methods(http.MethodGet)
+	r.HandleFunc("/v1/content/changelog/{slug}", a.publicChangelogPost).Methods(http.MethodGet)
 
 	r.HandleFunc("/v1/leaderboard", a.leaderboard).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}", a.match).Methods(http.MethodGet)
@@ -214,7 +216,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/admin/seasons", a.adminGetRankedSeason).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/seasons/rollover", a.adminRolloverRankedSeason).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/changelog", a.adminGetChangelog).Methods(http.MethodGet)
-	r.HandleFunc("/v1/admin/changelog", a.adminPutChangelog).Methods(http.MethodPut)
+	r.HandleFunc("/v1/admin/changelog", a.adminCreateChangelogPost).Methods(http.MethodPost)
+	r.HandleFunc("/v1/admin/changelog/{id}", a.adminUpdateChangelogPost).Methods(http.MethodPut)
 	r.HandleFunc("/v1/admin/maps/current/upload", a.adminUploadCurrentMap).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/maps/{mapKey}/upload", a.adminUploadMap).Methods(http.MethodPost)
 	r.Handle("/metrics", observability.Handler(a.metrics.Registry)).Methods(http.MethodGet)

@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { Montserrat } from 'next/font/google';
 import { useState } from 'react';
 import 'leaflet/dist/leaflet.css';
+import 'easymde/dist/easymde.min.css';
 import '../styles/globals.css';
 
 const montserrat = Montserrat({

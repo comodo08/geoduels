@@ -41,6 +41,8 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
     changelogEyebrow: 'News',
     changelogTitle: 'Latest',
     changelogMarkdown: '',
+    changelogSlug: '',
+    changelogUpdatedAt: '',
     devLogin: vi.fn(),
     onGoogleSignIn: vi.fn(),
     onBrowseLeaderboard: vi.fn(),

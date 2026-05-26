@@ -758,37 +758,145 @@ func (a *api) publicLobbyChangelog(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(content)
 }
 
+func (a *api) publicChangelogPosts(w http.ResponseWriter, r *http.Request) {
+	posts, err := a.store.ListChangelogPosts(false)
+	if err != nil {
+		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"posts": posts})
+}
+
+func (a *api) publicChangelogPost(w http.ResponseWriter, r *http.Request) {
+	slug := strings.TrimSpace(mux.Vars(r)["slug"])
+	post, ok, err := a.store.GetChangelogPostBySlug(slug, true)
+	if err != nil {
+		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(post)
+}
+
 func (a *api) adminGetChangelog(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.adminIdentity(r); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	a.publicLobbyChangelog(w, r)
+	posts, err := a.store.ListChangelogPosts(true)
+	if err != nil {
+		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"posts": posts})
 }
 
-func (a *api) adminPutChangelog(w http.ResponseWriter, r *http.Request) {
+func normalizeChangelogPostInput(req persistence.ChangelogPostInput) (persistence.ChangelogPostInput, error) {
+	req.Title = strings.TrimSpace(req.Title)
+	req.Summary = strings.TrimSpace(req.Summary)
+	req.Markdown = strings.TrimSpace(req.Markdown)
+	req.Slug = slugifyChangelogPost(req.Slug)
+	if req.Slug == "" {
+		req.Slug = slugifyChangelogPost(req.Title)
+	}
+	if req.Title == "" {
+		return persistence.ChangelogPostInput{}, errors.New("title is required")
+	}
+	if req.Slug == "" {
+		return persistence.ChangelogPostInput{}, errors.New("slug is required")
+	}
+	if len(req.Slug) > 120 {
+		return persistence.ChangelogPostInput{}, errors.New("slug is too long")
+	}
+	if len(req.Title) > 160 {
+		return persistence.ChangelogPostInput{}, errors.New("title is too long")
+	}
+	if len(req.Summary) > 400 {
+		return persistence.ChangelogPostInput{}, errors.New("summary is too long")
+	}
+	return req, nil
+}
+
+func slugifyChangelogPost(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (a *api) adminCreateChangelogPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.adminIdentity(r); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	var req struct {
-		Eyebrow  string `json:"eyebrow"`
-		Title    string `json:"title"`
-		Markdown string `json:"markdown"`
-	}
+	var req persistence.ChangelogPostInput
 	if err := decodeJSONBody(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := a.store.SetLobbyChangelog(persistence.LobbyChangelogContent{
-		Eyebrow:  req.Eyebrow,
-		Title:    req.Title,
-		Markdown: req.Markdown,
-	}); err != nil {
+	input, err := normalizeChangelogPostInput(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	post, err := a.store.CreateChangelogPost(input)
+	if err != nil {
 		http.Error(w, "failed to save changelog", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(post)
+}
+
+func (a *api) adminUpdateChangelogPost(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(mux.Vars(r)["id"]), 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+	var req persistence.ChangelogPostInput
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	input, err := normalizeChangelogPostInput(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	post, ok, err := a.store.UpdateChangelogPost(id, input)
+	if err != nil {
+		http.Error(w, "failed to save changelog", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(post)
 }
 
 func (a *api) adminUploadCurrentMap(w http.ResponseWriter, r *http.Request) {

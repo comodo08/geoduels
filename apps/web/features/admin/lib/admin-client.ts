@@ -1,5 +1,6 @@
 import { readError } from "../../../lib/http";
 import type { RuntimeConfig } from "../../../lib/runtime-config";
+import type { ChangelogPost, ChangelogPostInput } from "../../changelog/types";
 import type { MaintenanceStatus } from "../../matchmaking/lib/queue-client";
 
 export async function requestAdminBootstrap(
@@ -530,15 +531,35 @@ export async function requestAdminGetChangelog(
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load changelog"));
   }
-  return resp.json();
+  return resp.json() as Promise<{ posts: ChangelogPost[] }>;
 }
 
-export async function requestAdminPutChangelog(
+export async function requestAdminCreateChangelogPost(
   config: RuntimeConfig,
   accessToken: string,
-  content: { eyebrow: string; title: string; markdown: string },
+  content: ChangelogPostInput,
 ) {
   const resp = await fetch(`${config.apiURL}/v1/admin/changelog`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(content),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to save changelog"));
+  }
+  return resp.json() as Promise<ChangelogPost>;
+}
+
+export async function requestAdminUpdateChangelogPost(
+  config: RuntimeConfig,
+  accessToken: string,
+  id: number,
+  content: ChangelogPostInput,
+) {
+  const resp = await fetch(`${config.apiURL}/v1/admin/changelog/${encodeURIComponent(String(id))}`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -549,6 +570,7 @@ export async function requestAdminPutChangelog(
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to save changelog"));
   }
+  return resp.json() as Promise<ChangelogPost>;
 }
 
 export async function requestAdminUploadCurrentMap(

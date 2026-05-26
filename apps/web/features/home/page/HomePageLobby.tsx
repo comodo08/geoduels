@@ -100,6 +100,8 @@ export default function HomePageLobby({
       changelogEyebrow={lobby.changelogEyebrow}
       changelogTitle={lobby.changelogTitle}
       changelogMarkdown={lobby.changelogMarkdown}
+      changelogSlug={lobby.changelogSlug}
+      changelogUpdatedAt={lobby.changelogUpdatedAt}
       devLogin={actions.devLogin}
       onGoogleSignIn={actions.triggerGoogleSignIn}
       onDiscordSignIn={actions.triggerDiscordSignIn || actions.triggerGoogleSignIn}

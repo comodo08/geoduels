@@ -44,6 +44,8 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         changelogEyebrow: "News",
         changelogTitle: "Latest",
         changelogMarkdown: "",
+        changelogSlug: "",
+        changelogUpdatedAt: "",
         privateLobby: {
           status: "idle",
           snapshot: null,

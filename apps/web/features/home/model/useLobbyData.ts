@@ -138,6 +138,14 @@ export function useLobbyData({
       typeof changelogQuery.data?.markdown === "string"
         ? changelogQuery.data.markdown
         : "",
+    changelogSlug:
+      typeof changelogQuery.data?.slug === "string"
+        ? changelogQuery.data.slug
+        : "",
+    changelogUpdatedAt:
+      typeof changelogQuery.data?.updatedAt === "string"
+        ? changelogQuery.data.updatedAt
+        : "",
     loadLeaderboard: () => setLeaderboardEnabled(true),
   };
 }

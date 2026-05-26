@@ -62,6 +62,8 @@ export type HomeLobbyView = {
   changelogEyebrow: string;
   changelogTitle: string;
   changelogMarkdown: string;
+  changelogSlug: string;
+  changelogUpdatedAt: string;
   privateLobby: {
     status: LobbyRuntimeStatus;
     snapshot: LobbySnapshot | null;

@@ -45,6 +45,163 @@ body {
 }
 
 @layer components {
+  .markdown-content {
+    color: #c5d8e8;
+    font-size: 0.98rem;
+    line-height: 1.75;
+  }
+
+  .markdown-content > * + * {
+    margin-top: 1rem;
+  }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4 {
+    color: #ffffff;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .markdown-content h1 {
+    font-size: 2rem;
+  }
+
+  .markdown-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .markdown-content h3 {
+    font-size: 1.2rem;
+  }
+
+  .markdown-content a {
+    color: #77f0be;
+    text-decoration: underline;
+    text-decoration-color: rgba(119, 240, 190, 0.42);
+    text-underline-offset: 4px;
+  }
+
+  .markdown-content strong {
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    padding-left: 1.35rem;
+  }
+
+  .markdown-content ul {
+    list-style: disc;
+  }
+
+  .markdown-content ol {
+    list-style: decimal;
+  }
+
+  .markdown-content blockquote {
+    border-left: 3px solid rgba(42, 209, 143, 0.65);
+    padding-left: 1rem;
+    color: #d9e7f5;
+  }
+
+  .markdown-content code {
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.28);
+    padding: 0.15rem 0.35rem;
+    color: #d9e7f5;
+    font-size: 0.92em;
+  }
+
+  .markdown-content pre {
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    background: rgba(0, 0, 0, 0.34);
+    padding: 1rem;
+  }
+
+  .markdown-content pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  .markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 0.75rem;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.65rem 0.8rem;
+    text-align: left;
+  }
+
+  .markdown-content th {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .markdown-content-compact {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .markdown-content-compact h1 {
+    font-size: 1.25rem;
+  }
+
+  .markdown-content-compact h2 {
+    font-size: 1.1rem;
+  }
+
+  .markdown-content-compact h3 {
+    font-size: 1rem;
+  }
+
+  .admin-markdown-editor .EasyMDEContainer,
+  .admin-markdown-editor .CodeMirror {
+    background: #020617;
+    color: #e2e8f0;
+  }
+
+  .admin-markdown-editor .CodeMirror {
+    min-height: 460px;
+    border: 0;
+  }
+
+  .admin-markdown-editor .editor-toolbar {
+    border: 0;
+    border-bottom: 1px solid #1e293b;
+    background: #0f172a;
+    opacity: 1;
+  }
+
+  .admin-markdown-editor .editor-toolbar button {
+    color: #cbd5e1 !important;
+  }
+
+  .admin-markdown-editor .editor-toolbar button:hover,
+  .admin-markdown-editor .editor-toolbar button.active {
+    border-color: #334155;
+    background: #1e293b;
+  }
+
+  .admin-markdown-editor .editor-toolbar i.separator {
+    border-left-color: #334155;
+    border-right-color: #020617;
+  }
+
+  .admin-markdown-editor .editor-preview,
+  .admin-markdown-editor .editor-preview-side {
+    background: #020617;
+    color: #cbd5e1;
+  }
+
   .app-layer-match-end {
     z-index: 80;
   }

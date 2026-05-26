@@ -1,4 +1,5 @@
 import Head from "next/head";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,6 +40,7 @@ import {
   requestAdminDebugTestReports,
   requestAdminEnforcementActions,
   requestAdminGrantRole,
+  requestAdminCreateChangelogPost,
   requestAdminGetChangelog,
   requestAdminIPSignupBans,
   requestAdminMaintenance,
@@ -49,7 +51,6 @@ import {
   requestAdminPlayerDetail,
   requestAdminPlayerMatches,
   requestAdminPlayers,
-  requestAdminPutChangelog,
   requestAdminPutMaintenance,
   requestAdminPutModerationSettings,
   requestAdminRankedSeason,
@@ -59,11 +60,17 @@ import {
   requestAdminRemoveIPSignupBan,
   requestAdminRolloverRankedSeason,
   requestAdminUnbanPlayer,
+  requestAdminUpdateChangelogPost,
   requestAdminUploadCurrentMap,
 } from "../features/admin/lib/admin-client";
+import type { ChangelogPost, ChangelogPostInput } from "../features/changelog/types";
 import { useHomeModel } from "../features/home/model/useHomeModel";
 import type { MaintenanceStatus } from "../features/matchmaking/lib/queue-client";
 import { getRuntimeConfig } from "../lib/runtime-config";
+
+const SimpleMDE = dynamic(() => import("react-simplemde-editor"), {
+  ssr: false,
+});
 
 type Player = {
   userId: string;
@@ -273,6 +280,30 @@ function fromLocalDateTime(value: string) {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
+function formatAdminDate(value?: string) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(date);
 }
 
 function Panel(props: { children: React.ReactNode; className?: string }) {
@@ -1003,9 +1034,14 @@ function OperationsRoute(props: {
   const [mapFile, setMapFile] = useState<File | null>(null);
   const [mapKey, setMapKey] = useState("a-source-world");
   const [mapStatus, setMapStatus] = useState("");
-  const [changelog, setChangelog] = useState("");
-  const [changelogTitle, setChangelogTitle] = useState("");
-  const [changelogEyebrow, setChangelogEyebrow] = useState("");
+  const [selectedChangelogId, setSelectedChangelogId] = useState<number | "new">("new");
+  const [changelogDraft, setChangelogDraft] = useState<ChangelogPostInput>({
+    slug: "",
+    title: "",
+    summary: "",
+    markdown: "",
+    published: true,
+  });
   const [phase, setPhase] = useState<MaintenanceStatus["phase"]>("normal");
   const [message, setMessage] = useState("");
   const [startsAt, setStartsAt] = useState("");
@@ -1055,12 +1091,40 @@ function OperationsRoute(props: {
   }, [maintenanceQuery.data]);
 
   useEffect(() => {
-    const content = changelogQuery.data;
-    if (!content) return;
-    setChangelog(content.markdown || "");
-    setChangelogTitle(content.title || "");
-    setChangelogEyebrow(content.eyebrow || "");
+    const posts = changelogQuery.data?.posts || [];
+    if (selectedChangelogId !== "new" || posts.length === 0) return;
+    const latest = posts[0];
+    setSelectedChangelogId(latest.id);
+    setChangelogDraft({
+      slug: latest.slug,
+      title: latest.title,
+      summary: latest.summary,
+      markdown: latest.markdown,
+      published: latest.published,
+    });
   }, [changelogQuery.data]);
+
+  const selectChangelogPost = (post: ChangelogPost) => {
+    setSelectedChangelogId(post.id);
+    setChangelogDraft({
+      slug: post.slug,
+      title: post.title,
+      summary: post.summary,
+      markdown: post.markdown,
+      published: post.published,
+    });
+  };
+
+  const startNewChangelogPost = () => {
+    setSelectedChangelogId("new");
+    setChangelogDraft({
+      slug: "",
+      title: "",
+      summary: "",
+      markdown: "",
+      published: true,
+    });
+  };
 
   useEffect(() => {
     setWebhook(settingsQuery.data?.discordWebhookUrl || "");
@@ -1082,9 +1146,28 @@ function OperationsRoute(props: {
     mutationFn: () => requestAdminClearMaintenance(props.config, props.accessToken),
     onSuccess: props.refreshAdminData,
   });
-  const saveChangelog = useMutation({
-    mutationFn: () => requestAdminPutChangelog(props.config, props.accessToken, { eyebrow: changelogEyebrow, title: changelogTitle, markdown: changelog }),
-    onSuccess: props.refreshAdminData,
+  const saveChangelogPost = useMutation({
+    mutationFn: () => {
+      const content = {
+        ...changelogDraft,
+        slug: changelogDraft.slug || slugify(changelogDraft.title),
+      };
+      if (selectedChangelogId === "new") {
+        return requestAdminCreateChangelogPost(props.config, props.accessToken, content);
+      }
+      return requestAdminUpdateChangelogPost(props.config, props.accessToken, selectedChangelogId, content);
+    },
+    onSuccess: async (post) => {
+      setSelectedChangelogId(post.id);
+      setChangelogDraft({
+        slug: post.slug,
+        title: post.title,
+        summary: post.summary,
+        markdown: post.markdown,
+        published: post.published,
+      });
+      await props.refreshAdminData();
+    },
   });
   const saveSettings = useMutation({
     mutationFn: () => requestAdminPutModerationSettings(props.config, props.accessToken, { discordWebhookUrl: webhook }),
@@ -1118,6 +1201,11 @@ function OperationsRoute(props: {
   }
 
   const ipBans = (ipBansQuery.data?.bans || []) as IPBan[];
+  const changelogPosts = changelogQuery.data?.posts || [];
+  const selectedChangelogPost =
+    selectedChangelogId === "new"
+      ? null
+      : changelogPosts.find((post) => post.id === selectedChangelogId) || null;
 
   return (
     <div className="space-y-4">
@@ -1183,12 +1271,137 @@ function OperationsRoute(props: {
         ) : null}
 
         {props.leaf === "changelog" ? (
-          <Panel className="p-4">
-            <h3 className="font-black text-white">Changelog</h3>
-            <Input className="mt-4 w-full" value={changelogEyebrow} onChange={(event) => setChangelogEyebrow(event.target.value)} placeholder="Eyebrow" />
-            <Input className="mt-3 w-full" value={changelogTitle} onChange={(event) => setChangelogTitle(event.target.value)} placeholder="Title" />
-            <Textarea className="mt-3 min-h-72 w-full" value={changelog} onChange={(event) => setChangelog(event.target.value)} />
-            <Button className="mt-3" onClick={() => void saveChangelog.mutateAsync()}>Save</Button>
+          <Panel className="p-4 xl:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-black text-white">Changelog</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Write release notes as Markdown. Saving a post updates its modified date automatically.
+                </p>
+              </div>
+              <Button onClick={startNewChangelogPost}>New Post</Button>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+              <div className="space-y-2">
+                {changelogPosts.length === 0 ? (
+                  <div className="rounded-md border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">
+                    No changelog posts yet.
+                  </div>
+                ) : null}
+                {changelogPosts.map((post) => {
+                  const selected = selectedChangelogId === post.id;
+                  return (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => selectChangelogPost(post)}
+                      className={`w-full rounded-md border p-3 text-left transition ${
+                        selected
+                          ? "border-emerald-400 bg-emerald-400/10"
+                          : "border-slate-800 bg-slate-900/60 hover:border-slate-600"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="line-clamp-2 font-bold text-white">{post.title}</p>
+                        <span className={`rounded px-2 py-0.5 text-[11px] font-bold uppercase ${
+                          post.published ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-200"
+                        }`}>
+                          {post.published ? "Live" : "Draft"}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-500">/{post.slug}</p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Modified {formatAdminDate(post.updatedAt)}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="min-w-0 space-y-3">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+                  <Input
+                    value={changelogDraft.title}
+                    onChange={(event) =>
+                      setChangelogDraft((draft) => ({
+                        ...draft,
+                        title: event.target.value,
+                        slug: draft.slug || slugify(event.target.value),
+                      }))
+                    }
+                    placeholder="Post title"
+                  />
+                  <Input
+                    value={changelogDraft.slug}
+                    onChange={(event) =>
+                      setChangelogDraft((draft) => ({
+                        ...draft,
+                        slug: slugify(event.target.value),
+                      }))
+                    }
+                    placeholder="url-slug"
+                  />
+                </div>
+                <Textarea
+                  className="min-h-24 w-full"
+                  value={changelogDraft.summary}
+                  onChange={(event) =>
+                    setChangelogDraft((draft) => ({ ...draft, summary: event.target.value }))
+                  }
+                  placeholder="Short homepage/list summary"
+                />
+                <div className="admin-markdown-editor overflow-hidden rounded-lg border border-slate-800">
+                  <SimpleMDE
+                    value={changelogDraft.markdown}
+                    onChange={(value) =>
+                      setChangelogDraft((draft) => ({ ...draft, markdown: value || "" }))
+                    }
+                    options={{
+                      autofocus: false,
+                      spellChecker: false,
+                      status: false,
+                      minHeight: "460px",
+                      previewClass: ["editor-preview", "markdown-content"],
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={changelogDraft.published}
+                      onChange={(event) =>
+                        setChangelogDraft((draft) => ({ ...draft, published: event.target.checked }))
+                      }
+                    />
+                    Published
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {selectedChangelogPost ? (
+                      <Link
+                        href={`/changelog/${encodeURIComponent(selectedChangelogPost.slug)}`}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:border-emerald-400 hover:text-emerald-200"
+                      >
+                        View Post
+                        <ExternalLink className="h-4 w-4" />
+                      </Link>
+                    ) : null}
+                    <Button
+                      disabled={!changelogDraft.title.trim() || saveChangelogPost.isPending}
+                      onClick={() => void saveChangelogPost.mutateAsync()}
+                    >
+                      {saveChangelogPost.isPending ? "Saving..." : selectedChangelogId === "new" ? "Create Post" : "Save Post"}
+                    </Button>
+                  </div>
+                </div>
+                {saveChangelogPost.error ? (
+                  <p className="text-sm font-semibold text-red-300">
+                    {saveChangelogPost.error instanceof Error ? saveChangelogPost.error.message : "Failed to save changelog post"}
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </Panel>
         ) : null}
 

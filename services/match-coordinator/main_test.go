@@ -117,6 +117,22 @@ func (s *recoverTestStore) SetLobbyChangelog(content persistence.LobbyChangelogC
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) ListChangelogPosts(includeUnpublished bool) ([]persistence.ChangelogPost, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetChangelogPostBySlug(slug string, publishedOnly bool) (persistence.ChangelogPost, bool, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) CreateChangelogPost(input persistence.ChangelogPostInput) (persistence.ChangelogPost, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) UpdateChangelogPost(id int64, input persistence.ChangelogPostInput) (persistence.ChangelogPost, bool, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) GetModerationSettings() (persistence.ModerationSettings, error) {
 	panic("unexpected call")
 }

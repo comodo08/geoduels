@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import MarkdownContent from "./MarkdownContent";
 import PlayerBadge, { type PlayerBadgeInfo } from "./PlayerBadge";
 import AvatarBadge from "./AvatarBadge";
 import PlayerNameWithBadge from "./PlayerNameWithBadge";
@@ -118,6 +119,8 @@ type Props = {
   changelogEyebrow: string;
   changelogTitle: string;
   changelogMarkdown: string;
+  changelogSlug: string;
+  changelogUpdatedAt: string;
   devLogin: () => void;
   onGoogleSignIn: () => void;
   onDiscordSignIn?: () => void;
@@ -207,175 +210,15 @@ function formatQueueElapsed(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function renderMarkdownInline(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const pattern =
-    /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|_([^_]+)_|`([^`]+)`)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
-    }
-
-    if (match[2] && match[3]) {
-      nodes.push(
-        <a
-          key={`md-link-${match.index}`}
-          href={match[3]}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[#77f0be] underline decoration-[#77f0be]/40 underline-offset-4 transition hover:text-white"
-        >
-          {match[2]}
-        </a>,
-      );
-    } else if (match[4]) {
-      nodes.push(
-        <strong
-          key={`md-strong-${match.index}`}
-          className="font-semibold text-white"
-        >
-          {match[4]}
-        </strong>,
-      );
-    } else if (match[5]) {
-      nodes.push(
-        <em key={`md-em-${match.index}`} className="italic text-[#c5d8e8]">
-          {match[5]}
-        </em>,
-      );
-    } else if (match[6]) {
-      nodes.push(
-        <code
-          key={`md-code-${match.index}`}
-          className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[0.95em] text-[#d9e7f5]"
-        >
-          {match[6]}
-        </code>,
-      );
-    }
-
-    lastIndex = pattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
-  }
-
-  return nodes;
-}
-
-function renderMarkdownBlocks(markdown: string): ReactNode[] {
-  const lines = markdown.split("\n");
-  const blocks: ReactNode[] = [];
-  let paragraphLines: string[] = [];
-  let listItems: string[] = [];
-
-  const flushParagraph = () => {
-    if (paragraphLines.length === 0) {
-      return;
-    }
-
-    const text = paragraphLines.join(" ").trim();
-    if (text) {
-      blocks.push(
-        <p
-          key={`md-p-${blocks.length}`}
-          className="text-[14px] leading-relaxed text-[#a9bfd4]"
-        >
-          {renderMarkdownInline(text)}
-        </p>,
-      );
-    }
-    paragraphLines = [];
-  };
-
-  const flushList = () => {
-    if (listItems.length === 0) {
-      return;
-    }
-
-    blocks.push(
-      <ul
-        key={`md-ul-${blocks.length}`}
-        className="space-y-2 pl-5 text-[14px] leading-relaxed text-[#a9bfd4]"
-      >
-        {listItems.map((item, index) => (
-          <li key={`md-li-${index}`} className="list-disc">
-            {renderMarkdownInline(item)}
-          </li>
-        ))}
-      </ul>,
-    );
-    listItems = [];
-  };
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-
-    if (!line) {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-
-    if (line.startsWith("### ")) {
-      flushParagraph();
-      flushList();
-      blocks.push(
-        <h3
-          key={`md-h3-${blocks.length}`}
-          className="text-xl font-bold text-white"
-        >
-          {renderMarkdownInline(line.slice(4))}
-        </h3>,
-      );
-      continue;
-    }
-
-    if (line.startsWith("## ")) {
-      flushParagraph();
-      flushList();
-      blocks.push(
-        <h2
-          key={`md-h2-${blocks.length}`}
-          className="text-2xl font-bold text-white"
-        >
-          {renderMarkdownInline(line.slice(3))}
-        </h2>,
-      );
-      continue;
-    }
-
-    if (line.startsWith("# ")) {
-      flushParagraph();
-      flushList();
-      blocks.push(
-        <h1
-          key={`md-h1-${blocks.length}`}
-          className="text-3xl font-extrabold text-white"
-        >
-          {renderMarkdownInline(line.slice(2))}
-        </h1>,
-      );
-      continue;
-    }
-
-    if (line.startsWith("- ")) {
-      flushParagraph();
-      listItems.push(line.slice(2));
-      continue;
-    }
-
-    paragraphLines.push(line);
-  }
-
-  flushParagraph();
-  flushList();
-
-  return blocks;
+function formatChangelogDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 function LobbyModalShell({
@@ -494,6 +337,8 @@ export default function LobbyScreen({
   changelogEyebrow,
   changelogTitle,
   changelogMarkdown,
+  changelogSlug,
+  changelogUpdatedAt,
   onLogout,
   onDeleteAccount = async () => { },
 }: Props) {
@@ -736,7 +581,27 @@ export default function LobbyScreen({
               className="overflow-hidden"
             >
               <div className="mt-5 space-y-4 border-t border-white/[0.06] pt-5">
-                {renderMarkdownBlocks(changelogMarkdown)}
+                <MarkdownContent
+                  markdown={changelogMarkdown || "No changelog content yet."}
+                  compact
+                />
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  {changelogUpdatedAt ? (
+                    <time
+                      dateTime={changelogUpdatedAt}
+                      className="text-[12px] font-semibold text-[#a9bfd4]/70"
+                    >
+                      Updated {formatChangelogDate(changelogUpdatedAt)}
+                    </time>
+                  ) : <span />}
+                  <Link
+                    href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
+                    className="inline-flex items-center gap-1 text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#77f0be] transition hover:text-white"
+                  >
+                    Read More
+                    <ArrowUpRight size={14} />
+                  </Link>
+                </div>
               </div>
             </motion.div>
           )}
@@ -1258,6 +1123,13 @@ export default function LobbyScreen({
   const legalCard = (
     <div className="pointer-events-auto flex w-full items-center justify-center px-1 py-1">
       <div className="flex items-center gap-6">
+        <Link
+          href="/changelog"
+          className="text-[12px] font-semibold text-[#6b8b80] transition-colors hover:text-white"
+        >
+          Changelog
+        </Link>
+        <div className="h-1 w-1 rounded-full bg-[#6b8b80]/40" />
         <Link
           href="/privacy"
           className="text-[12px] font-semibold text-[#6b8b80] transition-colors hover:text-white"

@@ -27,6 +27,8 @@ type Params = {
   changelogEyebrow?: string;
   changelogTitle?: string;
   changelogMarkdown?: string;
+  changelogSlug?: string;
+  changelogUpdatedAt?: string;
 };
 
 const SINGLEPLAYER_TOTAL_ROUNDS = 5;
@@ -126,6 +128,8 @@ export function deriveHomeModel({
   changelogEyebrow = "Latest News",
   changelogTitle = "GeoDuels v1.1",
   changelogMarkdown = "",
+  changelogSlug = "",
+  changelogUpdatedAt = "",
 }: Params): HomeViewModel {
   const activeMatchId =
     homeResumeMatchId || match.activeMatchId || match.snapshot?.matchId || "";
@@ -515,6 +519,8 @@ export function deriveHomeModel({
       changelogEyebrow,
       changelogTitle,
       changelogMarkdown,
+      changelogSlug,
+      changelogUpdatedAt,
       privateLobby: {
         status: "idle",
         snapshot: null,

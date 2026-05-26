@@ -276,6 +276,8 @@ export async function requestLobbyChangelog(config: RuntimeConfig) {
     eyebrow?: string;
     title?: string;
     markdown?: string;
+    slug?: string;
+    updatedAt?: string;
   }>;
 }
 
