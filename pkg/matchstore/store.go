@@ -182,23 +182,11 @@ type redisStore struct {
 type QueuePool string
 
 const (
-	QueuePoolGuest      QueuePool = "guest"
 	QueuePoolRegistered QueuePool = "registered"
 )
 
-var allQueuePools = []QueuePool{QueuePoolGuest, QueuePoolRegistered}
+var allQueuePools = []QueuePool{QueuePoolRegistered}
 var allQueueRulesets = []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ}
-
-func AllQueuePools() []QueuePool {
-	return append([]QueuePool(nil), allQueuePools...)
-}
-
-func PoolForGuest(isGuest bool) QueuePool {
-	if isGuest {
-		return QueuePoolGuest
-	}
-	return QueuePoolRegistered
-}
 
 func QueueMatchKeysForUsers(users []string) []string {
 	keys := make([]string, 0, len(users)*len(allQueuePools)*len(allQueueRulesets))

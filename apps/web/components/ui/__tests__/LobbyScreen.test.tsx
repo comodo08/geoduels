@@ -1,7 +1,17 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LobbyScreen from '../LobbyScreen';
+
+function resetStoredQueueRulesets() {
+  if (
+    typeof window === 'undefined' ||
+    typeof window.localStorage?.removeItem !== 'function'
+  ) {
+    return;
+  }
+  window.localStorage.removeItem('geoduels.queueRulesets');
+}
 
 function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof LobbyScreen>>) {
   const props: React.ComponentProps<typeof LobbyScreen> = {
@@ -51,8 +61,13 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
   };
 }
 
+beforeEach(() => {
+  resetStoredQueueRulesets();
+});
+
 afterEach(() => {
   cleanup();
+  resetStoredQueueRulesets();
 });
 
 describe('LobbyScreen', () => {

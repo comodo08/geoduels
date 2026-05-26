@@ -18,11 +18,9 @@ type memoryStore struct {
 func newMemory() Store {
 	return &memoryStore{
 		queues: map[QueuePool][]ticket{
-			QueuePoolGuest:      {},
 			QueuePoolRegistered: {},
 		},
 		matches: map[QueuePool]map[string]contracts.MatchFound{
-			QueuePoolGuest:      {},
 			QueuePoolRegistered: {},
 		},
 	}
