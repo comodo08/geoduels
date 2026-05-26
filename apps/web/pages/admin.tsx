@@ -584,6 +584,13 @@ function ModerationRoute(props: {
                   <p className="mt-1 text-sm text-slate-400">{selectedCase.targetUserId}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Link
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+                    href={`/admin/players/${encodeURIComponent(selectedCase.targetUserId)}`}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Full Profile
+                  </Link>
                   <Button disabled={claimMutation.isPending} onClick={() => void claimMutation.mutateAsync(selectedCase.id)}>
                     Claim
                   </Button>
@@ -602,7 +609,16 @@ function ModerationRoute(props: {
 
               {target ? (
                 <Panel className="p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Target Account</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Target Account</p>
+                    <Link
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-sky-300 hover:text-white"
+                      href={`/admin/players/${encodeURIComponent(target.userId)}`}
+                    >
+                      Check full profile
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-4">
                     <Metric label="MMR" value={String(target.mmr)} />
                     <Metric label="Games" value={String(target.gamesPlayed)} />
