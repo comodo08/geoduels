@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AppModalShell from "../../../components/ui/AppModalShell";
 import type { HomeOverlaysView } from "../model/types";
 
 declare global {
@@ -145,8 +146,15 @@ export default function GuestVerificationOverlay({
   const canCancel = verification.status !== "creating";
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
-      <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-white/15 bg-[#08111b]/95 p-6 text-center text-white shadow-2xl">
+    <AppModalShell
+      title={title}
+      placement="center"
+      showHeader={false}
+      zIndexClassName="z-[1200]"
+      maxWidthClassName="max-w-sm"
+      panelClassName="text-center"
+    >
+      <div className="flex flex-col items-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#2ad18f]" />
         <h2 className="mt-4 text-lg font-black">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-[#b9c9d8]">
@@ -170,6 +178,6 @@ export default function GuestVerificationOverlay({
           </button>
         ) : null}
       </div>
-    </div>
+    </AppModalShell>
   );
 }

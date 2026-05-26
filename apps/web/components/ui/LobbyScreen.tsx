@@ -1,11 +1,10 @@
-import React, { useState, useEffect, type ReactNode } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle2,
   Github,
   HelpCircle,
   Heart,
   Play,
-  X,
   Loader2,
   Pencil,
   Check,
@@ -24,6 +23,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import AppModalShell from "./AppModalShell";
 import MarkdownContent from "./MarkdownContent";
 import PlayerBadge, { type PlayerBadgeInfo } from "./PlayerBadge";
 import AvatarBadge from "./AvatarBadge";
@@ -219,67 +219,6 @@ function formatChangelogDate(value: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(date);
-}
-
-function LobbyModalShell({
-  title,
-  onClose,
-  children,
-  placement = "responsive",
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  placement?: "responsive" | "center";
-}) {
-  useEffect(() => {
-    const onKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      className={`fixed inset-0 z-[2200] flex justify-center bg-black/60 backdrop-blur-md ${
-        placement === "center"
-          ? "items-center p-4"
-          : "items-end p-0 sm:items-center sm:p-4"
-      }`}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 350, damping: 30 }}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        className="glass-panel max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-[26px] p-5 text-[#f4f9ff] sm:rounded-[26px] sm:p-6"
-      >
-        <div className="mb-5 flex items-center justify-between sm:mb-6">
-          <h2 className="text-[18px] font-black uppercase tracking-[0.12em] text-white sm:text-[22px]">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white"
-          >
-            <X size={18} strokeWidth={2.5} />
-          </button>
-        </div>
-        <div>{children}</div>
-      </motion.div>
-    </motion.div>
-  );
 }
 
 export default function LobbyScreen({
@@ -1077,47 +1016,38 @@ export default function LobbyScreen({
   ) : null;
 
   const maintenanceOverlay = maintenanceIsActive ? (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
-      className="fixed inset-0 z-[2100] flex items-center justify-center overflow-hidden px-4 py-8"
+    <AppModalShell
+      title="Maintenance Break"
+      placement="center"
+      showHeader={false}
+      zIndexClassName="z-[2100]"
+      maxWidthClassName="max-w-[560px]"
+      panelClassName="p-7 sm:p-10"
     >
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,248,212,0.12),transparent_35%),linear-gradient(180deg,rgba(7,13,18,0.48),rgba(7,13,18,0.9))]" />
-      </div>
-      <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 260, damping: 26 }}
-        className="relative z-10 w-full max-w-[560px] overflow-hidden rounded-[32px] bg-[#081118]/78 p-7 text-white shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:p-10"
-      >
-        <div className="flex flex-col items-center text-center">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4c84c]/30 bg-[#f4c84c]/10">
-            <Loader2 size={30} className="animate-spin text-[#f4c84c]" />
-          </div>
-          <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#f4d98a]">
-            Maintenance Break
-          </p>
-          <h2 className="mt-3 text-[30px] font-black tracking-tight text-white sm:text-[38px]">
-            We&apos;ll Be Back Shortly
-          </h2>
-          <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#d9e7f5]">
-            {maintenanceMessage ||
-              "GeoDuels is temporarily offline while we finish a scheduled upgrade."}
-          </p>
-          <div className="mt-6 rounded-[20px] border border-white/10 bg-white/5 px-5 py-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a9bfd4]">
-              Approximate Time
-            </p>
-            <p className="mt-2 text-[18px] font-extrabold text-white">
-              {activeEta || "A few minutes"}
-            </p>
-          </div>
+      <div className="flex flex-col items-center text-center">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4c84c]/30 bg-[#f4c84c]/10">
+          <Loader2 size={30} className="animate-spin text-[#f4c84c]" />
         </div>
-      </motion.div>
-    </motion.div>
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#f4d98a]">
+          Maintenance Break
+        </p>
+        <h2 className="mt-3 text-[30px] font-black tracking-tight text-white sm:text-[38px]">
+          We&apos;ll Be Back Shortly
+        </h2>
+        <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#d9e7f5]">
+          {maintenanceMessage ||
+            "GeoDuels is temporarily offline while we finish a scheduled upgrade."}
+        </p>
+        <div className="mt-6 rounded-[20px] border border-white/10 bg-white/5 px-5 py-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a9bfd4]">
+            Approximate Time
+          </p>
+          <p className="mt-2 text-[18px] font-extrabold text-white">
+            {activeEta || "A few minutes"}
+          </p>
+        </div>
+      </div>
+    </AppModalShell>
   ) : null;
 
   const legalCard = (
@@ -1246,7 +1176,7 @@ export default function LobbyScreen({
 
   // Modal Renderers inside LobbyScreen
   const renderHelpModal = () => (
-    <LobbyModalShell title="Help" onClose={() => setOpenModal(null)}>
+    <AppModalShell title="Help" onClose={() => setOpenModal(null)}>
       <div className="space-y-5 text-[15px] leading-relaxed text-[#a9bfd4]">
         <div className="glass-panel rounded-xl p-4">
           <h3 className="mb-2 font-bold text-white tracking-wide">
@@ -1280,7 +1210,7 @@ export default function LobbyScreen({
           </p>
         </div>
       </div>
-    </LobbyModalShell>
+    </AppModalShell>
   );
 
   const renderInviteLobbyModal = () => {
@@ -1289,7 +1219,7 @@ export default function LobbyScreen({
       privateLobby.busy || authLoading || maintenanceIsActive;
 
     return (
-      <LobbyModalShell title="Private Lobby" onClose={() => setOpenModal(null)}>
+      <AppModalShell title="Private Lobby" onClose={() => setOpenModal(null)}>
         <div className="space-y-4">
           <button
             type="button"
@@ -1362,12 +1292,12 @@ export default function LobbyScreen({
           </div>
 
         </div>
-      </LobbyModalShell>
+      </AppModalShell>
     );
   };
 
   const renderSignInModal = () => (
-    <LobbyModalShell
+    <AppModalShell
       title="Sign In"
       onClose={() => setOpenModal(null)}
       placement="center"
@@ -1398,11 +1328,11 @@ export default function LobbyScreen({
           </p>
         ) : null}
       </div>
-    </LobbyModalShell>
+    </AppModalShell>
   );
 
   const renderProfileModal = () => (
-    <LobbyModalShell
+    <AppModalShell
       title="Profile"
       onClose={() => {
         setOpenModal(null);
@@ -1746,7 +1676,7 @@ export default function LobbyScreen({
           Sign Out
         </button>
       ) : null}
-    </LobbyModalShell>
+    </AppModalShell>
   );
 
   const inviteLobbyCard = (

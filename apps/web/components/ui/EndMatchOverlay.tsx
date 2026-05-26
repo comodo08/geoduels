@@ -7,6 +7,7 @@ import {
   PlayerIdentityRow,
   type ParticipantIdentityView,
 } from "./PlayerIdentity";
+import AppModalShell from "./AppModalShell";
 import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { RoundResult } from "./types";
 
@@ -495,103 +496,111 @@ export default function EndMatchOverlay({
       </div>
 
       {pendingReport ? (
-        <div className="absolute inset-0 z-[1200] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#101922] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-red-300/25 bg-red-500/15 text-red-100">
-                <Flag size={18} />
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-red-200">
-                  Report Player
-                </p>
-                <h3 className="mt-1 text-xl font-black">
-                  Report {pendingReport.name}?
-                </h3>
-              </div>
+        <AppModalShell
+          title="Report Player"
+          onClose={() => {
+            setPendingReport(null);
+            setReportReason("");
+          }}
+          placement="center"
+          showHeader={false}
+          zIndexClassName="z-[1200]"
+          maxWidthClassName="max-w-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-red-300/25 bg-red-500/15 text-red-100">
+              <Flag size={18} />
             </div>
-            <p className="mt-4 text-sm leading-6 text-[#c5d4e2]">
-              Reports are for suspected cheating or abuse, including bad
-              profiles, toxicity, or harassment.
-            </p>
-            <div className="mt-5 grid gap-2">
-              {[
-                ["cheating", "Cheating"],
-                ["boosting", "Boosting / throwing"],
-                ["harassment", "Harassment"],
-                ["profile", "Offensive profile"],
-                ["other", "Other"],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setReportCategory(value)}
-                  className={`min-h-10 rounded-xl border px-3 text-left text-sm font-bold transition ${reportCategory === value
-                      ? "border-red-200/55 bg-red-500/25 text-red-50"
-                      : "border-white/10 bg-white/5 text-[#c5d4e2] hover:bg-white/10"
-                    }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={reportReason}
-              onChange={(event) => setReportReason(event.target.value)}
-              maxLength={1000}
-              placeholder="Optional details"
-              className="mt-4 min-h-24 w-full resize-none rounded-xl border border-white/10 bg-[#0d141c] px-3 py-2 text-sm text-white outline-none placeholder:text-[#6f8aa5] focus:border-red-200/50"
-            />
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={reportBusyUserId === pendingReport.userId}
-                onClick={() => {
-                  setPendingReport(null);
-                  setReportReason("");
-                }}
-                className="min-h-11 rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-bold text-white transition hover:bg-white/15 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={reportBusyUserId === pendingReport.userId}
-                onClick={async () => {
-                  if (!onReportPlayer) return;
-                  setReportError("");
-                  setReportBusyUserId(pendingReport.userId);
-                  try {
-                    await onReportPlayer(
-                      pendingReport.userId,
-                      reportCategory,
-                      reportReason,
-                    );
-                    setReportedUserIds((current) => ({
-                      ...current,
-                      [pendingReport.userId]: true,
-                    }));
-                    setPendingReport(null);
-                    setReportReason("");
-                  } catch (error) {
-                    setReportError(
-                      error instanceof Error
-                        ? error.message
-                        : "Failed to send report",
-                    );
-                  } finally {
-                    setReportBusyUserId("");
-                  }
-                }}
-                className="min-h-11 rounded-xl border border-red-300/35 bg-red-500/20 px-4 text-sm font-black text-red-50 transition hover:bg-red-500/30 disabled:opacity-60"
-              >
-                {reportBusyUserId === pendingReport.userId
-                  ? "Sending..."
-                  : "Send report"}
-              </button>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-red-200">
+                Report Player
+              </p>
+              <h3 className="mt-1 text-xl font-black">
+                Report {pendingReport.name}?
+              </h3>
             </div>
           </div>
-        </div>
+          <p className="mt-4 text-sm leading-6 text-[#c5d4e2]">
+            Reports are for suspected cheating or abuse, including bad
+            profiles, toxicity, or harassment.
+          </p>
+          <div className="mt-5 grid gap-2">
+            {[
+              ["cheating", "Cheating"],
+              ["boosting", "Boosting / throwing"],
+              ["harassment", "Harassment"],
+              ["profile", "Offensive profile"],
+              ["other", "Other"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setReportCategory(value)}
+                className={`min-h-10 rounded-xl border px-3 text-left text-sm font-bold transition ${reportCategory === value
+                    ? "border-red-200/55 bg-red-500/25 text-red-50"
+                    : "border-white/10 bg-white/5 text-[#c5d4e2] hover:bg-white/10"
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={reportReason}
+            onChange={(event) => setReportReason(event.target.value)}
+            maxLength={1000}
+            placeholder="Optional details"
+            className="mt-4 min-h-24 w-full resize-none rounded-xl border border-white/10 bg-[#0d141c] px-3 py-2 text-sm text-white outline-none placeholder:text-[#6f8aa5] focus:border-red-200/50"
+          />
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              disabled={reportBusyUserId === pendingReport.userId}
+              onClick={() => {
+                setPendingReport(null);
+                setReportReason("");
+              }}
+              className="min-h-11 rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-bold text-white transition hover:bg-white/15 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={reportBusyUserId === pendingReport.userId}
+              onClick={async () => {
+                if (!onReportPlayer) return;
+                setReportError("");
+                setReportBusyUserId(pendingReport.userId);
+                try {
+                  await onReportPlayer(
+                    pendingReport.userId,
+                    reportCategory,
+                    reportReason,
+                  );
+                  setReportedUserIds((current) => ({
+                    ...current,
+                    [pendingReport.userId]: true,
+                  }));
+                  setPendingReport(null);
+                  setReportReason("");
+                } catch (error) {
+                  setReportError(
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to send report",
+                  );
+                } finally {
+                  setReportBusyUserId("");
+                }
+              }}
+              className="min-h-11 rounded-xl border border-red-300/35 bg-red-500/20 px-4 text-sm font-black text-red-50 transition hover:bg-red-500/30 disabled:opacity-60"
+            >
+              {reportBusyUserId === pendingReport.userId
+                ? "Sending..."
+                : "Send report"}
+            </button>
+          </div>
+        </AppModalShell>
       ) : null}
     </motion.div>
   );
