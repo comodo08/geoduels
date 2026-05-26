@@ -2269,19 +2269,20 @@ export default function LobbyScreen({
                 <div className="grid gap-5 lg:grid-cols-3">
                   <section className="glass-panel rounded-[18px] p-5">
                     <h2 className="text-[18px] font-extrabold tracking-tight text-white">
-                      100% Free (seriously)
-                    </h2>
-                    <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
-                      No subscriptions to play, no pay-to-win, making it one of the free alternatives to GeoGuessr.
-                    </p>
-                  </section>
-                  <section className="glass-panel rounded-[18px] p-5">
-                    <h2 className="text-[18px] font-extrabold tracking-tight text-white">
                       How to Play?
                     </h2>
                     <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
                       Find the location, place your guess. The closer you are, the
                       more points you get.
+                    </p>
+                  </section>
+                  
+                  <section className="glass-panel rounded-[18px] p-5">
+                    <h2 className="text-[18px] font-extrabold tracking-tight text-white">
+                      100% Free (seriously)
+                    </h2>
+                    <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
+                      No subscriptions to play, no pay-to-win. Considered one of the best GeoGuessr free alternatives.
                     </p>
                   </section>
 
@@ -2290,7 +2291,7 @@ export default function LobbyScreen({
                       Ranked & Casual
                     </h2>
                     <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
-                      Climb the ladder or practice in casual mode, play GeoDuels as a free alternative to GeoGuessr.
+                      Climb the ladder or practice in casual mode, which not many GeoGuessr alternatives offer.
                     </p>
                   </section>
                 </div>
