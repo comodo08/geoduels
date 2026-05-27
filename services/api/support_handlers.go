@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const defaultStripePaymentLinkURL = "https://donate.stripe.com/cNi8wH68d3O1ece8Xm0oM00"
+const defaultStripePaymentLinkURL = "https://donate.stripe.com/bJe28jfIN0BP1ps3D20oM02"
 
 type stripeRuntimeConfig struct {
 	Mode           string
