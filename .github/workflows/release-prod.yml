@@ -91,6 +91,9 @@ jobs:
           - image: geoduels-api
             dockerfile: services/api/Dockerfile
             context: .
+          - image: geoduels-discord-worker
+            dockerfile: services/discord-worker/Dockerfile
+            context: .
           - image: geoduels-match-coordinator
             dockerfile: services/match-coordinator/Dockerfile
             context: .
@@ -165,6 +168,7 @@ jobs:
           set -euo pipefail
           kustomize edit set image \
             ghcr.io/sourcelocation/geoduels-api="${{ env.REGISTRY }}/geoduels-api:${{ needs.release-meta.outputs.release_tag }}-amd64" \
+            ghcr.io/sourcelocation/geoduels-discord-worker="${{ env.REGISTRY }}/geoduels-discord-worker:${{ needs.release-meta.outputs.release_tag }}-amd64" \
             ghcr.io/sourcelocation/geoduels-match-coordinator="${{ env.REGISTRY }}/geoduels-match-coordinator:${{ needs.release-meta.outputs.release_tag }}-amd64" \
             ghcr.io/sourcelocation/geoduels-gameplay-node="${{ env.REGISTRY }}/geoduels-gameplay-node:${{ needs.release-meta.outputs.release_tag }}-amd64" \
             ghcr.io/sourcelocation/geoduels-moderation-worker="${{ env.REGISTRY }}/geoduels-moderation-worker:${{ needs.release-meta.outputs.release_tag }}-amd64" \
