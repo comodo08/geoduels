@@ -39,14 +39,16 @@ type PlayerProfile struct {
 }
 
 type PlayerBadge struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	ImageURL    string `json:"imageUrl"`
-	SeasonID    string `json:"seasonId,omitempty"`
-	Rank        int    `json:"rank,omitempty"`
-	Owned       bool   `json:"owned"`
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	Label        string `json:"label"`
+	Description  string `json:"description"`
+	ImageURL     string `json:"imageUrl"`
+	Rarity       string `json:"rarity,omitempty"`
+	SeasonID     string `json:"seasonId,omitempty"`
+	Rank         int    `json:"rank,omitempty"`
+	Owned        bool   `json:"owned"`
+	Unobtainable bool   `json:"unobtainable,omitempty"`
 }
 
 type MatchMode string

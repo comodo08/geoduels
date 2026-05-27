@@ -30,6 +30,12 @@ const (
 	IdentityProviderDiscord         = "discord"
 	badgeCodeDiscordMember          = int16(1)
 	badgeCodeGeoDuelsTeam           = int16(2)
+	badgeCodeDiscordServerMember    = int16(3)
+	badgeCodeSupporter              = int16(4)
+	badgeCodeSpeedrunner            = int16(5)
+	badgeCodeElo1000                = int16(6)
+	badgeCodeElo1500                = int16(7)
+	badgeCodeElo2000                = int16(8)
 	badgeCodeSeasonRank             = int16(10)
 )
 
@@ -313,6 +319,10 @@ type Store interface {
 	UpsertUser(userID, email, displayName string) error
 	GetProfile(userID string) (Profile, error)
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
+	SyncLoginBadges(userID string) error
+	AwardDiscordServerMemberByDiscordID(discordUserID string) (bool, error)
+	CreateDonationRef(userID string) (string, error)
+	AwardSupporterByDonationRef(ref string) (bool, error)
 	ListLeaderboard(mode, seasonID string, limit, offset int) ([]LeaderboardEntry, error)
 	GetLeaderboardOverview(userID, mode, seasonID string, limit int) (LeaderboardOverview, error)
 	RecordMatchResult(snap contracts.MatchSnapshot) error
@@ -581,11 +591,6 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 	if err := recordUserIdentityHistory(ctx, tx, userID, provider, providerUserID, email, providerName, avatarURL); err != nil {
 		return Identity{}, err
 	}
-	if provider == IdentityProviderDiscord {
-		if err := awardDiscordMemberBadgeTx(ctx, tx, userID); err != nil {
-			return Identity{}, err
-		}
-	}
 	if _, err := tx.Exec(ctx, `
 		insert into ranks (user_id, mode, mmr, season_id)
 		values ($1, $2, $4, $3)
@@ -725,11 +730,6 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 	}
 	if err := recordUserIdentityHistory(ctx, tx, linkUserID, provider, providerUserID, email, providerName, avatarURL); err != nil {
 		return Identity{}, err
-	}
-	if provider == IdentityProviderDiscord {
-		if err := awardDiscordMemberBadgeTx(ctx, tx, linkUserID); err != nil {
-			return Identity{}, err
-		}
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into ranks (user_id, mode, mmr, season_id)
@@ -1070,9 +1070,6 @@ func (s *pgStore) SetUserAdmin(userID string, isAdmin bool) error {
 		`, userID); err != nil {
 			return err
 		}
-		if err := awardGeoDuelsTeamBadgeTx(ctx, tx, userID); err != nil {
-			return err
-		}
 	} else {
 		if _, err := tx.Exec(ctx, `
 			update user_roles
@@ -1113,9 +1110,6 @@ func (s *pgStore) SetUserModerator(userID string, isModerator bool) error {
 			values($1, 'moderator', now(), 'legacy moderator toggle')
 			on conflict (user_id, role) where revoked_at is null do nothing
 		`, userID); err != nil {
-			return err
-		}
-		if err := awardGeoDuelsTeamBadgeTx(ctx, tx, userID); err != nil {
 			return err
 		}
 	} else {
@@ -1218,11 +1212,6 @@ func (s *pgStore) GrantUserRole(userID, role, grantedBy, reason string) error {
 			reason = excluded.reason
 	`, userID, role, strings.TrimSpace(grantedBy), strings.TrimSpace(reason)); err != nil {
 		return err
-	}
-	if role == "admin" || role == "moderator" {
-		if err := awardGeoDuelsTeamBadgeTx(ctx, tx, userID); err != nil {
-			return err
-		}
 	}
 	return tx.Commit(ctx)
 }
@@ -2734,8 +2723,7 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 		return nil, nil, err
 	}
 	defer rows.Close()
-	hasDiscord := false
-	ownedSeasonBadges := map[string]bool{}
+	owned := map[string]bool{}
 	for rows.Next() {
 		var code int16
 		var seasonID string
@@ -2747,31 +2735,16 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 		if !ok {
 			continue
 		}
-		if badge.ID == "discord-member" {
-			hasDiscord = true
-		}
-		if badge.Kind == "season_rank" {
-			ownedSeasonBadges[badge.ID] = true
-		}
+		owned[badge.ID] = true
 		badges = append(badges, badge)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
-	for _, badge := range seasonRankBadgeTemplates() {
-		if !ownedSeasonBadges[badge.ID] {
+	for _, badge := range badgeTemplates() {
+		if !owned[badge.ID] {
 			badges = append(badges, badge)
 		}
-	}
-	if !hasDiscord {
-		badges = append(badges, contracts.PlayerBadge{
-			ID:          "discord-member",
-			Kind:        "community",
-			Label:       "Discord Member",
-			Description: "Awarded for linking Discord to your GeoDuels account.",
-			ImageURL:    "/medals/discord-medal.v1.png",
-			Owned:       false,
-		})
 	}
 	var selected *contracts.PlayerBadge
 	for i := range badges {
@@ -2791,11 +2764,122 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 	return badges, selected, nil
 }
 
-func seasonRankBadgeTemplates() []contracts.PlayerBadge {
-	return []contracts.PlayerBadge{
-		seasonRankBadgeTemplate("s2"),
-		seasonRankBadgeTemplate("s2.5"),
+type badgeDefinition struct {
+	ID           string
+	Code         int16
+	Kind         string
+	Label        string
+	Description  string
+	ImageURL     string
+	Rarity       string
+	Unobtainable bool
+}
+
+var badgeDefinitions = []badgeDefinition{
+	{
+		ID:           "discord-member",
+		Code:         badgeCodeDiscordMember,
+		Kind:         "community",
+		Label:        "Discord Member",
+		Description:  "Retired badge previously awarded for linking Discord to your GeoDuels account.",
+		ImageURL:     "/medals/discord-medal.v1.png",
+		Rarity:       "common",
+		Unobtainable: true,
+	},
+	{
+		ID:          "geoduels-team",
+		Code:        badgeCodeGeoDuelsTeam,
+		Kind:        "special",
+		Label:       "GeoDuels Team",
+		Description: "An exclusive medal for GeoDuels moderators and team members.",
+		ImageURL:    "/medals/team-badge.v1.png",
+		Rarity:      "special",
+	},
+	{
+		ID:          "discord-server-member",
+		Code:        badgeCodeDiscordServerMember,
+		Kind:        "community",
+		Label:       "Discord Server Member",
+		Description: "Awarded for joining the official GeoDuels Discord server.",
+		ImageURL:    "/medals/discord-new-badge.v1.png",
+		Rarity:      "common",
+	},
+	{
+		ID:          "supporter",
+		Code:        badgeCodeSupporter,
+		Kind:        "supporter",
+		Label:       "Supporter",
+		Description: "Awarded for supporting GeoDuels.",
+		ImageURL:    "/medals/supporter-badge.v2.png",
+		Rarity:      "rare",
+	},
+	{
+		ID:          "speedrunner",
+		Code:        badgeCodeSpeedrunner,
+		Kind:        "achievement",
+		Label:       "Speedrunner",
+		Description: "Awarded for scoring 5000 points in under 30 seconds in ranked.",
+		ImageURL:    "/medals/speedrunner-badge.v2.png",
+		Rarity:      "epic",
+	},
+	{
+		ID:          "elo-1000",
+		Code:        badgeCodeElo1000,
+		Kind:        "ranked",
+		Label:       "1000 Elo",
+		Description: "Awarded for reaching 1000 Elo.",
+		ImageURL:    "/medals/1k-medal.v1.png",
+		Rarity:      "common",
+	},
+	{
+		ID:          "elo-1500",
+		Code:        badgeCodeElo1500,
+		Kind:        "ranked",
+		Label:       "1500 Elo",
+		Description: "Awarded for reaching 1500 Elo.",
+		ImageURL:    "/medals/1.5k-medal.v1.png",
+		Rarity:      "rare",
+	},
+	{
+		ID:          "elo-2000",
+		Code:        badgeCodeElo2000,
+		Kind:        "ranked",
+		Label:       "2000 Elo",
+		Description: "Awarded for reaching 2000 Elo.",
+		ImageURL:    "/medals/2k-medal.v1.png",
+		Rarity:      "legendary",
+	},
+}
+
+func badgeDefinitionByID(id string) (badgeDefinition, bool) {
+	id = strings.TrimSpace(id)
+	for _, def := range badgeDefinitions {
+		if def.ID == id {
+			return def, true
+		}
 	}
+	return badgeDefinition{}, false
+}
+
+func badgeDefinitionByCode(code int16) (badgeDefinition, bool) {
+	for _, def := range badgeDefinitions {
+		if def.Code == code {
+			return def, true
+		}
+	}
+	return badgeDefinition{}, false
+}
+
+func badgeTemplates() []contracts.PlayerBadge {
+	out := []contracts.PlayerBadge{}
+	for _, def := range badgeDefinitions {
+		if def.Unobtainable {
+			continue
+		}
+		out = append(out, badgeFromDefinition(def, false))
+	}
+	out = append(out, seasonRankBadgeTemplate("s2"), seasonRankBadgeTemplate("s2.5"))
+	return out
 }
 
 func seasonRankBadgeTemplate(seasonID string) contracts.PlayerBadge {
@@ -2806,6 +2890,7 @@ func seasonRankBadgeTemplate(seasonID string) contracts.PlayerBadge {
 		Label:       displaySeason + " Top 100",
 		Description: "Awarded to players who finish in the top 100 when " + displaySeason + " ends.",
 		ImageURL:    "/medals/platinum-medal.v1.png",
+		Rarity:      "legendary",
 		SeasonID:    seasonID,
 		Owned:       false,
 	}
@@ -2825,11 +2910,10 @@ func badgeRefFromID(id string) (badgeRef, bool) {
 	switch id {
 	case "":
 		return badgeRef{}, true
-	case "discord-member":
-		return badgeRef{Code: badgeCodeDiscordMember}, true
-	case "geoduels-team":
-		return badgeRef{Code: badgeCodeGeoDuelsTeam}, true
 	default:
+		if def, ok := badgeDefinitionByID(id); ok {
+			return badgeRef{Code: def.Code}, true
+		}
 		if strings.HasPrefix(id, "season-") && strings.HasSuffix(id, "-top-100") {
 			seasonID := strings.TrimSuffix(strings.TrimPrefix(id, "season-"), "-top-100")
 			if strings.TrimSpace(seasonID) == "" {
@@ -2842,40 +2926,33 @@ func badgeRefFromID(id string) (badgeRef, bool) {
 }
 
 func badgeIDFromParts(code int16, seasonID string) string {
-	switch code {
-	case badgeCodeDiscordMember:
-		return "discord-member"
-	case badgeCodeGeoDuelsTeam:
-		return "geoduels-team"
-	case badgeCodeSeasonRank:
+	if code == badgeCodeSeasonRank {
 		if strings.TrimSpace(seasonID) != "" {
 			return seasonRankBadgeID(seasonID)
 		}
+		return ""
+	}
+	if def, ok := badgeDefinitionByCode(code); ok {
+		return def.ID
 	}
 	return ""
 }
 
+func badgeFromDefinition(def badgeDefinition, owned bool) contracts.PlayerBadge {
+	return contracts.PlayerBadge{
+		ID:           def.ID,
+		Kind:         def.Kind,
+		Label:        def.Label,
+		Description:  def.Description,
+		ImageURL:     def.ImageURL,
+		Rarity:       def.Rarity,
+		Owned:        owned,
+		Unobtainable: def.Unobtainable,
+	}
+}
+
 func badgeFromParts(code int16, seasonID string, rank int, owned bool) (contracts.PlayerBadge, bool) {
-	switch code {
-	case badgeCodeDiscordMember:
-		return contracts.PlayerBadge{
-			ID:          "discord-member",
-			Kind:        "community",
-			Label:       "Discord Member",
-			Description: "Awarded for linking Discord to your GeoDuels account.",
-			ImageURL:    "/medals/discord-medal.v1.png",
-			Owned:       owned,
-		}, true
-	case badgeCodeGeoDuelsTeam:
-		return contracts.PlayerBadge{
-			ID:          "geoduels-team",
-			Kind:        "special",
-			Label:       "GeoDuels Team",
-			Description: "An exclusive medal for GeoDuels moderators and team members.",
-			ImageURL:    "/medals/team-badge.v1.png",
-			Owned:       owned,
-		}, true
-	case badgeCodeSeasonRank:
+	if code == badgeCodeSeasonRank {
 		badge := seasonRankBadgeTemplate(seasonID)
 		badge.Rank = rank
 		badge.Owned = owned
@@ -2885,9 +2962,11 @@ func badgeFromParts(code int16, seasonID string, rank int, owned bool) (contract
 			badge.Description = "Finished #" + fmt.Sprint(rank) + " in " + displaySeason + "."
 		}
 		return badge, strings.TrimSpace(seasonID) != ""
-	default:
-		return contracts.PlayerBadge{}, false
 	}
+	if def, ok := badgeDefinitionByCode(code); ok {
+		return badgeFromDefinition(def, owned), true
+	}
+	return contracts.PlayerBadge{}, false
 }
 
 func seasonBadgeDisplayName(seasonID string) string {
@@ -2905,28 +2984,37 @@ func seasonBadgeDisplayName(seasonID string) string {
 	}
 }
 
-func awardDiscordMemberBadgeTx(ctx context.Context, tx pgx.Tx, userID string) error {
-	_, err := tx.Exec(ctx, `
+func awardBadgeTx(ctx context.Context, tx pgx.Tx, userID, badgeID string) (bool, error) {
+	ref, ok := badgeRefFromID(badgeID)
+	if !ok || ref.Code == 0 || ref.Code == badgeCodeSeasonRank {
+		return false, errors.New("badge unavailable")
+	}
+	tag, err := tx.Exec(ctx, `
 		insert into user_badges(user_id, badge_code)
 		values(
 			$1,
 			$2
 		)
 		on conflict (user_id, badge_code, badge_season_id) do nothing
-	`, userID, badgeCodeDiscordMember)
-	return err
-}
-
-func awardGeoDuelsTeamBadgeTx(ctx context.Context, tx pgx.Tx, userID string) error {
-	_, err := tx.Exec(ctx, `
-		insert into user_badges(user_id, badge_code)
-		values(
-			$1,
-			$2
-		)
-		on conflict (user_id, badge_code, badge_season_id) do nothing
-	`, userID, badgeCodeGeoDuelsTeam)
-	return err
+	`, userID, ref.Code)
+	if err != nil {
+		return false, err
+	}
+	awarded := tag.RowsAffected() > 0
+	if !awarded {
+		return false, nil
+	}
+	badge, ok := badgeFromParts(ref.Code, ref.SeasonID, 0, true)
+	if !ok {
+		return false, nil
+	}
+	var notificationID int64
+	if err := upsertUserNotification(ctx, tx, userID, "badge_unlocked", "badge_unlocked:"+userID+":"+badge.ID, map[string]any{
+		"badge": badge,
+	}, &notificationID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func removeGeoDuelsTeamBadgeTx(ctx context.Context, tx pgx.Tx, userID string) error {
@@ -2945,6 +3033,159 @@ func removeGeoDuelsTeamBadgeTx(ctx context.Context, tx pgx.Tx, userID string) er
 			and badge_code = $2
 	`, userID, badgeCodeGeoDuelsTeam)
 	return err
+}
+
+func (s *pgStore) SyncLoginBadges(userID string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return errors.New("user id required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	seasonID, err := activeSeasonIDTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	var isGuest, hasTeamRole bool
+	var mmr int
+	if err := tx.QueryRow(ctx, `
+		select
+			coalesce(u.account_type = 'guest', false),
+			coalesce(u.is_admin, false)
+				or coalesce(u.is_moderator, false)
+				or exists (
+					select 1
+					from user_roles ur
+					where ur.user_id = u.id
+					  and ur.role in ('admin', 'moderator')
+					  and ur.revoked_at is null
+				),
+			coalesce(r.mmr, $3)
+		from users u
+		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $4
+		where u.id = $1
+	`, userID, modeDuel, initialMMR, seasonID).Scan(&isGuest, &hasTeamRole, &mmr); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+	if hasTeamRole {
+		if _, err := awardBadgeTx(ctx, tx, userID, "geoduels-team"); err != nil {
+			return err
+		}
+	}
+	if !isGuest {
+		if err := awardEloBadgesTx(ctx, tx, userID, mmr); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func awardEloBadgesTx(ctx context.Context, tx pgx.Tx, userID string, mmr int) error {
+	thresholds := []struct {
+		mmr     int
+		badgeID string
+	}{
+		{1000, "elo-1000"},
+		{1500, "elo-1500"},
+		{2000, "elo-2000"},
+	}
+	for _, threshold := range thresholds {
+		if mmr >= threshold.mmr {
+			if _, err := awardBadgeTx(ctx, tx, userID, threshold.badgeID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *pgStore) AwardDiscordServerMemberByDiscordID(discordUserID string) (bool, error) {
+	discordUserID = strings.TrimSpace(discordUserID)
+	if discordUserID == "" {
+		return false, errors.New("discord user id required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	var userID string
+	err = tx.QueryRow(ctx, `
+		select user_id
+		from user_identities
+		where provider = $1 and provider_user_id = $2
+		limit 1
+	`, IdentityProviderDiscord, discordUserID).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	awarded, err := awardBadgeTx(ctx, tx, userID, "discord-server-member")
+	if err != nil {
+		return false, err
+	}
+	return awarded, tx.Commit(ctx)
+}
+
+func (s *pgStore) CreateDonationRef(userID string) (string, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", errors.New("user id required")
+	}
+	ref := "don_" + strings.TrimPrefix(newUserID(), "u_")
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	if _, err := s.pool.Exec(ctx, `
+		insert into support_donation_refs(ref, user_id)
+		values($1, $2)
+	`, ref, userID); err != nil {
+		return "", err
+	}
+	return ref, nil
+}
+
+func (s *pgStore) AwardSupporterByDonationRef(ref string) (bool, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return false, errors.New("donation ref required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	var userID string
+	err = tx.QueryRow(ctx, `
+		update support_donation_refs
+		set completed_at = coalesce(completed_at, now())
+		where ref = $1
+		returning user_id
+	`, ref).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	awarded, err := awardBadgeTx(ctx, tx, userID, "supporter")
+	if err != nil {
+		return false, err
+	}
+	return awarded, tx.Commit(ctx)
 }
 
 func (s *pgStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]LeaderboardEntry, error) {
@@ -3290,7 +3531,45 @@ func (s *pgStore) RecordMatchResult(snap contracts.MatchSnapshot) error {
 			return err
 		}
 	}
+	if ratedMatch && !p1Guest {
+		if err := awardEloBadgesTx(ctx, tx, p1.UserID, p1Update.MMR); err != nil {
+			return err
+		}
+	}
+	if ratedMatch && !p2Guest {
+		if err := awardEloBadgesTx(ctx, tx, p2.UserID, p2Update.MMR); err != nil {
+			return err
+		}
+	}
+	if ratedMatch {
+		fast5000 := rankedSpeedrunnerUsers(snap)
+		if fast5000[p1.UserID] && !p1Guest {
+			if _, err := awardBadgeTx(ctx, tx, p1.UserID, "speedrunner"); err != nil {
+				return err
+			}
+		}
+		if fast5000[p2.UserID] && !p2Guest {
+			if _, err := awardBadgeTx(ctx, tx, p2.UserID, "speedrunner"); err != nil {
+				return err
+			}
+		}
+	}
 	return tx.Commit(ctx)
+}
+
+func rankedSpeedrunnerUsers(snap contracts.MatchSnapshot) map[string]bool {
+	out := map[string]bool{}
+	for _, round := range snap.RoundResults {
+		if round == nil {
+			continue
+		}
+		for userID, result := range round.Players {
+			if result.Score >= 5000 && result.GuessMS > 0 && result.GuessMS < 30000 {
+				out[userID] = true
+			}
+		}
+	}
+	return out
 }
 
 func (s *pgStore) matchBelongsToLobby(ctx context.Context, tx pgx.Tx, matchID string) (bool, error) {

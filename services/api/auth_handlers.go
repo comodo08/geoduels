@@ -370,6 +370,9 @@ func (a *api) issueAuthSessionPayload(identity persistence.Identity, sessionID s
 		return contracts.AuthSessionPayload{}, err
 	}
 	identity = bootstrapped
+	if err := a.store.SyncLoginBadges(identity.Sub); err != nil {
+		return contracts.AuthSessionPayload{}, err
+	}
 	accessToken, err := auth.IssueAppAccessToken(a.appAuthSecret, identity.Sub, sessionID, a.accessTokenTTL)
 	if err != nil {
 		return contracts.AuthSessionPayload{}, err

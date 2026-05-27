@@ -626,9 +626,12 @@ function normalizeBadge(value: unknown): PlayerBadgeInfo | null {
     label: typeof raw.label === "string" ? raw.label : "",
     description: typeof raw.description === "string" ? raw.description : "",
     imageUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : "",
+    rarity: typeof raw.rarity === "string" ? raw.rarity : undefined,
     seasonId: typeof raw.seasonId === "string" ? raw.seasonId : undefined,
     rank: typeof raw.rank === "number" ? raw.rank : undefined,
     owned: typeof raw.owned === "boolean" ? raw.owned : false,
+    unobtainable:
+      typeof raw.unobtainable === "boolean" ? raw.unobtainable : undefined,
   };
 }
 

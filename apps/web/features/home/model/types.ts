@@ -244,6 +244,7 @@ export type HomeActions = {
   submitOnboardingNickname: () => Promise<void>;
   submitProfileNickname: () => Promise<boolean>;
   selectBadge: (badgeId: string) => Promise<void>;
+  startSupportDonation: () => Promise<void>;
   setNicknameInput: (value: string) => void;
   dismissNotification: (notificationId: number) => Promise<void>;
   submitGuestVerificationToken: (token: string) => void;

@@ -76,6 +76,44 @@ export default function HomePageOverlays({
           </button>
         </AppModalShell>
       ) : null}
+      {activeNotification?.type === "badge_unlocked" &&
+      activeNotification.payload.badge ? (
+        <AppModalShell
+          title="New badge unlocked"
+          placement="center"
+          showHeader={false}
+          zIndexClassName="z-[1000]"
+          maxWidthClassName="max-w-sm"
+        >
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#77f0be]">
+            New badge unlocked!
+          </p>
+          <div className="mt-5 flex flex-col items-center text-center">
+            <img
+              src={activeNotification.payload.badge.imageUrl}
+              alt=""
+              className="h-24 w-24 object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
+            />
+            <h2 className="mt-4 text-2xl font-black">
+              {activeNotification.payload.badge.label}
+            </h2>
+            {activeNotification.payload.badge.description ? (
+              <p className="mt-3 text-sm leading-6 text-[#b9c9d8]">
+                {activeNotification.payload.badge.description}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              void actions.dismissNotification(activeNotification.id)
+            }
+            className="mt-5 min-h-11 w-full rounded-xl bg-[#77f0be] px-4 text-sm font-black text-[#08111b]"
+          >
+            Claim
+          </button>
+        </AppModalShell>
+      ) : null}
       {overlays.endMatch.open && (
         <EndMatchOverlay
           onLeaveGame={actions.leaveGame}

@@ -136,6 +136,7 @@ type Props = {
   onChangeNickname: (value: string) => void;
   onSaveNickname: () => Promise<boolean>;
   onSelectBadge?: (badgeId: string) => Promise<void>;
+  onSupportDonation?: () => Promise<void>;
   onLogout: () => void;
   onDeleteAccount?: () => Promise<void>;
 };
@@ -269,6 +270,7 @@ export default function LobbyScreen({
   onChangeNickname,
   onSaveNickname,
   onSelectBadge = async () => { },
+  onSupportDonation = async () => { },
   maintenance,
   onlinePlayers,
   appVersion,
@@ -550,11 +552,10 @@ export default function LobbyScreen({
   );
 
   const donateCard = (
-    <a
-      href="https://donate.stripe.com/cNi8wH68d3O1ece8Xm0oM00"
-      target="_blank"
-      rel="noreferrer"
-      className="glass-panel glass-panel-interactive lobby-feature-card group flex w-full items-center gap-4 rounded-[20px] p-5"
+    <button
+      type="button"
+      onClick={() => void onSupportDonation()}
+      className="glass-panel glass-panel-interactive lobby-feature-card group flex w-full items-center gap-4 rounded-[20px] p-5 text-left"
       style={{ animationDelay: "-0.75s" }}
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ef476f]/14 text-[#f7a1b5]">
@@ -579,7 +580,7 @@ export default function LobbyScreen({
           />
         </div>
       </div>
-    </a>
+    </button>
   );
 
   const socialLinksCard = (

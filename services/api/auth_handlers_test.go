@@ -77,6 +77,10 @@ func (s *guestAuthTestStore) GetIdentity(sub string) (persistence.Identity, erro
 	return s.identity, nil
 }
 
+func (s *guestAuthTestStore) SyncLoginBadges(userID string) error {
+	return nil
+}
+
 func TestGuestLoginReusesExistingRefreshSession(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})

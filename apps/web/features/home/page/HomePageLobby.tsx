@@ -33,6 +33,7 @@ type HomePageLobbyProps = {
     | "loadLeaderboard"
     | "submitProfileNickname"
     | "selectBadge"
+    | "startSupportDonation"
     | "setNicknameInput"
     | "clearAuthSession"
     | "deleteAccount"
@@ -117,6 +118,7 @@ export default function HomePageLobby({
       onChangeNickname={actions.setNicknameInput}
       onSaveNickname={actions.submitProfileNickname}
       onSelectBadge={actions.selectBadge}
+      onSupportDonation={actions.startSupportDonation}
       onLogout={() => actions.clearAuthSession()}
       onDeleteAccount={actions.deleteAccount}
     />

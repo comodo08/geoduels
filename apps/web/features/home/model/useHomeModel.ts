@@ -10,9 +10,11 @@ import {
   requestGoogleStart,
   requestGuestSession,
   requestLogout,
+  requestMe,
   requestMatchReport,
   requestUnlinkAuthProvider,
   requestUserNotifications,
+  requestSupportDonation,
   requestSession,
   requestRefreshSession,
   requestUpdateSelectedBadge,
@@ -239,6 +241,10 @@ export function useHomeModel(options?: {
   const deleteAccountMutation = useMutation({
     mutationFn: ({ accessToken }: { accessToken: string }) =>
       requestDeleteAccount(config, accessToken),
+  });
+  const supportDonationMutation = useMutation({
+    mutationFn: ({ accessToken }: { accessToken: string }) =>
+      requestSupportDonation(config, accessToken),
   });
 
   async function bootstrapSession() {
@@ -654,14 +660,17 @@ export function useHomeModel(options?: {
       setNotifications([]);
       return;
     }
-    void (async () => {
+    const refresh = async () => {
       const result = await requestUserNotifications(config, auth.accessToken);
       if (!cancelled) {
         setNotifications(result.notifications || []);
       }
-    })();
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [auth.userId, auth.accessToken, auth.onboardingRequired]);
 
@@ -1212,11 +1221,32 @@ export function useHomeModel(options?: {
   };
 
   const dismissNotification = async (notificationId: number) => {
+    const notification = notifications.find((item) => item.id === notificationId);
     setNotifications((current) =>
       current.filter((notification) => notification.id !== notificationId),
     );
     if (!auth.accessToken) return;
     await markUserNotificationRead(config, auth.accessToken, notificationId);
+    if (notification?.type === "badge_unlocked") {
+      const resp = await requestMe(config, auth.accessToken);
+      if (resp.ok) {
+        sessionController.applyProfileSnapshot(await resp.json());
+      }
+    }
+  };
+
+  const startSupportDonation = async () => {
+    const session = await sessionController.ensureFreshSession(60_000);
+    if (!session?.accessToken) {
+      sessionController.setAuthPending({ authError: "Please sign in again." });
+      return;
+    }
+    const payload = await supportDonationMutation.mutateAsync({
+      accessToken: session.accessToken,
+    });
+    if (payload.donationUrl) {
+      window.open(payload.donationUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const sendChatMessage = (body: string) => {
@@ -1261,6 +1291,7 @@ export function useHomeModel(options?: {
       submitOnboardingNickname,
       submitProfileNickname,
       selectBadge,
+      startSupportDonation,
       setNicknameInput: sessionController.setNicknameInputAndClearError,
       dismissNotification,
       submitGuestVerificationToken,

@@ -196,6 +196,22 @@ func (s *recoverTestStore) UpdateSelectedBadge(userID, badgeID string) (persiste
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) SyncLoginBadges(userID string) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) AwardDiscordServerMemberByDiscordID(discordUserID string) (bool, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) CreateDonationRef(userID string) (string, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) AwardSupporterByDonationRef(ref string) (bool, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]persistence.LeaderboardEntry, error) {
 	panic("unexpected call")
 }

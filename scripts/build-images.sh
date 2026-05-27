@@ -103,6 +103,7 @@ wait_first_job() {
 # dockerfile|image|context
 builds=(
   "services/api/Dockerfile|geoduels-api|.|generic"
+  "services/discord-worker/Dockerfile|geoduels-discord-worker|.|generic"
   "services/match-coordinator/Dockerfile|geoduels-match-coordinator|.|generic"
   "services/moderation-worker/Dockerfile|geoduels-moderation-worker|.|generic"
   "services/realtime-gateway/Dockerfile|geoduels-realtime-gateway|.|generic"

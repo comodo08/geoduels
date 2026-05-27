@@ -4,9 +4,11 @@ export type PlayerBadgeInfo = {
   label: string;
   description: string;
   imageUrl: string;
+  rarity?: string;
   seasonId?: string;
   rank?: number;
   owned?: boolean;
+  unobtainable?: boolean;
 };
 
 type PlayerBadgeProps = {

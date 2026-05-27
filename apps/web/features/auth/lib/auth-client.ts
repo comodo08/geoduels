@@ -61,6 +61,18 @@ export type UserNotification = {
   id: number;
   type: string;
   payload: {
+    badge?: {
+      id: string;
+      kind: string;
+      label: string;
+      description: string;
+      imageUrl: string;
+      rarity?: string;
+      seasonId?: string;
+      rank?: number;
+      owned?: boolean;
+      unobtainable?: boolean;
+    };
     refundDelta?: number;
     matchId?: string;
     cheaterUserId?: string;
@@ -95,6 +107,20 @@ export async function markUserNotificationRead(
       headers: { Authorization: `Bearer ${accessToken}` },
     },
   );
+}
+
+export async function requestSupportDonation(
+  config: RuntimeConfig,
+  accessToken: string,
+): Promise<{ donationUrl: string }> {
+  const resp = await fetch(`${config.apiURL}/v1/support/donate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Could not start donation"));
+  }
+  return resp.json();
 }
 
 export async function requestLeaderboard(

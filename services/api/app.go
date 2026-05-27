@@ -30,6 +30,13 @@ type api struct {
 	googleSecret           string
 	discordClientID        string
 	discordSecret          string
+	stripeMode             string
+	stripeTestPaymentLink  string
+	stripeLivePaymentLink  string
+	stripeLegacyPaymentURL string
+	stripeTestWebhook      string
+	stripeLiveWebhook      string
+	stripeLegacyWebhook    string
 	appAuthSecret          []byte
 	ticketAuth             []byte
 	internalSecret         string
@@ -70,6 +77,13 @@ func newAPI() (*api, error) {
 	googleSecret := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET"))
 	discordClientID := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID"))
 	discordSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
+	stripeMode := strings.TrimSpace(strings.ToLower(os.Getenv("STRIPE_MODE")))
+	stripeTestPaymentLink := strings.TrimSpace(os.Getenv("STRIPE_TEST_PAYMENT_LINK_URL"))
+	stripeLivePaymentLink := strings.TrimSpace(os.Getenv("STRIPE_LIVE_PAYMENT_LINK_URL"))
+	stripeLegacyPaymentURL := strings.TrimSpace(os.Getenv("STRIPE_PAYMENT_LINK_URL"))
+	stripeTestWebhook := strings.TrimSpace(os.Getenv("STRIPE_TEST_WEBHOOK_SECRET"))
+	stripeLiveWebhook := strings.TrimSpace(os.Getenv("STRIPE_LIVE_WEBHOOK_SECRET"))
+	stripeLegacyWebhook := strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET"))
 	var googleVerifier *auth.GoogleVerifier
 	if googleClientID != "" && googleSecret != "" {
 		googleVerifier, err = auth.NewGoogleVerifier(context.Background(), googleClientID, getenv("GOOGLE_ISSUER", ""))
@@ -124,6 +138,13 @@ func newAPI() (*api, error) {
 		googleSecret:           googleSecret,
 		discordClientID:        discordClientID,
 		discordSecret:          discordSecret,
+		stripeMode:             stripeMode,
+		stripeTestPaymentLink:  stripeTestPaymentLink,
+		stripeLivePaymentLink:  stripeLivePaymentLink,
+		stripeLegacyPaymentURL: stripeLegacyPaymentURL,
+		stripeTestWebhook:      stripeTestWebhook,
+		stripeLiveWebhook:      stripeLiveWebhook,
+		stripeLegacyWebhook:    stripeLegacyWebhook,
 		appAuthSecret:          appAuthSecret,
 		ticketAuth:             ticketAuth,
 		internalSecret:         internalSecret,
@@ -173,6 +194,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/me/auth-providers/{provider}", a.unlinkAuthProvider).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/me/notifications", a.userNotifications).Methods(http.MethodGet)
 	r.HandleFunc("/v1/me/notifications/{id}/read", a.markUserNotificationRead).Methods(http.MethodPost)
+	r.HandleFunc("/v1/support/donate", a.createSupportDonation).Methods(http.MethodPost)
+	r.HandleFunc("/v1/integrations/stripe/webhook", a.stripeWebhook).Methods(http.MethodPost)
 	r.HandleFunc("/v1/content/lobby-changelog", a.publicLobbyChangelog).Methods(http.MethodGet)
 	r.HandleFunc("/v1/content/changelog", a.publicChangelogPosts).Methods(http.MethodGet)
 	r.HandleFunc("/v1/content/changelog/{slug}", a.publicChangelogPost).Methods(http.MethodGet)
