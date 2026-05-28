@@ -145,6 +145,7 @@ export default function InGameScene({
   const sceneRef = useRef<HTMLElement | null>(null);
   const streetViewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const canShowForfeit = uiPhase !== 'match_end';
+  const disableStreetViewTabbing = !streetViewInteractive;
   const utilityControlPosition = 'absolute left-3 top-3 z-40 pointer-events-auto md:bottom-4 md:left-4 md:top-auto';
 
   const releaseStreetViewFocus = useCallback(() => {
@@ -212,6 +213,7 @@ export default function InGameScene({
   }, [streetViewSrc]);
 
   useEffect(() => {
+    if (!disableStreetViewTabbing) return;
     if (uiPhase !== 'live_round' && uiPhase !== 'prematch_countdown') return;
 
     const handleWindowBlur = () => {
@@ -220,7 +222,7 @@ export default function InGameScene({
 
     window.addEventListener('blur', handleWindowBlur);
     return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [releaseStreetViewFocus, uiPhase]);
+  }, [disableStreetViewTabbing, releaseStreetViewFocus, uiPhase]);
 
   const handleForfeitConfirm = () => {
     const sent = onForfeit();
@@ -250,8 +252,8 @@ export default function InGameScene({
             ref={streetViewFrameRef}
             title="Street View"
             src={streetViewSrc}
-            tabIndex={-1}
-            onFocus={releaseStreetViewFocus}
+            tabIndex={disableStreetViewTabbing ? -1 : undefined}
+            onFocus={disableStreetViewTabbing ? releaseStreetViewFocus : undefined}
             className={`absolute left-0 top-[-75px] h-[calc(100%+75px)] w-full border-0 ${streetViewInteractive ? '' : 'pointer-events-none'}`}
             allowFullScreen
             loading="eager"

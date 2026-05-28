@@ -72,16 +72,34 @@ describe('InGameScene', () => {
     });
   });
 
-  it('keeps the Street View iframe out of keyboard tab navigation', () => {
+  it('keeps interactive Street View iframes in keyboard tab navigation', () => {
     render(<InGameScene {...createProps()} />);
+
+    const streetViewFrame = screen.getByTitle('Street View');
+
+    expect(streetViewFrame).not.toHaveAttribute('tabindex');
+  });
+
+  it('keeps NMPZ Street View iframes out of keyboard tab navigation', () => {
+    render(<InGameScene {...createProps({ streetViewInteractive: false })} />);
 
     const streetViewFrame = screen.getByTitle('Street View');
 
     expect(streetViewFrame).toHaveAttribute('tabindex', '-1');
   });
 
-  it('releases focus if the Street View iframe captures it', () => {
+  it('allows interactive Street View iframes to keep focus', () => {
     render(<InGameScene {...createProps()} />);
+
+    const streetViewFrame = screen.getByTitle('Street View');
+
+    streetViewFrame.focus();
+
+    expect(document.activeElement).toBe(streetViewFrame);
+  });
+
+  it('releases focus if the NMPZ Street View iframe captures it', () => {
+    render(<InGameScene {...createProps({ streetViewInteractive: false })} />);
 
     const streetViewFrame = screen.getByTitle('Street View');
 
