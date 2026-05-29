@@ -1772,7 +1772,7 @@ export default function LobbyScreen({
           <div className="flex min-w-0 items-center justify-center">
             <Link href="/" aria-label="GeoDuels home" className="inline-flex">
               <img
-                src="/logo-dark.v1.png"
+                src="/logo.v2.png"
                 alt="GeoDuels"
                 width={140}
                 height={38}

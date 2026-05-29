@@ -15,7 +15,7 @@ export default function TopHeader({ userId, displayName, userEmail, userAvatar, 
 
   return (
     <header className="flex items-start justify-between gap-4">
-      <img src="/logo-dark.v1.png" alt="GeoDuels" className="h-11 w-auto md:h-14" />
+      <img src="/logo.v2.png" alt="GeoDuels" className="h-11 w-auto md:h-14" />
 
       <div className="min-w-[220px] rounded-panel border border-emerald-300/60 bg-emerald-300/15 p-3 text-emerald-50 shadow-[0_0_28px_rgba(52,211,153,0.4)] backdrop-blur-sm md:min-w-[280px]">
         <div className="mb-2 flex items-center justify-between">

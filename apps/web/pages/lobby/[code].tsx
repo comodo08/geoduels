@@ -78,7 +78,7 @@ export default function LobbyInviteRoute() {
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonicalURL} />
-        <meta property="og:image" content={`${siteURL}/logo.v1.png`} />
+        <meta property="og:image" content={`${siteURL}/logo.v2.png`} />
       </Head>
       <HomePageView model={model} />
     </>
