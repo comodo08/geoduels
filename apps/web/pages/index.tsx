@@ -25,9 +25,9 @@ export default function HomePage() {
   const prevMatchIdRef = useRef(model.view.meta.activeMatchId);
   const siteURL = getSiteURL();
   const canonicalURL = `${siteURL}/`;
-  const title = 'GeoDuels | Multiplayer';
+  const title = 'GeoDuels | Play';
   const description =
-    'Play GeoDuels, a competitive GeoGuessr-style multiplayer geography game with ranked duels, Street View rounds, and singleplayer practice.';
+    'Play the best free GeoGuessr alternative with ranked duels, online 1v1 games, singleplayer, or 2v2 with friends!'; 
 
   useEffect(() => {
     const nextMatchId = model.view.meta.activeMatchId;
