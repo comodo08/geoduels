@@ -152,6 +152,21 @@ type ModerationTimelineItem = {
   createdAt: string;
 };
 
+type ModerationMatch = {
+  matchId: string;
+  mode?: string;
+  startedAt?: string;
+  endedAt?: string;
+  winnerUserId?: string;
+  roundCount: number;
+  players: Array<{
+    userId: string;
+    displayName: string;
+    totalScore: number;
+    finalHp: number;
+  }>;
+};
+
 type MatchHistory = {
   matchId: string;
   mode: string;
@@ -504,6 +519,7 @@ function ModerationRoute(props: {
   const selectedCase = caseQuery.data?.case as ModerationCase | undefined;
   const reports = (caseQuery.data?.reports || []) as PlayerReport[];
   const evidence = (caseQuery.data?.evidence || []) as ModerationEvidence[];
+  const matches = (caseQuery.data?.matches || []) as ModerationMatch[];
   const timeline = (caseQuery.data?.timeline || []) as ModerationTimelineItem[];
   const target = caseQuery.data?.targetPlayer as Player | undefined;
 
@@ -627,6 +643,48 @@ function ModerationRoute(props: {
                   </div>
                 </Panel>
               ) : null}
+
+              <Panel className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-white">Matches</p>
+                  <span className="text-xs text-slate-500">{matches.length} referenced</span>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  {matches.map((match) => {
+                    const winner = match.players.find((player) => player.userId === match.winnerUserId);
+                    const outcome = match.winnerUserId
+                      ? `${winner?.displayName || match.winnerUserId} won`
+                      : match.mode === "singleplayer"
+                        ? "Completed"
+                        : match.mode
+                          ? "Draw"
+                          : "Result unavailable";
+                    return (
+                      <Link
+                        key={match.matchId}
+                        href={`/match/${encodeURIComponent(match.matchId)}`}
+                        className="grid gap-2 rounded-md border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-sm hover:bg-slate-900 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate font-semibold text-white">{match.matchId}</span>
+                            <span className={match.winnerUserId ? "font-semibold text-emerald-300" : "font-semibold text-amber-300"}>
+                              {outcome}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-slate-400">
+                            {match.players.map((player) => `${player.displayName} ${player.totalScore} pts / ${player.finalHp} HP`).join(" · ") || "Result details unavailable"}
+                          </p>
+                        </div>
+                        <p className="whitespace-nowrap text-xs text-slate-500">
+                          {match.mode || "unknown"} · {match.roundCount} rnd{match.roundCount === 1 ? "" : "s"} · {formatDate(match.endedAt)}
+                        </p>
+                      </Link>
+                    );
+                  })}
+                  {matches.length === 0 ? <p className="text-sm text-slate-400">No referenced matches.</p> : null}
+                </div>
+              </Panel>
 
               <Panel className="p-4">
                 <p className="font-bold text-white">Evidence</p>

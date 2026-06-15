@@ -554,6 +554,7 @@ type LobbyMember struct {
 	Ready          bool                `json:"ready"`
 	Connected      bool                `json:"connected,omitempty"`
 	PresenceStatus LobbyPresenceStatus `json:"presenceStatus,omitempty"`
+	InActiveMatch  bool                `json:"inActiveMatch,omitempty"`
 	JoinedAt       time.Time           `json:"joinedAt"`
 }
 
@@ -744,9 +745,27 @@ type ModerationCaseLogEntry struct {
 	CreatedAt   time.Time       `json:"createdAt"`
 }
 
+type ModerationMatchPlayerSummary struct {
+	UserID      string `json:"userId"`
+	DisplayName string `json:"displayName"`
+	TotalScore  int    `json:"totalScore"`
+	FinalHP     int    `json:"finalHp"`
+}
+
+type ModerationMatchSummary struct {
+	MatchID      string                         `json:"matchId"`
+	Mode         string                         `json:"mode,omitempty"`
+	StartedAt    *time.Time                     `json:"startedAt,omitempty"`
+	EndedAt      *time.Time                     `json:"endedAt,omitempty"`
+	WinnerUserID string                         `json:"winnerUserId,omitempty"`
+	RoundCount   int                            `json:"roundCount"`
+	Players      []ModerationMatchPlayerSummary `json:"players"`
+}
+
 type ModerationCaseDetail struct {
 	Case         ModerationCaseSummary       `json:"case"`
 	TargetPlayer *AdminPlayerSummary         `json:"targetPlayer,omitempty"`
+	Matches      []ModerationMatchSummary    `json:"matches"`
 	Reports      []ModerationReportSummary   `json:"reports"`
 	Events       []ModerationCaseEvent       `json:"events"`
 	Actions      []ModerationActionSummary   `json:"actions"`

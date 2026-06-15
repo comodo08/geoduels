@@ -103,6 +103,8 @@ type ModerationCaseEvent = contracts.ModerationCaseEvent
 type ModerationActionSummary = contracts.ModerationActionSummary
 type ModerationEvidenceSummary = contracts.ModerationEvidenceSummary
 type ModerationCaseLogEntry = contracts.ModerationCaseLogEntry
+type ModerationMatchSummary = contracts.ModerationMatchSummary
+type ModerationMatchPlayerSummary = contracts.ModerationMatchPlayerSummary
 type ModerationCaseDetail = contracts.ModerationCaseDetail
 type ModerationReportCreated = contracts.ModerationReportCreated
 type ModerationCaseNotificationPayload = contracts.ModerationCaseNotificationPayload
@@ -4359,6 +4361,10 @@ func (s *pgStore) GetModerationCase(caseID int64) (ModerationCaseDetail, error) 
 	if err != nil {
 		return ModerationCaseDetail{}, err
 	}
+	matches, err := s.listModerationCaseMatches(ctx, caseID, detail.Case.TargetUserID)
+	if err != nil {
+		return ModerationCaseDetail{}, err
+	}
 	timeline, err := s.listModerationCaseLog(ctx, caseID)
 	if err != nil {
 		return ModerationCaseDetail{}, err
@@ -4367,6 +4373,7 @@ func (s *pgStore) GetModerationCase(caseID int64) (ModerationCaseDetail, error) 
 	detail.Events = events
 	detail.Actions = actions
 	detail.Evidence = evidence
+	detail.Matches = matches
 	detail.Timeline = timeline
 	return detail, nil
 }
@@ -4677,6 +4684,68 @@ func (s *pgStore) listModerationCaseReports(ctx context.Context, caseID int64) (
 			return nil, err
 		}
 		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) listModerationCaseMatches(ctx context.Context, caseID int64, targetUserID string) ([]ModerationMatchSummary, error) {
+	rows, err := s.pool.Query(ctx, `
+		with case_matches as (
+			select match_id from moderation_reports where case_id = $1 and match_id <> ''
+			union
+			select match_id from moderation_evidence where case_id = $1 and match_id is not null and match_id <> ''
+		)
+		select
+			cm.match_id,
+			coalesce(h.mode, ''),
+			h.started_at,
+			h.ended_at,
+			coalesce(h.winner_user_id, ''),
+			coalesce(jsonb_array_length(coalesce(h.snapshot_json->'roundResults', '[]'::jsonb)), 0),
+			coalesce(p.user_id, ''),
+			coalesce(nullif(p.display_name, ''), p.user_id, ''),
+			coalesce(nullif(h.snapshot_json #>> array['players', p.user_id, 'totalScore'], '')::int, 0),
+			coalesce(p.hp, 0)
+		from case_matches cm
+		left join match_history h on h.match_id = cm.match_id
+		left join match_players p on p.match_id = cm.match_id
+		order by h.ended_at desc nulls last, cm.match_id desc,
+			case when p.user_id = $2 then 0 else 1 end, p.user_id
+	`, caseID, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []ModerationMatchSummary{}
+	matchIndexes := map[string]int{}
+	for rows.Next() {
+		var item ModerationMatchSummary
+		var player ModerationMatchPlayerSummary
+		if err := rows.Scan(
+			&item.MatchID,
+			&item.Mode,
+			&item.StartedAt,
+			&item.EndedAt,
+			&item.WinnerUserID,
+			&item.RoundCount,
+			&player.UserID,
+			&player.DisplayName,
+			&player.TotalScore,
+			&player.FinalHP,
+		); err != nil {
+			return nil, err
+		}
+		index, exists := matchIndexes[item.MatchID]
+		if !exists {
+			item.Players = []ModerationMatchPlayerSummary{}
+			out = append(out, item)
+			index = len(out) - 1
+			matchIndexes[item.MatchID] = index
+		}
+		if player.UserID != "" {
+			out[index].Players = append(out[index].Players, player)
+		}
 	}
 	return out, rows.Err()
 }
