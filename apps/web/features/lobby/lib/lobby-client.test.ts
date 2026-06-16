@@ -62,12 +62,12 @@ describe("lobby-client", () => {
 
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      "http://coordinator.example.test/lobbies",
+      "http://coordinator.example.test/parties",
       expect.objectContaining({ method: "POST" }),
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      "http://coordinator.example.test/lobbies/lob-1/settings",
+      "http://coordinator.example.test/parties/lob-1/settings",
       expect.objectContaining({ method: "PATCH" }),
     );
   });
@@ -89,7 +89,7 @@ describe("lobby-client", () => {
     await fetchLobby(runtimeConfig, "ABC123");
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://coordinator.example.test/lobbies/ABC123",
+      "http://coordinator.example.test/parties/ABC123",
     );
   });
 
@@ -112,10 +112,10 @@ describe("lobby-client", () => {
 
     expect(MockWebSocket.instances).toHaveLength(1);
     expect(MockWebSocket.instances[0]?.url).toBe(
-      "ws://coordinator.example.test/lobbies/lob-1/ws?accessToken=access-token",
+      "ws://coordinator.example.test/parties/lob-1/ws?accessToken=access-token",
     );
     MockWebSocket.instances[0]?.emitMessage({
-      type: "lobby_snapshot",
+      type: "party_snapshot",
       payload: {
         id: "lob-1",
         inviteCode: "ABC123",
@@ -128,7 +128,7 @@ describe("lobby-client", () => {
     });
 
     expect(onEvent).toHaveBeenCalledWith({
-      type: "lobby_snapshot",
+      type: "party_snapshot",
       lobby: expect.objectContaining({
         id: "lob-1",
         inviteCode: "ABC123",

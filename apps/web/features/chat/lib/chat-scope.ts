@@ -11,10 +11,10 @@ export function selectActiveChatConversationId(params: {
     lobbySnapshot?.id &&
     lobbySnapshot.members.some((member) => member.userId === params.userId)
   ) {
-    return `lobby:${lobbySnapshot.id}`;
+    return `party:${lobbySnapshot.id}`;
   }
-  if (params.match.sourceLobbyId) {
-    return `lobby:${params.match.sourceLobbyId}`;
+  if (params.match.sourcePartyId) {
+    return `party:${params.match.sourcePartyId}`;
   }
   if (params.match.snapshot?.matchId && params.match.snapshot.mode !== "singleplayer") {
     return `match:${params.match.snapshot.matchId}`;

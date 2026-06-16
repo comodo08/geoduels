@@ -9,7 +9,7 @@ This document describes the current runtime implemented in this repository. Olde
 - `services/match-coordinator`: duel queue websocket endpoint, assignment, recovery, online count, maintenance exposure.
 - `services/realtime-gateway`: public websocket gateway for `/ws/{node}`.
 - `services/gameplay-node`: authoritative in-memory duel and singleplayer execution for assigned matches.
-- `workers/location-ingest`: validates and imports location datasets into PostgreSQL.
+- `workers/location-ingest`: bootstraps official datasets; user uploads are handled by the API.
 
 ## Data ownership
 
@@ -33,7 +33,7 @@ This document describes the current runtime implemented in this repository. Olde
 
 1. Browser opens websocket matchmaking to `services/match-coordinator` at `/queue`.
 2. `match-coordinator` authenticates the app JWT, manages queue state, and selects a gameplay node.
-3. `match-coordinator` creates the match on the chosen `gameplay-node`.
+3. `match-coordinator` pins the selected map revision, persists a deterministic round plan, and creates the match on the chosen `gameplay-node`.
 4. `match-coordinator` returns match assignment plus a short-lived gameplay ticket.
 5. Browser connects to `/ws/{node}` through `services/realtime-gateway`.
 6. `realtime-gateway` resolves the registered gameplay pod for that route and proxies the websocket to the exact `gameplay-node`.
@@ -98,5 +98,7 @@ This document describes the current runtime implemented in this repository. Olde
 
 ## Location pipeline
 
-- `workers/location-ingest` validates dataset input and writes the catalog into PostgreSQL.
-- `gameplay-node` samples round locations through the in-process sampler backed by persisted data.
+- Custom-map JSON is streamed through the API, validated, normalized into immutable PostgreSQL revisions, and then discarded.
+- Match launch selects and persists the full bounded round plan before assigning a gameplay node.
+- `gameplay-node` consumes the supplied in-memory plan and does not query or preload map catalogs.
+- Redis is not used for map contents, lobby map settings, or per-match location deduplication.

@@ -13,7 +13,7 @@ export default function HomePage() {
       : '';
   const handlePrivateLobbyEntered = useCallback(
     (inviteCode: string) => {
-      void router.push(`/lobby/${encodeURIComponent(inviteCode)}`);
+      void router.push(`/party/${encodeURIComponent(inviteCode)}`);
     },
     [router],
   );
@@ -57,7 +57,7 @@ export default function HomePage() {
         <meta name="twitter:description" content={description} />
         <meta name="twitter:image" content={`${siteURL}/logo.v2.png`} />
       </Head>
-      <HomePageView model={model} />
+      <HomePageView model={model} lobbyRoute="play" />
     </>
   );
 }

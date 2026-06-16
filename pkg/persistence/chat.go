@@ -1,0 +1,83 @@
+package persistence
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"geoduels/pkg/contracts"
+)
+
+func (s *pgStore) RecordChatMessage(conversationID, scopeKind, scopeID string, message ChatMessage) error {
+	conversationID = strings.TrimSpace(conversationID)
+	scopeKind = strings.TrimSpace(scopeKind)
+	scopeID = strings.TrimSpace(scopeID)
+	if conversationID == "" || scopeKind == "" || scopeID == "" {
+		return errors.New("conversation scope required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	createdAt := message.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	return s.recordChatMessage(ctx, conversationID, scopeKind, scopeID, message, createdAt)
+}
+
+func (s *pgStore) recordChatMessage(ctx context.Context, conversationID, scopeKind, scopeID string, message ChatMessage, createdAt time.Time) error {
+	body := nullable(message.Body)
+	emote := nullable(string(message.Emote))
+	_, err := s.pool.Exec(ctx, `
+		insert into chat_conversations (id, scope_kind, scope_id)
+		values ($1, $2, $3)
+		on conflict (id) do nothing
+	`, conversationID, scopeKind, scopeID)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `
+		insert into chat_messages (
+			id, conversation_id, match_id, sender_user_id, sender_display_name, kind, body, emote, created_at
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		on conflict (id) do nothing
+	`, message.ID, conversationID, nullable(message.MatchID), message.SenderUserID, message.SenderDisplayName, string(message.Kind), body, emote, createdAt)
+	return err
+}
+
+func (s *pgStore) ListChatMessages(conversationID string, limit int) ([]ChatMessage, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	if conversationID == "" {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	rows, err := s.pool.Query(ctx, `
+		select id, conversation_id, coalesce(match_id, ''), sender_user_id, sender_display_name, kind, coalesce(body, ''), coalesce(emote, ''), created_at
+		from chat_messages
+		where conversation_id = $1
+		order by created_at asc
+		limit $2
+	`, conversationID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	messages := []ChatMessage{}
+	for rows.Next() {
+		var message ChatMessage
+		var kind string
+		var emote string
+		if err := rows.Scan(&message.ID, &message.ConversationID, &message.MatchID, &message.SenderUserID, &message.SenderDisplayName, &kind, &message.Body, &emote, &message.CreatedAt); err != nil {
+			return nil, err
+		}
+		message.Kind = contracts.ChatMessageKind(kind)
+		message.Emote = contracts.ChatEmote(emote)
+		messages = append(messages, message)
+	}
+	return messages, rows.Err()
+}

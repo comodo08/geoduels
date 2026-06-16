@@ -110,7 +110,7 @@ function buildHistoryOverlay(
   };
 }
 
-function matchSourceLobbyInviteCode(
+function matchSourcePartyInviteCode(
   response: MatchSessionResponse | null,
 ): string {
   if (!response) return "";
@@ -119,7 +119,7 @@ function matchSourceLobbyInviteCode(
     response.status === "history" ||
     response.status === "replaced"
   ) {
-    return response.sourceLobbyInviteCode || "";
+    return response.sourcePartyInviteCode || "";
   }
   return "";
 }
@@ -139,15 +139,15 @@ export default function MatchPage() {
   const canonicalURL = routeMatchId
     ? `${siteURL}/match/${encodeURIComponent(routeMatchId)}`
     : `${siteURL}/`;
-  const handleLeaveToLobby = () => {
-    const sourceLobbyInviteCode =
-      model.view.meta.sourceLobbyInviteCode ||
-      matchSourceLobbyInviteCode(routeSession.replacement) ||
+  const handleLeaveToParty = () => {
+    const sourcePartyInviteCode =
+      model.view.meta.sourcePartyInviteCode ||
+      matchSourcePartyInviteCode(routeSession.replacement) ||
       "";
     model.actions.leaveGame();
     void router.push(
-      sourceLobbyInviteCode
-        ? `/lobby/${encodeURIComponent(sourceLobbyInviteCode)}`
+      sourcePartyInviteCode
+        ? `/party/${encodeURIComponent(sourcePartyInviteCode)}`
         : "/",
     );
   };
@@ -230,21 +230,21 @@ export default function MatchPage() {
           overlays={model.view.overlays}
           actions={{
             ...model.actions,
-            leaveGame: handleLeaveToLobby,
+            leaveGame: handleLeaveToParty,
             startSingleplayer: handlePlayAgain,
           }}
         />
         <HomePageGame
           game={model.view.game}
           maxHP={model.view.meta.maxHP}
-          actions={{ ...model.actions, leaveGame: handleLeaveToLobby }}
+          actions={{ ...model.actions, leaveGame: handleLeaveToParty }}
         />
         <HomePageChatDock chat={model.view.chat} actions={model.actions} />
         {!model.view.game.inGame &&
           !model.view.overlays.endMatch.open &&
           historyOverlay && (
             <EndMatchOverlay
-              onLeaveGame={handleLeaveToLobby}
+              onLeaveGame={handleLeaveToParty}
               mode={historyOverlay.mode}
               outcome={historyOverlay.outcome}
               selfName={historyOverlay.selfName}
@@ -313,7 +313,7 @@ export default function MatchPage() {
                   href="/"
                   className="mt-4 inline-flex rounded-full border border-white/10 bg-white/10 px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white transition hover:bg-white/15"
                 >
-                  Back To Lobby
+                  Back To Party
                 </Link>
               </div>
             </div>

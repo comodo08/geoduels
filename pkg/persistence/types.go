@@ -1,0 +1,269 @@
+package persistence
+
+import (
+	"encoding/json"
+	"time"
+
+	"geoduels/pkg/contracts"
+)
+
+type Profile struct {
+	UserID            string                  `json:"userId"`
+	DisplayName       string                  `json:"displayName"`
+	AvatarURL         string                  `json:"avatarUrl,omitempty"`
+	MMR               int                     `json:"mmr"`
+	RatingRD          float64                 `json:"ratingRd,omitempty"`
+	SeasonID          string                  `json:"seasonId,omitempty"`
+	GamesPlayed       int                     `json:"gamesPlayed"`
+	Wins              int                     `json:"wins"`
+	RankedGamesPlayed int                     `json:"rankedGamesPlayed"`
+	RankedWins        int                     `json:"rankedWins"`
+	IsGuest           bool                    `json:"isGuest"`
+	IsAdmin           bool                    `json:"isAdmin"`
+	IsModerator       bool                    `json:"isModerator"`
+	IsBanned          bool                    `json:"isBanned"`
+	BanReason         string                  `json:"banReason,omitempty"`
+	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
+	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
+}
+
+type LeaderboardEntry struct {
+	Rank        int    `json:"rank"`
+	UserID      string `json:"userId"`
+	DisplayName string `json:"displayName"`
+	AvatarURL   string `json:"avatarUrl,omitempty"`
+	MMR         int    `json:"mmr"`
+	GamesPlayed int    `json:"gamesPlayed"`
+	Wins        int    `json:"wins"`
+}
+
+type LeaderboardOverview struct {
+	Mode         string             `json:"mode"`
+	SeasonID     string             `json:"season"`
+	SelfRank     int                `json:"selfRank"`
+	TotalPlayers int                `json:"totalPlayers"`
+	Entries      []LeaderboardEntry `json:"entries"`
+}
+
+type Identity struct {
+	Sub                   string
+	Email                 string
+	GoogleName            string
+	ProviderName          string
+	AvatarURL             string
+	Onboarded             bool
+	DisplayName           string
+	AccountType           string
+	LinkedProviders       []string
+	AuthMigrationRequired bool
+	RecoveryAvailable     bool
+	IsAdmin               bool
+	IsModerator           bool
+	IsBanned              bool
+	BanReason             string
+}
+
+type AdminPlayerSummary = contracts.AdminPlayerSummary
+
+type ModerationCaseSummary = contracts.ModerationCaseSummary
+type ModerationReportSummary = contracts.ModerationReportSummary
+type ModerationCaseEvent = contracts.ModerationCaseEvent
+type ModerationActionSummary = contracts.ModerationActionSummary
+type ModerationEvidenceSummary = contracts.ModerationEvidenceSummary
+type ModerationCaseLogEntry = contracts.ModerationCaseLogEntry
+type ModerationMatchSummary = contracts.ModerationMatchSummary
+type ModerationMatchPlayerSummary = contracts.ModerationMatchPlayerSummary
+type ModerationCaseDetail = contracts.ModerationCaseDetail
+type ModerationReportCreated = contracts.ModerationReportCreated
+type ModerationCaseNotificationPayload = contracts.ModerationCaseNotificationPayload
+type EnforcementActionSummary = contracts.EnforcementActionSummary
+type UserRoleGrant = contracts.UserRoleGrant
+
+type MapRevisionSummary = contracts.MapRevisionSummary
+
+type MatchHistorySummary struct {
+	MatchID      string    `json:"matchId"`
+	Mode         string    `json:"mode"`
+	StartedAt    time.Time `json:"startedAt"`
+	EndedAt      time.Time `json:"endedAt"`
+	WinnerUserID string    `json:"winnerUserId,omitempty"`
+}
+
+type CreateModerationReportParams struct {
+	MatchID        string
+	ReporterUserID string
+	ReportedUserID string
+	Category       string
+	Reason         string
+}
+
+type ModerationCaseActionParams struct {
+	CaseID      int64
+	ActorUserID string
+	ActionType  string
+	Reason      string
+	Status      string
+	AssignedTo  string
+	MuteUserID  string
+	MuteUntil   time.Time
+}
+
+type CreateDebugModerationReportsParams struct {
+	ReportedUserID string
+	Count          int
+	Category       string
+	Reason         string
+	CreatedBy      string
+}
+
+type DebugModerationReportsResult struct {
+	CaseID          int64    `json:"caseId"`
+	ReportsCreated  int      `json:"reportsCreated"`
+	ReporterUserIDs []string `json:"reporterUserIds"`
+}
+
+type NotificationOutboxItem struct {
+	ID          int64
+	Type        string
+	PayloadJSON []byte
+	Attempts    int
+}
+
+type EloRefundSummary struct {
+	RefundsIssued int `json:"refundsIssued"`
+	TotalRefunded int `json:"totalRefunded"`
+}
+
+type CheatingBanSummary struct {
+	UserID          string           `json:"userId"`
+	Reason          string           `json:"reason,omitempty"`
+	Refunds         EloRefundSummary `json:"refunds"`
+	IPSignupBanned  bool             `json:"ipSignupBanned"`
+	ArchivedCaseIDs []int64          `json:"archivedCaseIds,omitempty"`
+}
+
+type AdminPlayerStats struct {
+	TotalMatches     int `json:"totalMatches"`
+	RankedMatches    int `json:"rankedMatches"`
+	DuelMatches      int `json:"duelMatches"`
+	SingleplayerRuns int `json:"singleplayerRuns"`
+	Wins             int `json:"wins"`
+	Losses           int `json:"losses"`
+}
+
+type AdminPlayerEloPoint struct {
+	Date   time.Time `json:"date"`
+	MMR    int       `json:"mmr"`
+	Delta  int       `json:"delta"`
+	Played int       `json:"played"`
+}
+
+type AdminPlayerDetail struct {
+	Player     AdminPlayerSummary    `json:"player"`
+	Stats      AdminPlayerStats      `json:"stats"`
+	EloHistory []AdminPlayerEloPoint `json:"eloHistory"`
+	Matches    []MatchHistorySummary `json:"matches"`
+}
+
+type UserNotification struct {
+	ID        int64           `json:"id"`
+	Type      string          `json:"type"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"createdAt"`
+}
+
+type SignupIPBan struct {
+	ID        int64     `json:"id"`
+	IPAddress string    `json:"ipAddress"`
+	Reason    string    `json:"reason,omitempty"`
+	CreatedBy string    `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type LobbyChangelogContent struct {
+	Eyebrow   string    `json:"eyebrow"`
+	Title     string    `json:"title"`
+	Markdown  string    `json:"markdown"`
+	Slug      string    `json:"slug,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+}
+
+type ChangelogPost struct {
+	ID        int64     `json:"id"`
+	Slug      string    `json:"slug"`
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary"`
+	Markdown  string    `json:"markdown"`
+	Published bool      `json:"published"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type ChangelogPostInput struct {
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	Summary   string `json:"summary"`
+	Markdown  string `json:"markdown"`
+	Published bool   `json:"published"`
+}
+
+type ModerationSettings struct {
+	DiscordWebhookURL string `json:"discordWebhookUrl"`
+}
+
+type RankedSeasonSettings struct {
+	ActiveSeasonID string `json:"activeSeasonId"`
+}
+
+type RankedSeasonRolloverResult struct {
+	PreviousSeasonID string `json:"previousSeasonId"`
+	ActiveSeasonID   string `json:"activeSeasonId"`
+	BadgesAwarded    int    `json:"badgesAwarded"`
+	PlayersSeeded    int    `json:"playersSeeded"`
+}
+
+type RefreshTokenRecord struct {
+	ID               string
+	UserID           string
+	RefreshTokenHash string
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
+	LastUsedAt       time.Time
+	RevokedAt        *time.Time
+	UserAgent        string
+	IPAddress        string
+}
+type DiscordSyncOutboxItem struct {
+	ID            int64
+	Action        string
+	DiscordUserID string
+	Attempts      int
+}
+
+type DiscordLinkedUser struct {
+	UserID             string
+	DiscordUserID      string
+	HighestEloBadgeMMR int
+}
+
+type AuthSessionParams struct {
+	UserAgent string
+	IPAddress string
+}
+
+type RuntimeMatch struct {
+	MatchID    string
+	State      string
+	OwnerEpoch int64
+	StartedAt  time.Time
+	EndedAt    time.Time
+}
+
+type MatchSessionUpsert struct {
+	Found       contracts.MatchFound
+	NodeID      string
+	NodeEpoch   int64
+	PublicRoute string
+}
+
+type ChatMessage = contracts.ChatMessage

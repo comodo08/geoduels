@@ -2,6 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LobbyScreen from '../LobbyScreen';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 function resetStoredQueueRulesets() {
   if (
@@ -57,8 +58,9 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
     ...overrides
   };
 
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return {
-    ...render(<LobbyScreen {...props} />),
+    ...render(<QueryClientProvider client={queryClient}><LobbyScreen {...props} /></QueryClientProvider>),
     props
   };
 }
@@ -73,13 +75,14 @@ afterEach(() => {
 });
 
 describe('LobbyScreen', () => {
-  it('loads the leaderboard only after the leaderboard tab is opened', () => {
+  it('loads the leaderboard only on the leaderboard route', () => {
     const onBrowseLeaderboard = vi.fn();
     renderLobbyScreen({ onBrowseLeaderboard });
 
     expect(onBrowseLeaderboard).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'TOP' }));
+    cleanup();
+    renderLobbyScreen({ contentRoute: 'top', onBrowseLeaderboard });
 
     expect(onBrowseLeaderboard).toHaveBeenCalledTimes(1);
   });
@@ -193,7 +196,7 @@ describe('LobbyScreen', () => {
       }
     });
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Private Lobby' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Private Party' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'FRIENDS' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'PLAY' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'TOP' })).not.toBeInTheDocument();
@@ -213,7 +216,7 @@ describe('LobbyScreen', () => {
       }
     });
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Private Lobby' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Private Party' })).toBeInTheDocument();
     expect(screen.getByText('Connecting to lobby')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'FRIENDS' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'PLAY' })).not.toBeInTheDocument();
@@ -259,20 +262,79 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('button', { name: 'Start Duel' })).toBeDisabled();
   });
 
+  it('offers reconnect only to players in the active match roster', () => {
+    renderLobbyScreen({
+      privateLobby: {
+        status: 'ready',
+        snapshot: {
+          id: 'lobby-1',
+          inviteCode: 'ABCD12',
+          ownerUserId: 'opponent',
+          state: 'in_match',
+          mode: 'duel',
+          mapScope: 'world',
+          activeMatchId: 'match-1',
+          members: [
+            { userId: 'self', displayName: 'Self', role: 'member', inActiveMatch: true },
+            { userId: 'opponent', displayName: 'Opponent', role: 'owner', inActiveMatch: true }
+          ]
+        },
+        inviteCode: 'ABCD12',
+        isMember: true,
+        isOwner: false,
+        busy: false,
+        error: ''
+      }
+    });
+
+    expect(screen.getByText('You are part of this game and can reconnect whenever you are ready.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reconnect to Game' })).toHaveAttribute('href', '/match/match-1');
+  });
+
+  it('keeps late lobby members out of the active game', () => {
+    renderLobbyScreen({
+      privateLobby: {
+        status: 'ready',
+        snapshot: {
+          id: 'lobby-1',
+          inviteCode: 'ABCD12',
+          ownerUserId: 'opponent',
+          state: 'in_match',
+          mode: 'duel',
+          mapScope: 'world',
+          activeMatchId: 'match-1',
+          members: [
+            { userId: 'self', displayName: 'Self', role: 'member' },
+            { userId: 'opponent', displayName: 'Opponent', role: 'owner', inActiveMatch: true }
+          ]
+        },
+        inviteCode: 'ABCD12',
+        isMember: true,
+        isOwner: false,
+        busy: false,
+        error: ''
+      }
+    });
+
+    expect(screen.getByText('You joined after this game started and will be able to play in the next one.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reconnect to Game' })).not.toBeInTheDocument();
+  });
+
   it('opens invite lobby choices and joins with a typed code', () => {
     const joinInviteLobby = vi.fn(async () => true);
     renderLobbyScreen({ joinInviteLobby });
 
-    expect(screen.queryByRole('button', { name: /Private Lobby/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Private Party/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'FRIENDS' }));
+    cleanup();
+    renderLobbyScreen({ contentRoute: 'friends', joinInviteLobby });
 
     expect(screen.getByText('CUSTOM')).toBeInTheDocument();
     expect(screen.getByText('Create a lobby or join your friend')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Private Lobby/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Private Party/i }));
 
-    expect(screen.getByRole('dialog', { name: 'Private Lobby' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Private Party' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Join With Code'), {
       target: { value: 'abcd12' }
@@ -296,7 +358,7 @@ describe('LobbyScreen', () => {
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent('Lobby not found');
-    expect(screen.queryByRole('heading', { level: 2, name: 'Private Lobby' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create Lobby' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Private Party' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Party' })).not.toBeInTheDocument();
   });
 });

@@ -202,7 +202,7 @@ export type HomeViewModel = {
   overlays: HomeOverlaysView;
   meta: {
     activeMatchId: string;
-    sourceLobbyInviteCode: string;
+    sourcePartyInviteCode: string;
     appVersion: string;
     maxHP: number;
   };
@@ -210,9 +210,9 @@ export type HomeViewModel = {
 
 export type HomeActions = {
   joinQueue: (rulesets?: GameRuleset[]) => void;
-  startSingleplayer: () => Promise<string>;
+  startSingleplayer: (config?: MatchConfig) => Promise<string>;
   cancelQueue: () => void;
-  createInviteLobby: (mode?: PartyMode) => Promise<boolean>;
+  createInviteLobby: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
   joinInviteLobby: (inviteCode?: string) => Promise<boolean>;
   leavePrivateLobby: () => Promise<void>;
   kickLobbyMember: (userId: string) => Promise<void>;

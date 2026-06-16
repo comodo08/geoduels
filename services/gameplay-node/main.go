@@ -25,7 +25,6 @@ import (
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/duel"
 	"geoduels/pkg/gameticket"
-	"geoduels/pkg/locationsampler"
 	"geoduels/pkg/matchstore"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
@@ -54,8 +53,8 @@ type gameplayNode struct {
 	ticketAuth []byte
 	coordAuth  string
 
-	samplerCleanup func()
-	redisCleanup   func()
+	redisCleanup func()
+	plans        *roundPlanRegistry
 
 	runtimes   map[contracts.MatchMode]gameplayRuntime
 	conns      map[string]*websocket.Conn
@@ -72,7 +71,6 @@ type gameplayNode struct {
 }
 
 func main() {
-	ctx := context.Background()
 	nodeID := getenv("GAMEPLAY_NODE_ID", "")
 	if nodeID == "" {
 		h, _ := os.Hostname()
@@ -87,21 +85,6 @@ func main() {
 	rdb, redisCleanup, err := redisFromEnv()
 	if err != nil {
 		log.Fatal(err)
-	}
-	samplers := map[string]*locationsampler.Sampler{}
-	samplerCleanups := []func(){}
-	for _, mapKey := range []string{contracts.MapKeyMoving, contracts.MapKeyNMPZ} {
-		sampler, cleanup, err := locationsampler.NewFromEnvForMapKey(ctx, mapKey, locationsampler.Config{})
-		if err != nil {
-			log.Fatal(err)
-		}
-		samplers[mapKey] = sampler
-		samplerCleanups = append(samplerCleanups, cleanup)
-	}
-	samplerCleanup := func() {
-		for _, cleanup := range samplerCleanups {
-			cleanup()
-		}
 	}
 	store, err := persistence.NewFromEnv()
 	if err != nil {
@@ -121,34 +104,28 @@ func main() {
 	}
 
 	duelConfigs := newMatchConfigRegistry()
-	roundForConfig := func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
-		cfg := duelConfigs.Get(matchID)
-		sampler := samplers[cfg.MapKey]
-		if sampler == nil {
-			sampler = samplers[contracts.MapKeyMoving]
-		}
-		return sampler.NextRound(context.Background(), matchID, roundIndex)
+	plans := newRoundPlanRegistry()
+	roundForPlan := func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
+		return plans.Get(matchID, roundIndex)
 	}
 
 	g := &gameplayNode{
-		nodeID:         nodeID,
-		nodeEpoch:      time.Now().UnixNano(),
-		publicRoute:    publicRoute,
-		internalURL:    internalURL,
-		persist:        store,
-		coord:          coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
-		redis:          rdb,
-		ticketAuth:     ticketSecret,
-		coordAuth:      internalSecret,
-		samplerCleanup: samplerCleanup,
-		redisCleanup:   redisCleanup,
+		nodeID:       nodeID,
+		nodeEpoch:    time.Now().UnixNano(),
+		publicRoute:  publicRoute,
+		internalURL:  internalURL,
+		persist:      store,
+		coord:        coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		redis:        rdb,
+		ticketAuth:   ticketSecret,
+		coordAuth:    internalSecret,
+		redisCleanup: redisCleanup,
+		plans:        plans,
 		runtimes: map[contracts.MatchMode]gameplayRuntime{
-			contracts.ModeDuel:       duelRuntime{mode: contracts.ModeDuel, engine: duel.New(roundForConfig), configs: duelConfigs},
-			contracts.ModeTeamDuel:   duelRuntime{mode: contracts.ModeTeamDuel, engine: duel.New(roundForConfig), configs: duelConfigs},
-			contracts.ModeFreeForAll: duelRuntime{mode: contracts.ModeFreeForAll, engine: duel.New(roundForConfig), configs: duelConfigs},
-			contracts.ModeSingleplayer: singleplayerRuntime{engine: singleplayer.New(func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
-				return samplers[contracts.MapKeyMoving].NextRound(context.Background(), matchID, roundIndex)
-			})},
+			contracts.ModeDuel:         duelRuntime{mode: contracts.ModeDuel, engine: duel.New(roundForPlan), configs: duelConfigs},
+			contracts.ModeTeamDuel:     duelRuntime{mode: contracts.ModeTeamDuel, engine: duel.New(roundForPlan), configs: duelConfigs},
+			contracts.ModeFreeForAll:   duelRuntime{mode: contracts.ModeFreeForAll, engine: duel.New(roundForPlan), configs: duelConfigs},
+			contracts.ModeSingleplayer: singleplayerRuntime{engine: singleplayer.New(roundForPlan)},
 		},
 		conns:      map[string]*websocket.Conn{},
 		connWrite:  map[string]*sync.Mutex{},
@@ -160,7 +137,6 @@ func main() {
 		drainTTL:   getenvDuration("GAMEPLAY_DRAIN_TIMEOUT", 9*time.Minute+30*time.Second),
 	}
 	defer g.persist.Close()
-	defer g.samplerCleanup()
 	defer g.redisCleanup()
 	defer g.coord.RemoveNode(context.Background(), g.nodeID)
 
@@ -220,12 +196,17 @@ func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
 	}
+	if len(found.PlannedRounds) == 0 || found.ResolvedMap.RevisionID == "" {
+		http.Error(w, "match has no resolved round plan", http.StatusBadRequest)
+		return
+	}
 	if _, err := runtime.GetSnapshot(found.MatchID); err == nil {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "exists"})
 		return
 	}
 	found.Config = contracts.NormalizeMatchConfig(found.Config)
+	g.plans.Set(found.MatchID, found.PlannedRounds)
 	if err := runtime.CreateMatch(found.MatchID, found.Players, found.Profiles, found.Unranked, found.SeasonID, found.Config, found.Teams); err != nil && !strings.Contains(err.Error(), "already exists") {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -531,8 +512,8 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 	if err := g.persist.RecordRuntimeMatch(matchID, string(contracts.MatchEnded), g.nodeEpoch, true); err != nil {
 		log.Printf("record runtime match failed: %v", err)
 	}
-	if _, err := g.persist.ReopenEndedLobbies(); err != nil {
-		log.Printf("reopen ended lobbies failed: %v", err)
+	if err := g.persist.CompleteMatchSession(matchID); err != nil {
+		log.Printf("complete match session failed: %v", err)
 	}
 	if b, err := json.Marshal(snap); err == nil {
 		if err := g.persist.RecordFinalMatchSnapshot(matchID, b); err != nil {

@@ -58,7 +58,6 @@ type api struct {
 	guestTurnstileRequired bool
 	trustedProxyCIDRs      []*net.IPNet
 	adminBootstrapEmails   map[string]struct{}
-	locationMapKey         string
 	metrics                *observability.APIMetrics
 	draining               atomic.Bool
 }
@@ -123,7 +122,7 @@ func newAPI() (*api, error) {
 		store.Close()
 		return nil, err
 	}
-	if err := store.ExpireOpenLobbies(); err != nil {
+	if err := store.ExpireOpenParties(); err != nil {
 		store.Close()
 		return nil, err
 	}
@@ -166,7 +165,6 @@ func newAPI() (*api, error) {
 		guestTurnstileRequired: guestTurnstileRequired,
 		trustedProxyCIDRs:      trustedProxyCIDRs,
 		adminBootstrapEmails:   parseEmailAllowlist(os.Getenv("ADMIN_BOOTSTRAP_EMAILS")),
-		locationMapKey:         getenv("LOCATION_MAP_KEY", "a-source-world"),
 		metrics:                observability.NewAPIMetrics(),
 	}, nil
 }
@@ -209,6 +207,18 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/session/resumable", a.sessionResumable).Methods(http.MethodGet)
 	r.HandleFunc("/v1/sessions", a.startSession).Methods(http.MethodPost)
 	r.HandleFunc("/v1/singleplayer/session", a.startSingleplayerSession).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps", a.listMaps).Methods(http.MethodGet)
+	r.HandleFunc("/v1/maps", a.createMap).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}", a.getMap).Methods(http.MethodGet)
+	r.HandleFunc("/v1/maps/{id}", a.updateMap).Methods(http.MethodPatch)
+	r.HandleFunc("/v1/maps/{id}", a.archiveMap).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/maps/{id}/publish", a.publishMap).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}/favorite", a.favoriteMap).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}/favorite", a.unfavoriteMap).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/maps/{id}/comments", a.listMapComments).Methods(http.MethodGet)
+	r.HandleFunc("/v1/maps/{id}/comments", a.createMapComment).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}/comments/{commentId}", a.deleteMapComment).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/maps/{id}/revisions", a.uploadMapRevision).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/players", a.adminPlayers).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/players/{id}", a.adminPlayerDetail).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/players/{id}/matches", a.adminPlayerMatches).Methods(http.MethodGet)

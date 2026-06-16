@@ -7,7 +7,7 @@ import (
 )
 
 func TestRecordMatchResultFinalRankedDeltaCastsParameters(t *testing.T) {
-	body, err := os.ReadFile("store.go")
+	body, err := os.ReadFile("matches_write.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestRecordMatchResultFinalRankedDeltaCastsParameters(t *testing.T) {
 }
 
 func TestCheatingBanRefundQueryCastsOpponentRatingPreviewKey(t *testing.T) {
-	body, err := os.ReadFile("store.go")
+	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {
 		t.Fatal(err)
 	}

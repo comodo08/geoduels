@@ -92,8 +92,8 @@ function createMatchState(snapshot: Snapshot | null): MatchState {
     connected: true,
 	    snapshot,
 	    activeMatchId: snapshot?.matchId || '',
-	    sourceLobbyId: '',
-    sourceLobbyInviteCode: '',
+	    sourcePartyId: '',
+    sourcePartyInviteCode: '',
     queueError: '',
     connectionIssue: '',
     onlinePlayers: 42

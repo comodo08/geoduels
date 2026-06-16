@@ -3,10 +3,7 @@ import type { RuntimeConfig } from "../../../lib/runtime-config";
 import type { SessionController } from "../../auth/controllers/session-controller";
 import type { AuthSessionSnapshot } from "../../auth/session";
 import type { MatchController } from "../../matchmaking/controllers/match-controller";
-import {
-  fetchMatchSession,
-  type MatchConfig,
-} from "../../matchmaking/lib/queue-client";
+import type { MatchConfig } from "../../matchmaking/lib/queue-client";
 import {
   applyLobbyPatch,
   createLobby as requestCreateLobby,
@@ -144,6 +141,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         inviteCode: snap.inviteCode,
         snapshot: normalizeLobbySnapshot(snap),
       });
+      this.markExistingMatchHandled(snap);
       if (!this.isCurrentUserMember(snap)) {
         this.patchState({ status: "ready", error: "" });
         return;
@@ -157,7 +155,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  createLobby = async (mode: PartyMode = "duel") => {
+  createLobby = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
     this.patchState({ status: "creating", error: "" });
     try {
       const session = await this.playableSession();
@@ -166,6 +164,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         this.config,
         session.accessToken,
         mode,
+        matchConfig,
       );
       this.handledMatchId = "";
       this.patchState({
@@ -174,6 +173,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         inviteCode: snap.inviteCode,
         snapshot: snap,
       });
+      this.markExistingMatchHandled(snap);
       await this.connectToLobby(session, snap.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
@@ -210,6 +210,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         inviteCode: snap.inviteCode,
         snapshot: snap,
       });
+      this.markExistingMatchHandled(snap);
       await this.connectToLobby(session, snap.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
@@ -399,25 +400,23 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       controller.signal,
       (event) => {
         if (requestId !== this.connectRequestId) return;
-        if (event.type === "lobby_snapshot") {
+        if (event.type === "party_snapshot") {
           if (readyTimeout) window.clearTimeout(readyTimeout);
           this.reconnectAttempt = 0;
           this.stopPollLoop();
           this.startPresenceLoop();
           this.patchSnapshot(event.lobby, "ready");
-          this.handleStartedLobby(event.lobby, controller);
           readyResolve?.();
           readyResolve = null;
           readyReject = null;
           return;
         }
-        if (event.type === "lobby_patch") {
+        if (event.type === "party_patch") {
           const next = applyLobbyPatch(this.state.snapshot, event.patch);
           if (next) {
             this.reconnectAttempt = 0;
             this.startPresenceLoop();
             this.patchSnapshot(next, "ready");
-            this.handleStartedLobby(next, controller);
           }
           return;
         }
@@ -429,10 +428,10 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
           });
           return;
         }
-        if (event.type === "lobby_error") {
+        if (event.type === "party_error") {
           if (readyTimeout) window.clearTimeout(readyTimeout);
           this.patchState({ status: "error", error: event.message });
-          if (event.message.toLowerCase().includes("left this lobby")) {
+          if (event.message.toLowerCase().includes("left this party")) {
             this.reset();
           }
           readyReject?.(new Error(event.message));
@@ -553,39 +552,9 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     return snapshot.members.some((member) => member.userId === session.userId);
   }
 
-  private async handleStartedLobby(
-    snap: LobbySnapshot,
-    controller: AbortController,
-  ) {
-    const matchId = snap.activeMatchId || snap.startedMatchId || "";
-    if (
-      !matchId ||
-      this.handledMatchId === matchId ||
-      (snap.state !== "in_match" && snap.state !== "started")
-    ) {
-      return;
-    }
-    const session = this.streamSession;
-    if (!session) return;
-    try {
-      const resolved = await fetchMatchSession(
-        this.config,
-        session.accessToken,
-        matchId,
-        controller.signal,
-      );
-      if (resolved.status === "live_connectable") {
-        const connected = await this.matchController.resumeResolvedMatch(
-          resolved,
-          { playMatchFoundSfx: true },
-        );
-        if (connected) {
-          this.handledMatchId = matchId;
-        }
-      }
-    } catch {
-      // The stream will continue carrying lobby state; match recovery can retry elsewhere.
-    }
+  private markExistingMatchHandled(snapshot: LobbySnapshot) {
+    if (snapshot.state !== "in_match" && snapshot.state !== "started") return;
+    this.handledMatchId = snapshot.activeMatchId || snapshot.startedMatchId || "";
   }
 
   private patchState(patch: Partial<LobbyRuntimeState>) {

@@ -90,7 +90,9 @@ const (
 
 type MatchConfig struct {
 	Ruleset             GameRuleset    `json:"ruleset,omitempty"`
-	MapKey              string         `json:"mapKey,omitempty"`
+	MapID               string         `json:"mapId,omitempty"`
+	MapName             string         `json:"mapName,omitempty"`
+	MapKey              string         `json:"mapKey,omitempty"` // Legacy read compatibility.
 	RoundTimerMode      RoundTimerMode `json:"roundTimerMode,omitempty"`
 	RoundTimeLimitMS    int64          `json:"roundTimeLimitMs,omitempty"`
 	PressureTimeLimitMS int64          `json:"pressureTimeLimitMs,omitempty"`
@@ -105,18 +107,15 @@ func NormalizeRuleset(v GameRuleset) GameRuleset {
 	}
 }
 
-func MapKeyForRuleset(ruleset GameRuleset) string {
-	if NormalizeRuleset(ruleset) == RulesetNMPZ {
-		return MapKeyNMPZ
-	}
-	return MapKeyMoving
-}
-
 func NormalizeMatchConfig(cfg MatchConfig) MatchConfig {
 	cfg.Ruleset = NormalizeRuleset(cfg.Ruleset)
-	if cfg.MapKey == "" {
-		cfg.MapKey = MapKeyForRuleset(cfg.Ruleset)
+	if cfg.MapID == "" {
+		cfg.MapID = cfg.MapKey
 	}
+	if cfg.MapID == "" {
+		cfg.MapID = MapKeyMoving
+	}
+	cfg.MapKey = ""
 	switch cfg.RoundTimerMode {
 	case "":
 		cfg.RoundTimerMode = RoundTimerNone
@@ -450,8 +449,8 @@ type MatchAssignedPayload struct {
 	Node                  string      `json:"node"`
 	Ticket                string      `json:"ticket"`
 	WSPath                string      `json:"wsPath"`
-	SourceLobbyID         string      `json:"sourceLobbyId,omitempty"`
-	SourceLobbyInviteCode string      `json:"sourceLobbyInviteCode,omitempty"`
+	SourcePartyID         string      `json:"sourcePartyId,omitempty"`
+	SourcePartyInviteCode string      `json:"sourcePartyInviteCode,omitempty"`
 }
 
 type SessionStartRequest struct {
@@ -470,8 +469,8 @@ type MatchSessionResponse struct {
 	Snapshot              *MatchSnapshot        `json:"snapshot,omitempty"`
 	ReplacementMatchID    string                `json:"replacementMatchId,omitempty"`
 	Replacement           *MatchAssignedPayload `json:"replacement,omitempty"`
-	SourceLobbyID         string                `json:"sourceLobbyId,omitempty"`
-	SourceLobbyInviteCode string                `json:"sourceLobbyInviteCode,omitempty"`
+	SourcePartyID         string                `json:"sourcePartyId,omitempty"`
+	SourcePartyInviteCode string                `json:"sourcePartyInviteCode,omitempty"`
 }
 
 type AuthUser struct {
@@ -524,25 +523,25 @@ type ResumableSessionResponse struct {
 	Mode    string `json:"mode,omitempty"`
 }
 
-type LobbyState string
+type PartyState string
 
 const (
-	LobbyOpen    LobbyState = "open"
-	LobbyInMatch LobbyState = "in_match"
-	LobbyStarted LobbyState = "started"
-	LobbyClosed  LobbyState = "closed"
-	LobbyExpired LobbyState = "expired"
+	PartyOpen    PartyState = "open"
+	PartyInMatch PartyState = "in_match"
+	PartyStarted PartyState = "started"
+	PartyClosed  PartyState = "closed"
+	PartyExpired PartyState = "expired"
 )
 
-type LobbyPresenceStatus string
+type PartyPresenceStatus string
 
 const (
-	LobbyPresenceOnline  LobbyPresenceStatus = "online"
-	LobbyPresenceAway    LobbyPresenceStatus = "away"
-	LobbyPresenceOffline LobbyPresenceStatus = "offline"
+	PartyPresenceOnline  PartyPresenceStatus = "online"
+	PartyPresenceAway    PartyPresenceStatus = "away"
+	PartyPresenceOffline PartyPresenceStatus = "offline"
 )
 
-type LobbyMember struct {
+type PartyMember struct {
 	UserID         string              `json:"userId"`
 	DisplayName    string              `json:"displayName"`
 	AvatarURL      string              `json:"avatarUrl,omitempty"`
@@ -553,55 +552,57 @@ type LobbyMember struct {
 	Role           string              `json:"role"`
 	Ready          bool                `json:"ready"`
 	Connected      bool                `json:"connected,omitempty"`
-	PresenceStatus LobbyPresenceStatus `json:"presenceStatus,omitempty"`
+	PresenceStatus PartyPresenceStatus `json:"presenceStatus,omitempty"`
 	InActiveMatch  bool                `json:"inActiveMatch,omitempty"`
 	JoinedAt       time.Time           `json:"joinedAt"`
 }
 
-type LobbySnapshot struct {
-	ID             string        `json:"id"`
-	InviteCode     string        `json:"inviteCode"`
-	OwnerUserID    string        `json:"ownerUserId"`
-	State          LobbyState    `json:"state"`
-	Mode           MatchMode     `json:"mode"`
-	MapScope       string        `json:"mapScope"`
-	Config         MatchConfig   `json:"config,omitempty"`
-	ActiveMatchID  string        `json:"activeMatchId,omitempty"`
-	LastMatchID    string        `json:"lastMatchId,omitempty"`
-	StartedMatchID string        `json:"startedMatchId,omitempty"`
-	CreatedAt      time.Time     `json:"createdAt"`
-	ExpiresAt      time.Time     `json:"expiresAt"`
-	Members        []LobbyMember `json:"members"`
+type PartySnapshot struct {
+	ID               string        `json:"id"`
+	InviteCode       string        `json:"inviteCode"`
+	OwnerUserID      string        `json:"ownerUserId"`
+	State            PartyState    `json:"state"`
+	Mode             MatchMode     `json:"mode"`
+	MapScope         string        `json:"mapScope"`
+	MapName          string        `json:"mapName,omitempty"`
+	MapLocationCount int           `json:"mapLocationCount,omitempty"`
+	Config           MatchConfig   `json:"config,omitempty"`
+	ActiveMatchID    string        `json:"activeMatchId,omitempty"`
+	LastMatchID      string        `json:"lastMatchId,omitempty"`
+	StartedMatchID   string        `json:"startedMatchId,omitempty"`
+	CreatedAt        time.Time     `json:"createdAt"`
+	ExpiresAt        time.Time     `json:"expiresAt"`
+	Members          []PartyMember `json:"members"`
 }
 
-type LobbyPatch struct {
+type PartyPatch struct {
 	Revision        int64         `json:"revision"`
-	State           *LobbyState   `json:"state,omitempty"`
+	State           *PartyState   `json:"state,omitempty"`
 	OwnerUserID     *string       `json:"ownerUserId,omitempty"`
 	Mode            *MatchMode    `json:"mode,omitempty"`
 	Config          *MatchConfig  `json:"config,omitempty"`
 	ActiveMatchID   *string       `json:"activeMatchId,omitempty"`
 	LastMatchID     *string       `json:"lastMatchId,omitempty"`
 	StartedMatchID  *string       `json:"startedMatchId,omitempty"`
-	UpsertMembers   []LobbyMember `json:"upsertMembers,omitempty"`
+	UpsertMembers   []PartyMember `json:"upsertMembers,omitempty"`
 	RemoveMemberIDs []string      `json:"removeMemberIds,omitempty"`
 }
 
-type LobbyCreateRequest struct {
+type PartyCreateRequest struct {
 	Mode     MatchMode   `json:"mode,omitempty"`
 	MapScope string      `json:"mapScope,omitempty"`
 	Config   MatchConfig `json:"config,omitempty"`
 }
 
-type LobbyMemberRequest struct {
+type PartyMemberRequest struct {
 	UserID string `json:"userId"`
 }
 
-type LobbyTeamRequest struct {
+type PartyTeamRequest struct {
 	TeamID string `json:"teamId"`
 }
 
-type LobbyStartResponse struct {
+type PartyStartResponse struct {
 	Assignment MatchAssignedPayload `json:"assignment"`
 }
 
@@ -620,9 +621,40 @@ type MatchFound struct {
 	Players               []string                 `json:"players"`
 	Profiles              map[string]PlayerProfile `json:"profiles,omitempty"`
 	Teams                 map[string]string        `json:"teams,omitempty"`
-	MapScope              string                   `json:"mapScope"`
-	SourceLobbyID         string                   `json:"sourceLobbyId,omitempty"`
-	SourceLobbyInviteCode string                   `json:"sourceLobbyInviteCode,omitempty"`
+	ResolvedMap           ResolvedMap              `json:"resolvedMap"`
+	PlannedRounds         []PlannedRound           `json:"plannedRounds"`
+	MapAccessUserID       string                   `json:"mapAccessUserId,omitempty"`
+	MapScope              string                   `json:"mapScope,omitempty"` // Legacy read compatibility.
+	SourcePartyID         string                   `json:"sourcePartyId,omitempty"`
+	SourcePartyInviteCode string                   `json:"sourcePartyInviteCode,omitempty"`
+}
+
+type MatchPresetID string
+
+const (
+	MatchPresetRankedDuel  MatchPresetID = "ranked_duel"
+	MatchPresetPrivateDuel MatchPresetID = "private_duel"
+	MatchPresetTeamDuel    MatchPresetID = "team_duel"
+	MatchPresetFreeForAll  MatchPresetID = "free_for_all"
+	MatchPresetSolo        MatchPresetID = "solo"
+)
+
+type MatchParticipant struct {
+	UserID        string    `json:"userId"`
+	TeamID        string    `json:"teamId,omitempty"`
+	JoinedPartyAt time.Time `json:"joinedPartyAt,omitempty"`
+	InGame        bool      `json:"inGame"`
+}
+
+type ResolvedMap struct {
+	MapID       string `json:"mapId"`
+	RevisionID  string `json:"revisionId"`
+	DisplayName string `json:"displayName"`
+}
+
+type PlannedRound struct {
+	RoundIndex int           `json:"roundIndex"`
+	Location   LocationPoint `json:"location"`
 }
 
 type AdminPlayerSummary struct {
@@ -827,6 +859,77 @@ type MapRevisionSummary struct {
 	RowCount    int    `json:"rowCount"`
 	Inserted    bool   `json:"inserted"`
 	DisplayName string `json:"displayName"`
+}
+
+type CustomMap struct {
+	ID               string     `json:"id"`
+	OwnerUserID      string     `json:"ownerUserId,omitempty"`
+	AuthorName       string     `json:"authorName,omitempty"`
+	DisplayName      string     `json:"displayName"`
+	Description      string     `json:"description,omitempty"`
+	Visibility       string     `json:"visibility"`
+	Status           string     `json:"status"`
+	Difficulty       string     `json:"difficulty"`
+	ThumbnailVariant int        `json:"thumbnailVariant"`
+	ThumbnailKey     string     `json:"thumbnailKey"`
+	LocationCount    int        `json:"locationCount"`
+	ActiveRevisionID string     `json:"activeRevisionId,omitempty"`
+	System           bool       `json:"system"`
+	PublishedAt      *time.Time `json:"publishedAt,omitempty"`
+	PlayCount        int        `json:"playCount"`
+	FavoriteCount    int        `json:"favoriteCount"`
+	CommentCount     int        `json:"commentCount"`
+	TrendingScore    float64    `json:"trendingScore"`
+	Favorited        bool       `json:"favorited,omitempty"`
+	OfficialRegion   string     `json:"officialRegion,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+}
+
+type CustomMapUpdate struct {
+	DisplayName      string `json:"displayName"`
+	Description      string `json:"description"`
+	Visibility       string `json:"visibility"`
+	Difficulty       string `json:"difficulty"`
+	ThumbnailVariant int    `json:"thumbnailVariant"`
+	ThumbnailKey     string `json:"thumbnailKey"`
+}
+
+type MapListOptions struct {
+	Scope  string `json:"scope"`
+	Sort   string `json:"sort"`
+	Search string `json:"search"`
+}
+
+type MapCountryStat struct {
+	Country       string `json:"country"`
+	LocationCount int    `json:"locationCount"`
+}
+
+type MapComment struct {
+	ID              string       `json:"id"`
+	MapID           string       `json:"mapId"`
+	ParentID        string       `json:"parentId,omitempty"`
+	UserID          string       `json:"userId"`
+	UserDisplayName string       `json:"userDisplayName"`
+	AvatarURL       string       `json:"avatarUrl,omitempty"`
+	Body            string       `json:"body"`
+	Status          string       `json:"status"`
+	CanDelete       bool         `json:"canDelete,omitempty"`
+	CreatedAt       time.Time    `json:"createdAt"`
+	UpdatedAt       time.Time    `json:"updatedAt"`
+	Replies         []MapComment `json:"replies,omitempty"`
+}
+
+type MapCommentCreate struct {
+	Body     string `json:"body"`
+	ParentID string `json:"parentId,omitempty"`
+}
+
+type MapDetails struct {
+	Map          CustomMap        `json:"map"`
+	CountryStats []MapCountryStat `json:"countryStats"`
+	Comments     []MapComment     `json:"comments"`
 }
 
 type CommandEnvelope struct {

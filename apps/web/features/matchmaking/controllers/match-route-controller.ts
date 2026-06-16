@@ -165,10 +165,10 @@ export class MatchRouteController extends ObservableStore<MatchRouteState> {
           node: resolved.node,
           wsPath: resolved.wsPath,
           ticket: resolved.ticket,
-          ...(resolved.sourceLobbyInviteCode
+          ...(resolved.sourcePartyInviteCode
             ? {
-                sourceLobbyId: resolved.sourceLobbyId,
-                sourceLobbyInviteCode: resolved.sourceLobbyInviteCode
+                sourcePartyId: resolved.sourcePartyId,
+                sourcePartyInviteCode: resolved.sourcePartyInviteCode
               }
             : {})
         });

@@ -22,7 +22,6 @@ import (
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
-	"geoduels/pkg/lobbysettings"
 	"geoduels/pkg/maintenance"
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/matchstore"
@@ -32,19 +31,18 @@ import (
 )
 
 type matchCoordinator struct {
-	store         matchstore.Store
-	state         *coordinator.Store
-	persist       persistence.Store
-	redis         *redis.Client
-	lobbySettings *lobbysettings.Store
-	httpClient    *http.Client
-	appSecret     []byte
-	ticketAuth    []byte
-	internal      string
-	metrics       *observability.APIMetrics
-	draining      atomic.Bool
-	chatMu        sync.Mutex
-	chatRecent    map[string][]time.Time
+	store      matchstore.Store
+	state      *coordinator.Store
+	persist    persistence.Store
+	redis      *redis.Client
+	httpClient *http.Client
+	appSecret  []byte
+	ticketAuth []byte
+	internal   string
+	metrics    *observability.APIMetrics
+	draining   atomic.Bool
+	chatMu     sync.Mutex
+	chatRecent map[string][]time.Time
 }
 
 var queueUpgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
@@ -66,10 +64,10 @@ func main() {
 	if err := persist.ExpireStaleRuntimeMatches("solo-", singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
-	if err := persist.ExpireOpenLobbies(); err != nil {
+	if err := persist.ExpireOpenParties(); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := persist.ReopenEndedLobbies(); err != nil {
+	if _, err := persist.ReopenEndedParties(); err != nil {
 		log.Fatal(err)
 	}
 	appSecret, err := requiredSecret("APP_AUTH_SECRET", 32)
@@ -86,17 +84,16 @@ func main() {
 	}
 
 	q := &matchCoordinator{
-		store:         store,
-		state:         coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
-		persist:       persist,
-		redis:         rdb,
-		lobbySettings: lobbysettings.New(rdb, 2*time.Hour),
-		httpClient:    &http.Client{Timeout: 3 * time.Second},
-		appSecret:     appSecret,
-		ticketAuth:    ticketSecret,
-		internal:      internalSecret,
-		metrics:       observability.NewAPIMetrics(),
-		chatRecent:    map[string][]time.Time{},
+		store:      store,
+		state:      coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		persist:    persist,
+		redis:      rdb,
+		httpClient: &http.Client{Timeout: 3 * time.Second},
+		appSecret:  appSecret,
+		ticketAuth: ticketSecret,
+		internal:   internalSecret,
+		metrics:    observability.NewAPIMetrics(),
+		chatRecent: map[string][]time.Time{},
 	}
 	defer q.persist.Close()
 	defer redisCleanup()
@@ -109,17 +106,17 @@ func main() {
 	r.HandleFunc("/queue/heartbeat", q.heartbeat).Methods(http.MethodPost)
 	r.HandleFunc("/queue/online", q.online).Methods(http.MethodGet)
 	r.HandleFunc("/chat/ws", q.chatWS).Methods(http.MethodGet)
-	r.HandleFunc("/lobbies", q.createLobby).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/ws", q.lobbyWS).Methods(http.MethodGet)
-	r.HandleFunc("/lobbies/{id}/presence", q.lobbyPresence).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/start", q.startLobby).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/leave", q.leaveLobby).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/kick", q.kickLobbyMember).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/transfer-owner", q.transferLobbyOwner).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{id}/team", q.updateLobbyTeam).Methods(http.MethodPatch)
-	r.HandleFunc("/lobbies/{id}/settings", q.updateLobbySettings).Methods(http.MethodPatch)
-	r.HandleFunc("/lobbies/{code}/join", q.joinLobby).Methods(http.MethodPost)
-	r.HandleFunc("/lobbies/{code}", q.getLobby).Methods(http.MethodGet)
+	r.HandleFunc("/parties", q.createParty).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/ws", q.partyWS).Methods(http.MethodGet)
+	r.HandleFunc("/parties/{id}/presence", q.partyPresence).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/start", q.startParty).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/leave", q.leaveParty).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/kick", q.kickPartyMember).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/transfer-owner", q.transferPartyOwner).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{id}/team", q.updatePartyTeam).Methods(http.MethodPatch)
+	r.HandleFunc("/parties/{id}/settings", q.updatePartySettings).Methods(http.MethodPatch)
+	r.HandleFunc("/parties/{code}/join", q.joinParty).Methods(http.MethodPost)
+	r.HandleFunc("/parties/{code}", q.getParty).Methods(http.MethodGet)
 	r.Handle("/metrics", observability.Handler(q.metrics.Registry)).Methods(http.MethodGet)
 
 	addr := getenv("MATCH_COORDINATOR_ADDR", getenv("QUEUE_COORDINATOR_ADDR", ":8090"))
@@ -132,9 +129,9 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 	observability.Log("info", "match-coordinator startup", map[string]any{"addr": addr})
-	go q.runLobbyCleanupLoop(
-		getenvDuration("LOBBY_CLEANUP_INTERVAL", 30*time.Second),
-		getenvDuration("LOBBY_INACTIVITY_TTL", 5*time.Minute),
+	go q.runPartyCleanupLoop(
+		getenvDuration("PARTY_CLEANUP_INTERVAL", getenvDuration("LOBBY_CLEANUP_INTERVAL", 30*time.Second)),
+		getenvDuration("PARTY_INACTIVITY_TTL", getenvDuration("LOBBY_INACTIVITY_TTL", 5*time.Minute)),
 	)
 	go q.runMatchmakingLoop(
 		getenvDuration("MATCHMAKING_INTERVAL", 500*time.Millisecond),

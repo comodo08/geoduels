@@ -155,6 +155,8 @@ export type Snapshot = {
   config?: {
     ruleset?: "moving" | "nmpz";
     mapKey?: string;
+    mapId?: string;
+    mapName?: string;
     roundTimerMode?: "none" | "pressure" | "fixed";
     roundTimeLimitMs?: number;
     pressureTimeLimitMs?: number;

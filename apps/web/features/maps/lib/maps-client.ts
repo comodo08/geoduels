@@ -1,0 +1,144 @@
+import type { RuntimeConfig } from "../../../lib/runtime-config";
+
+export type CustomMap = {
+  id: string;
+  ownerUserId?: string;
+  authorName?: string;
+  displayName: string;
+  description?: string;
+  visibility: "private" | "unlisted" | "public";
+  status: "processing" | "ready" | "rejected" | "archived";
+  difficulty: "easy" | "normal" | "hard";
+  thumbnailVariant: number;
+  thumbnailKey: string;
+  locationCount: number;
+  activeRevisionId?: string;
+  system: boolean;
+  publishedAt?: string;
+  playCount: number;
+  favoriteCount: number;
+  commentCount: number;
+  trendingScore: number;
+  favorited?: boolean;
+  officialRegion?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MapScope = "official" | "community" | "favorites" | "mine";
+export type MapSort = "trending" | "popular" | "new";
+export type MapCountryStat = { country: string; locationCount: number };
+export type MapComment = {
+  id: string;
+  mapId: string;
+  parentId?: string;
+  userId: string;
+  userDisplayName: string;
+  avatarUrl?: string;
+  body: string;
+  status: "visible" | "deleted" | "moderated";
+  canDelete?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  replies?: MapComment[];
+};
+export type MapDetails = { map: CustomMap; countryStats: MapCountryStat[]; comments: MapComment[] };
+
+function headers(accessToken: string) {
+  return { Authorization: `Bearer ${accessToken}` };
+}
+
+async function expectJSON<T>(response: Response): Promise<T> {
+  if (!response.ok) throw new Error((await response.text()) || "Map request failed");
+  return response.json();
+}
+
+function authHeaders(accessToken?: string) {
+  return accessToken ? headers(accessToken) : undefined;
+}
+
+export async function listMaps(config: RuntimeConfig, accessToken: string | undefined, input: { scope: MapScope; sort?: MapSort; search?: string }): Promise<CustomMap[]> {
+  const params = new URLSearchParams({ scope: input.scope });
+  if (input.sort) params.set("sort", input.sort);
+  const search = input.search?.trim();
+  if (search) params.set("search", search);
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps?${params}`, { headers: authHeaders(accessToken) }));
+}
+
+export async function getMap(config: RuntimeConfig, accessToken: string | undefined, mapId: string): Promise<MapDetails> {
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}`, { headers: authHeaders(accessToken) }));
+}
+
+export async function createMap(config: RuntimeConfig, accessToken: string, input: { file: File; displayName: string; description: string; difficulty: "easy" | "normal" | "hard"; thumbnailKey: string; thumbnailVariant?: number }): Promise<CustomMap> {
+  const body = new FormData();
+  body.set("file", input.file);
+  body.set("displayName", input.displayName);
+  body.set("description", input.description);
+  body.set("difficulty", input.difficulty);
+  body.set("thumbnailKey", input.thumbnailKey);
+  body.set("thumbnailVariant", String(input.thumbnailVariant || 1));
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps`, { method: "POST", headers: headers(accessToken), body }));
+}
+
+export async function uploadMapRevision(config: RuntimeConfig, accessToken: string, mapId: string, file: File): Promise<CustomMap> {
+  const body = new FormData();
+  body.set("file", file);
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}/revisions`, { method: "POST", headers: headers(accessToken), body }));
+}
+
+export async function archiveMap(config: RuntimeConfig, accessToken: string, mapId: string): Promise<void> {
+  const response = await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}`, { method: "DELETE", headers: headers(accessToken) });
+  if (!response.ok) throw new Error((await response.text()) || "Could not delete map");
+}
+
+export async function publishMap(config: RuntimeConfig, accessToken: string, mapId: string): Promise<CustomMap> {
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}/publish`, { method: "POST", headers: headers(accessToken) }));
+}
+
+export async function setMapFavorite(config: RuntimeConfig, accessToken: string, mapId: string, favorite: boolean): Promise<CustomMap> {
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}/favorite`, { method: favorite ? "POST" : "DELETE", headers: headers(accessToken) }));
+}
+
+export async function createMapComment(config: RuntimeConfig, accessToken: string, mapId: string, input: { body: string; parentId?: string }): Promise<MapComment> {
+  return expectJSON(await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}/comments`, {
+    method: "POST",
+    headers: { ...headers(accessToken), "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }));
+}
+
+export async function deleteMapComment(config: RuntimeConfig, accessToken: string, mapId: string, commentId: string): Promise<void> {
+  const response = await fetch(`${config.apiURL}/v1/maps/${encodeURIComponent(mapId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", headers: headers(accessToken) });
+  if (!response.ok) throw new Error((await response.text()) || "Could not delete comment");
+}
+
+export async function validateMapFile(file: File): Promise<number> {
+  if (file.size > 64 * 1024 * 1024) throw new Error("Map file exceeds 64 MiB");
+  const raw = JSON.parse(await file.text());
+  const locations = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray(raw.customCoordinates) ? raw.customCoordinates : null;
+  if (!locations) throw new Error("Map JSON must be an array or a map-making.app export");
+  if (locations.length > 100_000) throw new Error("Map exceeds 100,000 locations");
+  const coordinates = new Set<string>();
+  const panos = new Set<string>();
+  let valid = 0;
+  for (const item of locations) {
+    if (!item || typeof item !== "object") continue;
+    const lat = Number(item.lat);
+    const lng = Number(item.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+    const coordinate = `${lat.toFixed(8)}:${lng.toFixed(8)}`;
+    const extra = item.extra && typeof item.extra === "object" ? item.extra : undefined;
+    const pano =
+      typeof item.panoId === "string" && item.panoId.trim()
+        ? item.panoId.trim()
+        : typeof extra?.panoId === "string"
+          ? extra.panoId.trim()
+          : "";
+    if (coordinates.has(coordinate) || (pano && panos.has(pano))) continue;
+    coordinates.add(coordinate);
+    if (pano) panos.add(pano);
+    valid += 1;
+  }
+  if (valid < 5) throw new Error("Map requires at least 5 unique valid locations");
+  return valid;
+}

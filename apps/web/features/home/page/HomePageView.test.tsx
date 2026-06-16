@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { HomeModel } from "../model/types";
 import HomePageView from "./HomePageView";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("next/dynamic", () => ({
   default: () => () => null,
@@ -188,7 +189,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
       },
       meta: {
         activeMatchId: "match-1",
-        sourceLobbyInviteCode: "",
+        sourcePartyInviteCode: "",
         appVersion: "dev",
         maxHP: 6000,
       },
@@ -197,6 +198,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
     actions: {
       joinQueue: vi.fn(),
       startSingleplayer: vi.fn(),
+      startSupportDonation: vi.fn(),
       cancelQueue: vi.fn(),
       placeGuess: vi.fn(),
       finalizeGuess: vi.fn(),
@@ -237,7 +239,8 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
 
 describe("HomePageView", () => {
   it("renders onboarding and end match overlays while hiding the game scene", () => {
-    render(<HomePageView model={createModel()} />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><HomePageView model={createModel()} /></QueryClientProvider>);
 
     expect(screen.getByText("Choose Your Nickname")).toBeInTheDocument();
     expect(screen.getByText("Match Complete")).toBeInTheDocument();
@@ -245,8 +248,9 @@ describe("HomePageView", () => {
   });
 
   it("keeps chat on the top app layer over the match end page", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <HomePageView
+      <QueryClientProvider client={client}><HomePageView
         model={createModel({
           chat: {
             conversationId: "match:match-1",
@@ -255,7 +259,7 @@ describe("HomePageView", () => {
             error: "",
           },
         })}
-      />,
+      /></QueryClientProvider>,
     );
 
     expect(screen.getByLabelText("Open chat").parentElement).toHaveClass(

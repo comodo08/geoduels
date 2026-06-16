@@ -1,5 +1,6 @@
 import dynamic from 'next/dynamic';
 import type { HomeModel } from '../model/types';
+import type { LobbyContentRoute } from '../../../components/ui/LobbyScreen';
 import HomePageChatDock from './HomePageChatDock';
 import HomePageLobby from './HomePageLobby';
 import HomePageOverlays from './HomePageOverlays';
@@ -10,9 +11,11 @@ const HomePageGame = dynamic(() => import('./HomePageGame'), {
 
 type HomePageViewProps = {
   model: HomeModel;
+  lobbyRoute?: LobbyContentRoute;
+  mapId?: string;
 };
 
-export default function HomePageView({ model }: HomePageViewProps) {
+export default function HomePageView({ model, lobbyRoute = 'play', mapId = '' }: HomePageViewProps) {
   const showGame =
     model.view.game.inGame &&
     !(
@@ -23,7 +26,7 @@ export default function HomePageView({ model }: HomePageViewProps) {
   return (
     <main className="relative min-h-screen overflow-hidden text-ink">
       <HomePageOverlays auth={model.view.auth} overlays={model.view.overlays} actions={model.actions} />
-      <HomePageLobby auth={model.view.auth} lobby={model.view.lobby} meta={model.view.meta} actions={model.actions} />
+      <HomePageLobby auth={model.view.auth} lobby={model.view.lobby} meta={model.view.meta} actions={model.actions} contentRoute={lobbyRoute} mapId={mapId} />
       <HomePageChatDock chat={model.view.chat} actions={model.actions} />
       {showGame ? (
         <HomePageGame

@@ -19,6 +19,7 @@ export type LobbyMember = {
   ready?: boolean;
   connected?: boolean;
   presenceStatus?: "online" | "away" | "offline";
+  inActiveMatch?: boolean;
 };
 
 export type LobbySnapshot = {
@@ -28,6 +29,8 @@ export type LobbySnapshot = {
   state: "open" | "in_match" | "started" | "closed" | "expired";
   mode: PartyMode;
   mapScope: string;
+  mapName?: string;
+  mapLocationCount?: number;
   config?: MatchConfig;
   activeMatchId?: string;
   lastMatchId?: string;
@@ -55,15 +58,15 @@ export type LobbyAssignment = {
   node: string;
   ticket: string;
   wsPath: string;
-  sourceLobbyId?: string;
-  sourceLobbyInviteCode?: string;
+  sourcePartyId?: string;
+  sourcePartyInviteCode?: string;
 };
 
 export type LobbyEvent =
-  | { type: "lobby_snapshot"; lobby: LobbySnapshot }
-  | { type: "lobby_patch"; patch: LobbyPatch }
+  | { type: "party_snapshot"; lobby: LobbySnapshot }
+  | { type: "party_patch"; patch: LobbyPatch }
   | { type: "match_assigned"; assignment: LobbyAssignment }
-  | { type: "lobby_error"; message: string };
+  | { type: "party_error"; message: string };
 
 function authHeaders(accessToken: string) {
   return { Authorization: `Bearer ${accessToken}` };
@@ -74,31 +77,31 @@ function lobbyHTTPBase(config: RuntimeConfig) {
 }
 
 function lobbyWSTarget(config: RuntimeConfig, lobbyId: string, accessToken: string) {
-  return `${normalizeWSBase(config.queueURL).replace(/\/$/, "")}/lobbies/${encodeURIComponent(lobbyId)}/ws?accessToken=${encodeURIComponent(accessToken)}`;
+  return `${normalizeWSBase(config.queueURL).replace(/\/$/, "")}/parties/${encodeURIComponent(lobbyId)}/ws?accessToken=${encodeURIComponent(accessToken)}`;
 }
 
-export async function createLobby(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel"): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies`, {
+export async function createLobby(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel", matchConfig?: MatchConfig): Promise<LobbySnapshot> {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-    body: JSON.stringify({ mode, mapScope: "world" }),
+    body: JSON.stringify({ mode, config: matchConfig }),
   });
-  if (!resp.ok) throw new Error((await resp.text()) || "Lobby unavailable");
+  if (!resp.ok) throw new Error((await resp.text()) || "Party unavailable");
   return resp.json();
 }
 
 export async function updateLobbySettings(config: RuntimeConfig, lobbyId: string, accessToken: string, matchConfig: MatchConfig, mode?: PartyMode): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/settings`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/settings`, {
     method: "PATCH",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ config: matchConfig, mode }),
   });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not update lobby settings");
+  if (!resp.ok) throw new Error((await resp.text()) || "Could not update party settings");
   return resp.json();
 }
 
 export async function updateLobbyTeam(config: RuntimeConfig, lobbyId: string, accessToken: string, teamId: LobbyTeamId): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/team`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/team`, {
     method: "PATCH",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ teamId }),
@@ -132,42 +135,42 @@ export function applyLobbyPatch(lobby: LobbySnapshot | null, patch: LobbyPatch):
 }
 
 export async function fetchLobby(config: RuntimeConfig, code: string, signal?: AbortSignal): Promise<LobbySnapshot | null> {
-  const target = `${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(code)}`;
+  const target = `${lobbyHTTPBase(config)}/parties/${encodeURIComponent(code)}`;
   const resp = signal ? await fetch(target, { signal }) : await fetch(target);
   if (resp.status === 404) return null;
-  if (!resp.ok) throw new Error("Lobby unavailable");
+  if (!resp.ok) throw new Error("Party unavailable");
   return resp.json();
 }
 
 export async function touchLobbyPresence(config: RuntimeConfig, lobbyId: string, accessToken: string, signal?: AbortSignal): Promise<void> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/presence`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/presence`, {
     method: "POST",
     headers: authHeaders(accessToken),
     signal,
   });
-  if (!resp.ok) throw new Error("Lobby presence unavailable");
+  if (!resp.ok) throw new Error("Party presence unavailable");
 }
 
 export async function joinLobby(config: RuntimeConfig, code: string, accessToken: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(code)}/join`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(code)}/join`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not join lobby");
+  if (!resp.ok) throw new Error((await resp.text()) || "Could not join party");
   return resp.json();
 }
 
 export async function leaveLobby(config: RuntimeConfig, lobbyId: string, accessToken: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/leave`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/leave`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not leave lobby");
+  if (!resp.ok) throw new Error((await resp.text()) || "Could not leave party");
   return resp.json();
 }
 
 export async function kickLobbyMember(config: RuntimeConfig, lobbyId: string, accessToken: string, userId: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/kick`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/kick`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ userId }),
@@ -177,7 +180,7 @@ export async function kickLobbyMember(config: RuntimeConfig, lobbyId: string, ac
 }
 
 export async function transferLobbyOwner(config: RuntimeConfig, lobbyId: string, accessToken: string, userId: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/transfer-owner`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/transfer-owner`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ userId }),
@@ -187,11 +190,11 @@ export async function transferLobbyOwner(config: RuntimeConfig, lobbyId: string,
 }
 
 export async function startLobby(config: RuntimeConfig, lobbyId: string, accessToken: string): Promise<LobbyAssignment> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/lobbies/${encodeURIComponent(lobbyId)}/start`, {
+  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/start`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not start lobby");
+  if (!resp.ok) throw new Error((await resp.text()) || "Could not start party");
   const data = await resp.json();
   return data.assignment;
 }
@@ -219,7 +222,7 @@ export async function streamLobby(
       settle(reject, new DOMException("Aborted", "AbortError"));
     };
     signal.addEventListener("abort", abort, { once: true });
-    ws.onerror = () => settle(reject, new Error("Lobby connection failed"));
+    ws.onerror = () => settle(reject, new Error("Party connection failed"));
     ws.onclose = () => {
       if (signal.aborted) settle(reject, new DOMException("Aborted", "AbortError"));
       else settle(resolve);
@@ -229,14 +232,14 @@ export async function streamLobby(
       try {
         msg = JSON.parse(String(evt.data));
       } catch {
-        settle(reject, new Error("Lobby connection failed"));
+        settle(reject, new Error("Party connection failed"));
         return;
       }
       const payload = msg?.payload ?? {};
-      if (msg?.type === "lobby_snapshot") onEvent({ type: "lobby_snapshot", lobby: payload as LobbySnapshot });
-      if (msg?.type === "lobby_patch") onEvent({ type: "lobby_patch", patch: payload as LobbyPatch });
+      if (msg?.type === "party_snapshot") onEvent({ type: "party_snapshot", lobby: payload as LobbySnapshot });
+      if (msg?.type === "party_patch") onEvent({ type: "party_patch", patch: payload as LobbyPatch });
       if (msg?.type === "match_assigned") onEvent({ type: "match_assigned", assignment: payload as LobbyAssignment });
-      if (msg?.type === "lobby_error") onEvent({ type: "lobby_error", message: payload?.message || "Lobby unavailable" });
+      if (msg?.type === "party_error") onEvent({ type: "party_error", message: payload?.message || "Party unavailable" });
     };
   });
 }

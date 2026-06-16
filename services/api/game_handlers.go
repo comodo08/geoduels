@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -328,7 +329,7 @@ func (a *api) resolveMatchRoute(ctx context.Context, userID string, authenticate
 	}
 	if found && !authenticated {
 		resp := contracts.MatchSessionResponse{Status: "history", MatchID: targetMatchID, Snapshot: history}
-		a.attachLobbyReturn(&resp, targetMatchID)
+		a.attachPartyReturn(&resp, targetMatchID)
 		return resp, nil
 	}
 
@@ -356,8 +357,8 @@ func (a *api) resolveMatchRoute(ctx context.Context, userID string, authenticate
 						Node:                  payload.Node,
 						Ticket:                payload.Ticket,
 						WSPath:                payload.WSPath,
-						SourceLobbyID:         payload.SourceLobbyID,
-						SourceLobbyInviteCode: payload.SourceLobbyInviteCode,
+						SourcePartyID:         payload.SourcePartyID,
+						SourcePartyInviteCode: payload.SourcePartyInviteCode,
 					}, nil
 				}
 				return contracts.MatchSessionResponse{Status: "missing", MatchID: targetMatchID}, nil
@@ -369,7 +370,7 @@ func (a *api) resolveMatchRoute(ctx context.Context, userID string, authenticate
 					Snapshot:           history,
 					ReplacementMatchID: assigned.MatchID,
 				}
-				a.attachLobbyReturn(&resp, targetMatchID)
+				a.attachPartyReturn(&resp, targetMatchID)
 				if replacement, ok, err := a.launcher().AssignedPayload(userID, assigned); err == nil && ok {
 					resp.Replacement = &replacement
 				}
@@ -395,7 +396,7 @@ func (a *api) resolveMatchRoute(ctx context.Context, userID string, authenticate
 
 	if found {
 		resp := contracts.MatchSessionResponse{Status: "history", MatchID: targetMatchID, Snapshot: history}
-		a.attachLobbyReturn(&resp, targetMatchID)
+		a.attachPartyReturn(&resp, targetMatchID)
 		return resp, nil
 	}
 	if rec, ok, err := a.store.GetRuntimeMatch(targetMatchID); err == nil && ok && rec.State != string(contracts.MatchEnded) {
@@ -404,16 +405,16 @@ func (a *api) resolveMatchRoute(ctx context.Context, userID string, authenticate
 	return contracts.MatchSessionResponse{Status: "missing", MatchID: targetMatchID}, nil
 }
 
-func (a *api) attachLobbyReturn(resp *contracts.MatchSessionResponse, matchID string) {
-	if resp == nil || resp.SourceLobbyInviteCode != "" {
+func (a *api) attachPartyReturn(resp *contracts.MatchSessionResponse, matchID string) {
+	if resp == nil || resp.SourcePartyInviteCode != "" {
 		return
 	}
-	lobby, ok, err := a.store.GetLobbyByMatchID(matchID)
+	partyID, inviteCode, ok, err := a.store.MatchSessionSourceParty(matchID)
 	if err != nil || !ok {
 		return
 	}
-	resp.SourceLobbyID = lobby.ID
-	resp.SourceLobbyInviteCode = lobby.InviteCode
+	resp.SourcePartyID = partyID
+	resp.SourcePartyInviteCode = inviteCode
 }
 
 func (a *api) getPublicFinalMatchSnapshot(matchID string) (*contracts.MatchSnapshot, bool, error) {
@@ -540,6 +541,14 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "connect discord to continue", http.StatusForbidden)
 		return
 	}
+	var requestedConfig contracts.MatchConfig
+	if r.Body != nil {
+		dec := json.NewDecoder(io.LimitReader(r.Body, 16<<10))
+		if err := dec.Decode(&requestedConfig); err != nil && !errors.Is(err, io.EOF) {
+			http.Error(w, "invalid singleplayer config", http.StatusBadRequest)
+			return
+		}
+	}
 	userID := claims.Sub
 	if assigned, ok, err := a.coord.GetAssignmentByUser(r.Context(), userID); err == nil && ok {
 		mode := sessionpolicy.NormalizeMode(assigned.Mode, assigned.MatchID)
@@ -575,7 +584,15 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 	found := contracts.MatchFound{
 		MatchID: "solo-" + soloSessionID(),
 		Mode:    contracts.ModeSingleplayer,
-		Config:  contracts.NormalizeMatchConfig(contracts.MatchConfig{Ruleset: contracts.RulesetMoving}),
+		Config: contracts.NormalizeMatchConfig(contracts.MatchConfig{
+			Ruleset:             requestedConfig.Ruleset,
+			MapID:               requestedConfig.MapID,
+			MapName:             requestedConfig.MapName,
+			MapKey:              requestedConfig.MapKey,
+			RoundTimerMode:      requestedConfig.RoundTimerMode,
+			RoundTimeLimitMS:    requestedConfig.RoundTimeLimitMS,
+			PressureTimeLimitMS: requestedConfig.PressureTimeLimitMS,
+		}),
 		Players: []string{userID},
 		Profiles: map[string]contracts.PlayerProfile{
 			userID: {
@@ -590,7 +607,8 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 				SelectedBadge:     profile.SelectedBadge,
 			},
 		},
-		MapScope: "world",
+		MapAccessUserID: userID,
+		MapScope:        "world",
 	}
 	assigned, err := a.launcher().EnsureAssignment(r.Context(), found)
 	if err != nil {

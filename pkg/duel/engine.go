@@ -271,41 +271,43 @@ func (e *Engine) Tick() []string {
 		if e.roundExpired(m, now) {
 			e.resolveRound(m)
 		}
-		allDisconnected := true
-		maxDue := int64(0)
-		for _, p := range m.Players {
-			if !p.Disconnected {
-				allDisconnected = false
+		if !m.Unranked {
+			allDisconnected := true
+			maxDue := int64(0)
+			for _, p := range m.Players {
+				if !p.Disconnected {
+					allDisconnected = false
+				}
+				if p.DisconnectDue > maxDue {
+					maxDue = p.DisconnectDue
+				}
+				if p.Disconnected && p.DisconnectDue > 0 && now.UnixMilli() > p.DisconnectDue {
+					p.HP = 0
+					m.State = contracts.MatchEnded
+					m.LastActivity = now
+					m.EventSeq++
+				}
 			}
-			if p.DisconnectDue > maxDue {
-				maxDue = p.DisconnectDue
+			if m.State != contracts.MatchLive {
+				if m.EventSeq != beforeSeq {
+					changed = append(changed, m.ID)
+				}
+				continue
 			}
-			if p.Disconnected && p.DisconnectDue > 0 && now.UnixMilli() > p.DisconnectDue {
-				p.HP = 0
+			if allDisconnected && maxDue > 0 && now.UnixMilli() > maxDue {
+				for _, p := range m.Players {
+					p.HP = 0
+				}
 				m.State = contracts.MatchEnded
 				m.LastActivity = now
 				m.EventSeq++
+			} else if allDisconnected && !m.LastActivity.IsZero() && now.Sub(m.LastActivity) > staleGrace {
+				for _, p := range m.Players {
+					p.HP = 0
+				}
+				m.State = contracts.MatchEnded
+				m.EventSeq++
 			}
-		}
-		if m.State != contracts.MatchLive {
-			if m.EventSeq != beforeSeq {
-				changed = append(changed, m.ID)
-			}
-			continue
-		}
-		if allDisconnected && maxDue > 0 && now.UnixMilli() > maxDue {
-			for _, p := range m.Players {
-				p.HP = 0
-			}
-			m.State = contracts.MatchEnded
-			m.LastActivity = now
-			m.EventSeq++
-		} else if allDisconnected && !m.LastActivity.IsZero() && now.Sub(m.LastActivity) > staleGrace {
-			for _, p := range m.Players {
-				p.HP = 0
-			}
-			m.State = contracts.MatchEnded
-			m.EventSeq++
 		}
 		if m.EventSeq != beforeSeq {
 			changed = append(changed, m.ID)
@@ -326,7 +328,11 @@ func (e *Engine) MarkDisconnected(matchID, userID string) (*contracts.MatchSnaps
 		return nil, errors.New("player not in match")
 	}
 	p.Disconnected = true
-	p.DisconnectDue = time.Now().Add(disconnectGrace).UnixMilli()
+	if m.Unranked {
+		p.DisconnectDue = 0
+	} else {
+		p.DisconnectDue = time.Now().Add(disconnectGrace).UnixMilli()
+	}
 	m.LastActivity = time.Now()
 	m.EventSeq++
 	return m.snapshot(), nil

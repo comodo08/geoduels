@@ -25,7 +25,7 @@ import (
 type recoverTestStore struct {
 	runtimeMatches map[string]persistence.RuntimeMatch
 	profiles       map[string]persistence.Profile
-	lobbies        map[string]contracts.LobbySnapshot
+	parties        map[string]contracts.PartySnapshot
 	accountTypes   map[string]string
 }
 
@@ -204,6 +204,22 @@ func (s *recoverTestStore) AwardDiscordServerMemberByDiscordID(discordUserID str
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) ClaimPendingDiscordSync(now time.Time) (persistence.DiscordSyncOutboxItem, bool, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) MarkDiscordSyncProcessed(id int64) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) MarkDiscordSyncFailed(id int64, nextAttemptAt time.Time, lastError string) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetDiscordLinkedUser(discordUserID string) (persistence.DiscordLinkedUser, bool, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) CreateDonationRef(userID string) (string, error) {
 	panic("unexpected call")
 }
@@ -363,88 +379,120 @@ func (s *recoverTestStore) ExpireStaleRuntimeMatches(prefix string, olderThan ti
 	return nil
 }
 
-func (s *recoverTestStore) ExpireOpenLobbies() error {
+func (s *recoverTestStore) ExpireOpenParties() error {
 	return nil
 }
 
-func (s *recoverTestStore) ListOpenLobbyIDs() ([]string, error) {
+func (s *recoverTestStore) UpsertMatchSession(params persistence.MatchSessionUpsert) error {
+	return nil
+}
+
+func (s *recoverTestStore) CompleteMatchSession(matchID string) error {
+	if s.parties == nil {
+		return nil
+	}
+	for id, snap := range s.parties {
+		if snap.ActiveMatchID == matchID || snap.StartedMatchID == matchID {
+			snap.State = contracts.PartyOpen
+			snap.LastMatchID = matchID
+			snap.ActiveMatchID = ""
+			snap.StartedMatchID = ""
+			s.parties[id] = snap
+		}
+	}
+	return nil
+}
+
+func (s *recoverTestStore) ListOpenPartyIDs() ([]string, error) {
 	return nil, nil
 }
 
-func (s *recoverTestStore) CloseInactiveOpenLobbies(lobbyIDs []string, inactiveFor time.Duration) (int64, error) {
+func (s *recoverTestStore) CloseInactiveOpenParties(partyIDs []string, inactiveFor time.Duration) (int64, error) {
 	return 0, nil
 }
 
-func (s *recoverTestStore) CreateLobby(ownerUserID string, mode contracts.MatchMode, mapScope string, ttl time.Duration) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapScope string, ttl time.Duration) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetLobbyMode(lobbyID string, mode contracts.MatchMode) error {
+func (s *recoverTestStore) SetPartyMode(partyID string, mode contracts.MatchMode) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetLobbyByID(lobbyID string) (contracts.LobbySnapshot, bool, error) {
-	if s.lobbies == nil {
+func (s *recoverTestStore) GetPartyByID(partyID string) (contracts.PartySnapshot, bool, error) {
+	if s.parties == nil {
 		panic("unexpected call")
 	}
-	snap, ok := s.lobbies[lobbyID]
+	snap, ok := s.parties[partyID]
 	return snap, ok, nil
 }
 
-func (s *recoverTestStore) GetLobbyByInviteCode(inviteCode string) (contracts.LobbySnapshot, bool, error) {
+func (s *recoverTestStore) GetPartyByInviteCode(inviteCode string) (contracts.PartySnapshot, bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetLobbyByMatchID(matchID string) (contracts.LobbySnapshot, bool, error) {
-	if s.lobbies == nil {
-		return contracts.LobbySnapshot{}, false, nil
+func (s *recoverTestStore) MatchSessionSourceParty(matchID string) (string, string, bool, error) {
+	if s.parties == nil {
+		return "", "", false, nil
 	}
-	for _, snap := range s.lobbies {
+	for _, snap := range s.parties {
+		if snap.ActiveMatchID == matchID || snap.LastMatchID == matchID || snap.StartedMatchID == matchID {
+			return snap.ID, snap.InviteCode, true, nil
+		}
+	}
+	return "", "", false, nil
+}
+
+func (s *recoverTestStore) GetPartyByMatchID(matchID string) (contracts.PartySnapshot, bool, error) {
+	if s.parties == nil {
+		return contracts.PartySnapshot{}, false, nil
+	}
+	for _, snap := range s.parties {
 		if snap.ActiveMatchID == matchID || snap.LastMatchID == matchID || snap.StartedMatchID == matchID {
 			return snap, true, nil
 		}
 	}
-	return contracts.LobbySnapshot{}, false, nil
+	return contracts.PartySnapshot{}, false, nil
 }
 
-func (s *recoverTestStore) JoinLobby(lobbyID, userID string) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) JoinParty(partyID, userID string) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) LeaveLobby(lobbyID, userID string) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) LeaveParty(partyID, userID string) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetLobbyMemberTeam(lobbyID, userID, teamID string) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) SetPartyMemberTeam(partyID, userID, teamID string) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) KickLobbyMember(lobbyID, ownerUserID, targetUserID string) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) KickPartyMember(partyID, ownerUserID, targetUserID string) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) TransferLobbyOwner(lobbyID, ownerUserID, targetUserID string) (contracts.LobbySnapshot, error) {
+func (s *recoverTestStore) TransferPartyOwner(partyID, ownerUserID, targetUserID string) (contracts.PartySnapshot, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) MarkLobbyInMatch(lobbyID, matchID string) (contracts.LobbySnapshot, error) {
-	if s.lobbies == nil {
+func (s *recoverTestStore) MarkPartyInMatch(partyID, matchID string) (contracts.PartySnapshot, error) {
+	if s.parties == nil {
 		panic("unexpected call")
 	}
-	snap := s.lobbies[lobbyID]
-	snap.State = contracts.LobbyInMatch
+	snap := s.parties[partyID]
+	snap.State = contracts.PartyInMatch
 	snap.ActiveMatchID = matchID
 	snap.StartedMatchID = matchID
-	s.lobbies[lobbyID] = snap
+	s.parties[partyID] = snap
 	return snap, nil
 }
 
-func (s *recoverTestStore) ReopenEndedLobbies() (int64, error) {
-	if s.lobbies == nil || s.runtimeMatches == nil {
+func (s *recoverTestStore) ReopenEndedParties() (int64, error) {
+	if s.parties == nil || s.runtimeMatches == nil {
 		return 0, nil
 	}
 	var reopened int64
-	for id, snap := range s.lobbies {
+	for id, snap := range s.parties {
 		matchID := snap.ActiveMatchID
 		if matchID == "" {
 			matchID = snap.StartedMatchID
@@ -453,11 +501,11 @@ func (s *recoverTestStore) ReopenEndedLobbies() (int64, error) {
 		if matchID == "" || !ok || rec.State != string(contracts.MatchEnded) {
 			continue
 		}
-		snap.State = contracts.LobbyOpen
+		snap.State = contracts.PartyOpen
 		snap.LastMatchID = matchID
 		snap.ActiveMatchID = ""
 		snap.StartedMatchID = ""
-		s.lobbies[id] = snap
+		s.parties[id] = snap
 		reopened++
 	}
 	return reopened, nil
@@ -602,24 +650,24 @@ var _ matchstore.Store = (*recoverTestMatchStore)(nil)
 var _ matchstore.Store = (*queueTestMatchStore)(nil)
 var _ matchstore.Store = (*staleQueuePollStore)(nil)
 
-func TestLobbyPatchIncludesChangedMembersAndMode(t *testing.T) {
-	prev := contracts.LobbySnapshot{
+func TestPartyPatchIncludesChangedMembersAndMode(t *testing.T) {
+	prev := contracts.PartySnapshot{
 		ID:          "lob-1",
 		OwnerUserID: "u1",
-		State:       contracts.LobbyOpen,
+		State:       contracts.PartyOpen,
 		Mode:        contracts.ModeDuel,
-		Members: []contracts.LobbyMember{
+		Members: []contracts.PartyMember{
 			{UserID: "u1", DisplayName: "One", TeamID: "a", Connected: true},
 			{UserID: "u2", DisplayName: "Two", TeamID: "b", Connected: true},
 		},
 	}
 	next := prev
 	next.Mode = contracts.ModeTeamDuel
-	next.Members = []contracts.LobbyMember{
+	next.Members = []contracts.PartyMember{
 		{UserID: "u1", DisplayName: "One", TeamID: "b", Connected: true},
 		{UserID: "u3", DisplayName: "Three", TeamID: "a", Connected: false},
 	}
-	patch := lobbyPatch(prev, next, 2)
+	patch := partyPatch(prev, next, 2)
 	if patch.Mode == nil || *patch.Mode != contracts.ModeTeamDuel {
 		t.Fatalf("expected mode patch, got %+v", patch.Mode)
 	}
@@ -631,23 +679,23 @@ func TestLobbyPatchIncludesChangedMembersAndMode(t *testing.T) {
 	}
 }
 
-func TestLobbyPatchIncludesPresenceChange(t *testing.T) {
-	prev := contracts.LobbySnapshot{
+func TestPartyPatchIncludesPresenceChange(t *testing.T) {
+	prev := contracts.PartySnapshot{
 		ID:          "lob-1",
 		OwnerUserID: "u1",
-		State:       contracts.LobbyOpen,
+		State:       contracts.PartyOpen,
 		Mode:        contracts.ModeDuel,
-		Members: []contracts.LobbyMember{
+		Members: []contracts.PartyMember{
 			{UserID: "u1", DisplayName: "One", Connected: true},
 			{UserID: "u2", DisplayName: "Two", Connected: false},
 		},
 	}
 	next := prev
-	next.Members = []contracts.LobbyMember{
+	next.Members = []contracts.PartyMember{
 		{UserID: "u1", DisplayName: "One", Connected: true},
 		{UserID: "u2", DisplayName: "Two", Connected: true},
 	}
-	patch := lobbyPatch(prev, next, 2)
+	patch := partyPatch(prev, next, 2)
 	if len(patch.UpsertMembers) != 1 {
 		t.Fatalf("expected one presence upsert, got %+v", patch.UpsertMembers)
 	}
@@ -656,14 +704,29 @@ func TestLobbyPatchIncludesPresenceChange(t *testing.T) {
 	}
 }
 
-func TestApplyLobbyPresenceComputesStatuses(t *testing.T) {
+func TestPartyPatchIncludesActiveMatchRosterChange(t *testing.T) {
+	prev := contracts.PartySnapshot{
+		Members: []contracts.PartyMember{{UserID: "u1"}, {UserID: "u2"}},
+	}
+	next := prev
+	next.Members = []contracts.PartyMember{
+		{UserID: "u1", InActiveMatch: true},
+		{UserID: "u2"},
+	}
+	patch := partyPatch(prev, next, 2)
+	if len(patch.UpsertMembers) != 1 || patch.UpsertMembers[0].UserID != "u1" || !patch.UpsertMembers[0].InActiveMatch {
+		t.Fatalf("expected active roster upsert, got %+v", patch.UpsertMembers)
+	}
+}
+
+func TestApplyPartyPresenceComputesStatuses(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	q := &matchCoordinator{redis: rdb}
 	now := time.Now().UnixMilli()
-	if err := rdb.HSet(context.Background(), lobbyPresenceKey("lob-1"), map[string]any{
+	if err := rdb.HSet(context.Background(), partyPresenceKey("lob-1"), map[string]any{
 		"u1":        now,
 		"u2":        now - 30_000,
 		"u3|conn-1": now,
@@ -671,43 +734,43 @@ func TestApplyLobbyPresenceComputesStatuses(t *testing.T) {
 		t.Fatalf("set presence: %v", err)
 	}
 
-	snap := contracts.LobbySnapshot{
+	snap := contracts.PartySnapshot{
 		ID: "lob-1",
-		Members: []contracts.LobbyMember{
+		Members: []contracts.PartyMember{
 			{UserID: "u1", DisplayName: "One"},
 			{UserID: "u2", DisplayName: "Two"},
 			{UserID: "u3", DisplayName: "Three"},
 		},
 	}
-	q.applyLobbyPresence(&snap)
+	q.applyPartyPresence(&snap)
 
-	if !snap.Members[0].Connected || snap.Members[0].PresenceStatus != contracts.LobbyPresenceOnline {
+	if !snap.Members[0].Connected || snap.Members[0].PresenceStatus != contracts.PartyPresenceOnline {
 		t.Fatalf("u1 presence = %+v", snap.Members[0])
 	}
-	if snap.Members[1].Connected || snap.Members[1].PresenceStatus != contracts.LobbyPresenceAway {
+	if snap.Members[1].Connected || snap.Members[1].PresenceStatus != contracts.PartyPresenceAway {
 		t.Fatalf("u2 presence = %+v", snap.Members[1])
 	}
-	if snap.Members[2].Connected || snap.Members[2].PresenceStatus != contracts.LobbyPresenceOffline {
+	if snap.Members[2].Connected || snap.Members[2].PresenceStatus != contracts.PartyPresenceOffline {
 		t.Fatalf("u3 presence = %+v", snap.Members[2])
 	}
 }
 
-func TestTouchLobbyPresencePublishesOnlyOnVisibleStatusChange(t *testing.T) {
+func TestTouchPartyPresencePublishesOnlyOnVisibleStatusChange(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	q := &matchCoordinator{redis: rdb}
-	if !q.touchLobbyPresence("lob-1", "u1", "conn-1") {
+	if !q.touchPartyPresence("lob-1", "u1", "conn-1") {
 		t.Fatal("first touch should publish because the user becomes online")
 	}
-	if q.touchLobbyPresence("lob-1", "u1", "conn-2") {
+	if q.touchPartyPresence("lob-1", "u1", "conn-2") {
 		t.Fatal("second online touch should not publish")
 	}
-	if err := rdb.HSet(context.Background(), lobbyPresenceKey("lob-1"), "u1", time.Now().Add(-30*time.Second).UnixMilli()).Err(); err != nil {
+	if err := rdb.HSet(context.Background(), partyPresenceKey("lob-1"), "u1", time.Now().Add(-30*time.Second).UnixMilli()).Err(); err != nil {
 		t.Fatalf("age presence: %v", err)
 	}
-	if !q.touchLobbyPresence("lob-1", "u1", "conn-3") {
+	if !q.touchPartyPresence("lob-1", "u1", "conn-3") {
 		t.Fatal("away to online touch should publish")
 	}
 }
@@ -718,19 +781,19 @@ func queueWSURL(serverURL string) string {
 	return "ws" + strings.TrimPrefix(serverURL, "http")
 }
 
-func testLobby(id, owner string, members ...string) contracts.LobbySnapshot {
-	out := contracts.LobbySnapshot{
+func testParty(id, owner string, members ...string) contracts.PartySnapshot {
+	out := contracts.PartySnapshot{
 		ID:          id,
 		InviteCode:  "ABC123",
 		OwnerUserID: owner,
-		State:       contracts.LobbyOpen,
+		State:       contracts.PartyOpen,
 		Mode:        contracts.ModeDuel,
 		MapScope:    "world",
 		CreatedAt:   time.Now(),
 		ExpiresAt:   time.Now().Add(time.Hour),
 	}
 	for _, userID := range members {
-		out.Members = append(out.Members, contracts.LobbyMember{
+		out.Members = append(out.Members, contracts.PartyMember{
 			UserID:      userID,
 			DisplayName: "Player " + strings.TrimPrefix(userID, "u"),
 			Role:        "member",
@@ -930,7 +993,7 @@ func TestQueueRejectsGuestAccount(t *testing.T) {
 	}
 }
 
-func TestStartLobbyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
+func TestStartPartyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -966,8 +1029,8 @@ func TestStartLobbyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 			"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 			"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 		},
-		lobbies: map[string]contracts.LobbySnapshot{
-			"lob-1": testLobby("lob-1", "u1", "u1", "u2"),
+		parties: map[string]contracts.PartySnapshot{
+			"lob-1": testParty("lob-1", "u1", "u1", "u2"),
 		},
 	}
 	q := &matchCoordinator{
@@ -983,12 +1046,12 @@ func TestStartLobbyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/lobbies/lob-1/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startLobby(rr, req)
+	q.startParty(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
@@ -999,12 +1062,12 @@ func TestStartLobbyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	if !terminateCalled {
 		t.Fatalf("singleplayer match was not terminated")
 	}
-	if snap := store.lobbies["lob-1"]; snap.State != contracts.LobbyInMatch || snap.ActiveMatchID == "" {
-		t.Fatalf("lobby was not moved into match: %#v", snap)
+	if snap := store.parties["lob-1"]; snap.State != contracts.PartyInMatch || snap.ActiveMatchID == "" {
+		t.Fatalf("party was not moved into match: %#v", snap)
 	}
 }
 
-func TestStartLobbyRequiresPlayersInLobby(t *testing.T) {
+func TestStartPartyRequiresPlayersInParty(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -1016,8 +1079,8 @@ func TestStartLobbyRequiresPlayersInLobby(t *testing.T) {
 				"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 				"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 			},
-			lobbies: map[string]contracts.LobbySnapshot{
-				"lob-1": testLobby("lob-1", "u1", "u1", "u2"),
+			parties: map[string]contracts.PartySnapshot{
+				"lob-1": testParty("lob-1", "u1", "u1", "u2"),
 			},
 		},
 		redis:      rdb,
@@ -1026,28 +1089,28 @@ func TestStartLobbyRequiresPlayersInLobby(t *testing.T) {
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
 	}
-	q.touchLobbyPresence("lob-1", "u1", "conn-1")
+	q.touchPartyPresence("lob-1", "u1", "conn-1")
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/lobbies/lob-1/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startLobby(rr, req)
+	q.startParty(rr, req)
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
 	}
-	if body := rr.Body.String(); !strings.Contains(body, "all players must be in the lobby") || !strings.Contains(body, "Player 2") {
+	if body := rr.Body.String(); !strings.Contains(body, "all players must be in the party") || !strings.Contains(body, "Player 2") {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestStartLobbyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
+func TestStartPartyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -1081,8 +1144,8 @@ func TestStartLobbyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
 				"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 				"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 			},
-			lobbies: map[string]contracts.LobbySnapshot{
-				"lob-1": testLobby("lob-1", "u1", "u1", "u2"),
+			parties: map[string]contracts.PartySnapshot{
+				"lob-1": testParty("lob-1", "u1", "u1", "u2"),
 			},
 		},
 		httpClient: gameplay.Client(),
@@ -1095,12 +1158,12 @@ func TestStartLobbyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/lobbies/lob-1/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startLobby(rr, req)
+	q.startParty(rr, req)
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())

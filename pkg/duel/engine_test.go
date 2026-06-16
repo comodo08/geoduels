@@ -220,6 +220,33 @@ func TestDisconnectForfeitAfterGrace(t *testing.T) {
 	}
 }
 
+func TestUnrankedDisconnectDoesNotEndMatch(t *testing.T) {
+	e := New(func(_ string, _ int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{Lat: 1, Lng: 1, Country: "US"}, nil
+	})
+	m, err := e.CreateMatchWithOptions("m-unranked-disconnect", []string{"u1", "u2"}, nil, MatchOptions{Unranked: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.MarkDisconnected(m.ID, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if m.Players["u1"].DisconnectDue != 0 {
+		t.Fatalf("unranked disconnect should not have a forfeit deadline")
+	}
+	e.Tick()
+	snap, err := e.GetSnapshot(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State != contracts.MatchLive {
+		t.Fatalf("unranked match ended after disconnect: %s", snap.State)
+	}
+	if !snap.Players["u1"].Disconnected {
+		t.Fatal("disconnected player should remain marked for reconnect")
+	}
+}
+
 func TestImmediateForfeitEndsMatch(t *testing.T) {
 	rounds := []contracts.LocationPoint{{Lat: 1, Lng: 1, Country: "US"}}
 	e := New(func(_ string, _ int) (contracts.LocationPoint, error) { return rounds[0], nil })

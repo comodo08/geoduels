@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import LobbyScreen from "../../../components/ui/LobbyScreen";
+import LobbyScreen, { type LobbyContentRoute } from "../../../components/ui/LobbyScreen";
 import type {
   HomeActions,
   HomeAuthView,
@@ -8,6 +8,8 @@ import type {
 } from "../model/types";
 
 type HomePageLobbyProps = {
+  contentRoute?: LobbyContentRoute;
+  mapId?: string;
   auth: HomeAuthView;
   lobby: HomeLobbyView;
   meta: HomeViewModel["meta"];
@@ -41,6 +43,8 @@ type HomePageLobbyProps = {
 };
 
 export default function HomePageLobby({
+  contentRoute = "play",
+  mapId = "",
   auth,
   lobby,
   meta,
@@ -58,7 +62,10 @@ export default function HomePageLobby({
 
   return (
     <LobbyScreen
+      contentRoute={contentRoute}
+      mapId={mapId}
       userId={auth.userId}
+      accessToken={auth.accessToken}
       userEmail={auth.userEmail}
       displayName={auth.displayName}
       userAvatar={auth.userAvatar}
@@ -98,6 +105,7 @@ export default function HomePageLobby({
       }
       appVersion={meta.appVersion}
       isAdmin={auth.isAdmin}
+      isModerator={auth.isModerator}
       changelogEyebrow={lobby.changelogEyebrow}
       changelogTitle={lobby.changelogTitle}
       changelogMarkdown={lobby.changelogMarkdown}

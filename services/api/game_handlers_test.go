@@ -37,8 +37,8 @@ func (s *matchAccessTestStore) GetRuntimeMatch(matchID string) (persistence.Runt
 	return persistence.RuntimeMatch{}, false, nil
 }
 
-func (s *matchAccessTestStore) GetLobbyByMatchID(matchID string) (contracts.LobbySnapshot, bool, error) {
-	return contracts.LobbySnapshot{}, false, nil
+func (s *matchAccessTestStore) MatchSessionSourceParty(matchID string) (string, string, bool, error) {
+	return "", "", false, nil
 }
 
 func TestPublicFinalMatchSnapshotIsAvailableToAnyViewer(t *testing.T) {

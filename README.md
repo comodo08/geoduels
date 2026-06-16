@@ -15,11 +15,11 @@ https://geoduels.io/
 - `services/match-coordinator` (Go): matchmaking over websocket (`/queue`), assignment, maintenance status, and recovery (`/v1/session/recover`).
 - `services/realtime-gateway` (Go): websocket gatewaying (`/ws/{node}`) to the assigned gameplay node.
 - `services/gameplay-node` (Go): round engine and authoritative match state broadcast for assigned matches.
-- `workers/location-ingest` (Go): one-off/cron worker that validates and ingests location datasets into PostgreSQL.
+- `workers/location-ingest` (Go): one-off bootstrap utility for official location datasets.
 
 ### Data and state
 
-- PostgreSQL: source of truth for persistent data (profiles, stats, location catalog, match persistence).
+- PostgreSQL: source of truth for profiles, stats, user maps, immutable map revisions, round plans, and match persistence.
 - Redis: queue and distributed coordination state for matchmaking and gameplay node ownership.
 - Dataset JSON files (`datasets/*.json`): seed source for location ingest.
 
@@ -31,6 +31,14 @@ https://geoduels.io/
 4. `match-coordinator` assigns a match + gameplay route and issues ticket.
 5. Browser upgrades to websocket through `realtime-gateway` (`/ws/{node}`), which proxies to the assigned `gameplay-node`.
 6. `gameplay-node` runs duel engine and broadcasts authoritative snapshots.
+
+Before step 4, the launching service resolves the selected immutable map revision and persists the match's complete round plan. Gameplay pods receive that bounded plan and never preload map catalogs.
+
+## Custom maps
+
+- Signed-in non-guest accounts upload JSON through `/v1/maps`; uploads are validated and normalized directly into PostgreSQL, and the source file is discarded.
+- Quotas are enforced transactionally: 10 active maps, 250,000 active locations, 20 revisions per map, 3 uploads per hour, and 10 per day.
+- Ranked duels always use the official server-selected map. Private lobbies may select an accessible ready map independently from movement rules.
 
 ### Match route flow
 
@@ -104,6 +112,18 @@ cd apps/web && npm ci && npm run dev
 ```
 
 The tracked sample map at `datasets/a-source-world.sample.json` contains 10 public landmark locations so contributors can launch a playable local stack without private location data. To use a larger local dataset, keep it in ignored `datasets/*.json` and pass that path to `workers/location-ingest`.
+
+To remove stale or unavailable Street View panoramas from a Vali export, validate it before ingesting:
+
+```bash
+cd apps/web
+npm ci
+GOOGLE_MAPS_API_KEY='server-key' npm run validate:streetview -- \
+  --input ../../datasets/a-source-world.json \
+  --output ../../datasets/a-source-world.clean.json
+```
+
+The key must have Street View Static API enabled and should be restricted to that API and, where practical, the machine's IP address. The validator calls only Google's no-charge Street View metadata endpoint and never requests imagery. Deleted panorama IDs are refreshed from their saved coordinates against the nearest outdoor panorama within 50 meters. The run is resumable through an append-only checkpoint and writes refreshed IDs and rejected locations beside the clean output.
 
 Endpoints:
 

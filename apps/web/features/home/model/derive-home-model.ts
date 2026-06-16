@@ -599,7 +599,7 @@ export function deriveHomeModel({
         : ruleset === "nmpz"
           ? "NMPZ"
           : "Moving",
-      mapName: ruleset === "nmpz" ? "A Location World" : "A Source World",
+      mapName: match.snapshot?.config?.mapName || (ruleset === "nmpz" ? "A Location World" : "A Source World"),
       streetViewInteractive: ruleset !== "nmpz",
       selfUserId: selfId,
     },
@@ -660,7 +660,7 @@ export function deriveHomeModel({
     },
     meta: {
       activeMatchId,
-      sourceLobbyInviteCode: match.sourceLobbyInviteCode,
+      sourcePartyInviteCode: match.sourcePartyInviteCode,
       appVersion: config.appVersion,
       maxHP: config.maxHP,
     },

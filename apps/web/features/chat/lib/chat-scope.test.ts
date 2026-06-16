@@ -26,8 +26,8 @@ function matchState(patch: Partial<MatchState> = {}): MatchState {
     connected: false,
     snapshot: null,
     activeMatchId: "",
-    sourceLobbyId: "",
-    sourceLobbyInviteCode: "",
+    sourcePartyId: "",
+    sourcePartyInviteCode: "",
     queueError: "",
     connectionIssue: "",
     onlinePlayers: 0,
@@ -78,7 +78,7 @@ describe("selectActiveChatConversationId", () => {
         }),
         match: matchState(),
       }),
-    ).toBe("lobby:lobby-1");
+    ).toBe("party:lobby-1");
   });
 
   it("keeps private lobby chat during the sourced match", () => {
@@ -87,11 +87,11 @@ describe("selectActiveChatConversationId", () => {
         userId: "u1",
         lobby: lobbyState(),
         match: matchState({
-          sourceLobbyId: "lobby-1",
+          sourcePartyId: "lobby-1",
           snapshot: snapshot("match-1"),
         }),
       }),
-    ).toBe("lobby:lobby-1");
+    ).toBe("party:lobby-1");
   });
 
   it("uses match chat for regular multiplayer and disables singleplayer", () => {

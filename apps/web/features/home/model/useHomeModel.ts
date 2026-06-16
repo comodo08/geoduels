@@ -533,7 +533,7 @@ export function useHomeModel(options?: {
   }, [isMatchRoute, sessionController]);
 
   useEffect(() => {
-    if (isMatchRoute) {
+    if (isMatchRoute || lobbyInviteCode) {
       setHomeResumeMatchId("");
       return;
     }
@@ -577,6 +577,7 @@ export function useHomeModel(options?: {
     auth.onboardingRequired,
     config,
     isMatchRoute,
+    lobbyInviteCode,
     sessionController,
   ]);
 
@@ -674,13 +675,13 @@ export function useHomeModel(options?: {
     };
   }, [auth.userId, auth.accessToken, auth.onboardingRequired]);
 
-  const routeSourceLobbyId =
-    matchRoute.replacement && "sourceLobbyId" in matchRoute.replacement
-      ? matchRoute.replacement.sourceLobbyId || ""
+  const routeSourcePartyId =
+    matchRoute.replacement && "sourcePartyId" in matchRoute.replacement
+      ? matchRoute.replacement.sourcePartyId || ""
       : "";
   const routeFallbackChatConversationId =
-    isMatchRoute && routeSourceLobbyId
-      ? `lobby:${routeSourceLobbyId}`
+    isMatchRoute && routeSourcePartyId
+      ? `party:${routeSourcePartyId}`
       : isMatchRoute &&
           routeMatchId &&
           matchRoute.historySnapshot &&
@@ -1138,8 +1139,8 @@ export function useHomeModel(options?: {
     }
   };
 
-  const createInviteLobby = async (mode: PartyMode = "duel") => {
-    const ok = await lobbyController.createLobby(mode);
+  const createInviteLobby = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
+    const ok = await lobbyController.createLobby(mode, matchConfig);
     const inviteCode = lobbyController.getState().inviteCode;
     if (ok && inviteCode) {
       onPrivateLobbyEntered?.(inviteCode);

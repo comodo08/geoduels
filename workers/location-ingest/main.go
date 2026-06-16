@@ -103,12 +103,6 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			created_at timestamptz not null default now(),
 			unique(map_key, content_hash)
 		);
-		create table if not exists map_aliases (
-			map_key text primary key references maps(map_key) on delete cascade,
-			active_revision_id text references map_revisions(id),
-			rollback_revision_id text references map_revisions(id),
-			updated_at timestamptz not null default now()
-		);
 		create table if not exists locations (
 			id bigserial primary key,
 			map_revision_id text references map_revisions(id) on delete cascade,
@@ -195,6 +189,18 @@ func ingestRows(ctx context.Context, pool *pgxpool.Pool, revisionID string, rows
 	if _, err := tx.Exec(ctx, `update map_revisions set row_count=$2 where id=$1`, revisionID, len(rows)); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, `delete from map_revision_country_stats where map_revision_id=$1`, revisionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into map_revision_country_stats(map_revision_id, country, location_count)
+		select map_revision_id, coalesce(nullif(country,''), 'Unknown'), count(*)::int
+		from locations
+		where map_revision_id=$1
+		group by map_revision_id, coalesce(nullif(country,''), 'Unknown')
+	`, revisionID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -204,17 +210,17 @@ func activateRevision(ctx context.Context, pool *pgxpool.Pool, mapKey, revisionI
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `
-		insert into map_aliases(map_key, active_revision_id, updated_at)
-		values($1, $2, now())
-		on conflict (map_key) do update set
-			rollback_revision_id = map_aliases.active_revision_id,
-			active_revision_id = excluded.active_revision_id,
-			updated_at = now()
-	`, mapKey, revisionID); err != nil {
+	if _, err := tx.Exec(ctx, `update map_revisions set status='active' where id=$1`, revisionID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `update map_revisions set status='active' where id=$1`, revisionID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		update maps
+		set active_revision_id=$2,
+			status='ready',
+			location_count=(select row_count from map_revisions where id=$2),
+			updated_at=now()
+		where map_key=$1
+	`, mapKey, revisionID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

@@ -49,7 +49,7 @@ func (q *matchCoordinator) chatWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "profile unavailable", http.StatusBadGateway)
 		return
 	}
-	conn, err := lobbyUpgrader.Upgrade(w, r, nil)
+	conn, err := partyUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
@@ -144,9 +144,9 @@ func (q *matchCoordinator) authorizeChatConversation(ctx context.Context, conver
 	}
 	scope := chatScope{ConversationID: conversationID, Kind: kind, ID: id}
 	switch kind {
-	case "lobby":
-		snap, found, err := q.persist.GetLobbyByID(id)
-		if err != nil || !found || !lobbyHasMember(snap, userID) {
+	case "party":
+		snap, found, err := q.persist.GetPartyByID(id)
+		if err != nil || !found || !partyHasMember(snap, userID) {
 			return chatScope{}, errors.New("forbidden")
 		}
 		return scope, nil

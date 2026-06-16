@@ -47,11 +47,11 @@ describe("ChatController", () => {
   it("connects to the selected conversation and sends through the active socket", () => {
     const controller = new ChatController({ config: runtimeConfig });
 
-    controller.setConversation("lobby:lobby-1", "token-1");
+    controller.setConversation("party:lobby-1", "token-1");
 
     expect(MockWebSocket.instances).toHaveLength(1);
     expect(MockWebSocket.instances[0]?.url).toBe(
-      "ws://localhost:8090/chat/ws?conversationId=lobby%3Alobby-1&accessToken=token-1",
+      "ws://localhost:8090/chat/ws?conversationId=party%3Alobby-1&accessToken=token-1",
     );
 
     MockWebSocket.instances[0]?.open();
@@ -63,13 +63,13 @@ describe("ChatController", () => {
 
   it("caches messages by conversation across temporary conversation changes", () => {
     const controller = new ChatController({ config: runtimeConfig });
-    controller.setConversation("lobby:lobby-1", "token-1");
+    controller.setConversation("party:lobby-1", "token-1");
 
     MockWebSocket.instances[0]?.emitMessage({
       type: "chat.message",
       payload: {
         id: "chat-1",
-        conversationId: "lobby:lobby-1",
+        conversationId: "party:lobby-1",
         matchId: "",
         senderUserId: "u2",
         senderDisplayName: "Two",
@@ -86,7 +86,7 @@ describe("ChatController", () => {
     controller.setConversation("", "");
     expect(controller.getState().messages).toEqual([]);
 
-    controller.setConversation("lobby:lobby-1", "token-1");
+    controller.setConversation("party:lobby-1", "token-1");
     expect(controller.getState().messages.map((message) => message.id)).toEqual([
       "chat-1",
     ]);

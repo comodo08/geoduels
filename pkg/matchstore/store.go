@@ -526,7 +526,6 @@ func matchFromTickets(opponent, self ticket) contracts.MatchFound {
 		SeasonID: seasonID,
 		Config: contracts.NormalizeMatchConfig(contracts.MatchConfig{
 			Ruleset: ruleset,
-			MapKey:  contracts.MapKeyForRuleset(ruleset),
 		}),
 		Players: []string{opponent.UserID, self.UserID},
 		Profiles: map[string]contracts.PlayerProfile{
