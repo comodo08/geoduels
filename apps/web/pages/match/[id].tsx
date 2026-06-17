@@ -304,7 +304,7 @@ export default function MatchPage() {
                         `/match/${encodeURIComponent(replacementMatchId)}`,
                       )
                     }
-                    className="mt-6 inline-flex rounded-full border border-[#2ad18f]/40 bg-[#2ad18f]/10 px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-[#b6f5d8] transition hover:bg-[#2ad18f]/20"
+                    className="mt-6 inline-flex rounded-full border border-[#2ad18f]/40 bg-[#2ad18f]/10 px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white transition hover:bg-[#2ad18f]/20"
                   >
                     Resume Current Match
                   </button>

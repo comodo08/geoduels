@@ -70,7 +70,7 @@ export default function HomePageOverlays({
             onClick={() =>
               void actions.dismissNotification(activeNotification.id)
             }
-            className="mt-5 min-h-11 w-full rounded-xl bg-[#2ad18f] px-4 text-sm font-black text-[#08111b]"
+            className="mt-5 min-h-11 w-full rounded-xl bg-accentPrimary px-4 text-sm font-black text-white hover:bg-accentPrimaryDeep"
           >
             Got it
           </button>
@@ -108,7 +108,7 @@ export default function HomePageOverlays({
             onClick={() =>
               void actions.dismissNotification(activeNotification.id)
             }
-            className="mt-5 min-h-11 w-full rounded-xl bg-[#77f0be] px-4 text-sm font-black text-[#08111b]"
+            className="mt-5 min-h-11 w-full rounded-xl bg-accentPrimary px-4 text-sm font-black text-white hover:bg-accentPrimaryDeep"
           >
             Claim
           </button>

@@ -147,7 +147,7 @@ export function ProfileModal(props: ProfileModalProps) {
             key={tab.id}
             type="button"
             onClick={() => setProfileTab(tab.id)}
-            className={`min-h-[38px] rounded-xl text-[11px] font-black uppercase tracking-[0.12em] transition ${profileTab === tab.id ? "bg-[#2ad18f] text-[#06130d]" : "text-[#a9bfd4] hover:bg-white/10 hover:text-white"}`}
+            className={`min-h-[38px] rounded-xl text-[11px] font-black uppercase tracking-[0.12em] transition ${profileTab === tab.id ? "bg-accentPrimary text-white" : "text-[#a9bfd4] hover:bg-white/10 hover:text-white"}`}
           >
             {tab.label}
           </button>
@@ -225,7 +225,7 @@ function BadgeTab(props: {
               aria-label={badge.label}
             >
               <PlayerBadge badge={badge} size="lg" muted={!owned} />
-              {selected ? <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#2ad18f] shadow-[0_0_10px_rgba(42,209,143,0.8)]" /> : null}
+              {selected ? <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-accentPrimary shadow-[0_0_10px_rgba(42,209,143,0.8)]" /> : null}
               {!owned ? <span className="absolute inset-x-2 bottom-1.5 rounded-full bg-black/40 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-white/45">Locked</span> : null}
             </button>
           );

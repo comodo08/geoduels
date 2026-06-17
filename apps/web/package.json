@@ -10,6 +10,8 @@
     "start": "next start -p 3000",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint:architecture": "node scripts/check-frontend-architecture.mjs",
+    "lint:architecture:strict": "node scripts/check-frontend-architecture.mjs --strict",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "maps:thumbnails": "node scripts/generate-map-thumbnails.mjs",

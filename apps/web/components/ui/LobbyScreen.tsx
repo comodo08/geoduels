@@ -1,41 +1,8 @@
 import React, { useState, useEffect } from "react";
-import {
-  Github,
-  HelpCircle,
-  Heart,
-  Play,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  ArrowLeft,
-  ArrowUpRight,
-  Shield,
-  Twitter,
-  UserPlus,
-  Copy,
-  Crown,
-  LogOut,
-  UserMinus,
-  Trash2,
-  Youtube,
-  Map as MapIcon,
-  Upload,
-  MessageCircle,
-  Star,
-  MoreVertical,
-  Search,
-  X,
-} from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import Router from "next/router";
-import AppModalShell from "./AppModalShell";
-import MarkdownContent from "./MarkdownContent";
-import PlayerBadge, { type PlayerBadgeInfo } from "./PlayerBadge";
-import AvatarBadge from "./AvatarBadge";
-import PlayerNameWithBadge from "./PlayerNameWithBadge";
-import { RatingTrophyIcon } from "./PlayerIdentity";
+import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { LeaderboardSummary } from "../../features/auth/controllers/session-controller";
 import type { LobbySnapshot as PartySnapshot, LobbyTeamId as PartyTeamId, PartyMode } from "../../features/lobby/lib/lobby-client";
 import type { LobbyRuntimeStatus as PartyRuntimeStatus } from "../../features/lobby/controllers/lobby-controller";
@@ -51,36 +18,44 @@ import {
 import { useFavoriteMap, useMapComments, useMapDetails, useMapList, useMapManagement } from "../../features/maps/lib/map-hooks";
 import { mapThumbnailURL } from "../../features/maps/lib/map-thumbnails";
 import {
-  CLOCK_OPTIONS,
   NAV_ITEMS,
-  PRESSURE_OPTIONS,
-  commentAvatarFallback,
-  commentDeletedLabel,
   formatApproximateTime,
-  formatChangelogDate,
-  formatCommentAge,
   formatQueueElapsed,
   formatRelativeDuration,
   isLobbyNavRoute,
   isMapScope,
   lobbyRouteStorageKey,
-  lobbyTeamLabel,
-  lobbyTeamPillClass,
-  lobbyTeamTextClass,
   parseTime,
   type LobbyContentRoute,
 } from "../../features/lobby/lib/lobby-ui";
-import {
-  LobbyActionButton,
-  LobbyCardButton,
-  LobbyInput,
-  LobbyMutedBox,
-  LobbyPanel,
-} from "../../features/lobby/components/lobby-primitives";
 import { MapUploadForm } from "../../features/lobby/components/MapUploadForm";
 import { PlayPanel } from "../../features/lobby/components/PlayPanel";
 import { LobbyTutorialSection } from "../../features/lobby/components/LobbyTutorialSection";
+import { LobbyHeader } from "../../features/lobby/components/LobbyHeader";
+import { DiscordProviderButton, GoogleProviderButton, SignInButton } from "../../features/lobby/components/LobbyAuthButtons";
 import { ProfileModal } from "../../features/lobby/components/ProfileModal";
+import { PartyPanel } from "../../features/lobby/components/PartyPanel";
+import { LeaderboardPanel } from "../../features/lobby/components/LeaderboardPanel";
+import {
+  DonateCard,
+  InviteLobbyCard,
+  LegalFooter,
+  NewsPanel,
+  OnlineStatusCard,
+  PrivateLobbyErrorNotice,
+  SocialLinksCard,
+} from "../../features/lobby/components/LobbyShellPieces";
+import { MaintenanceBanner, MaintenanceOverlay } from "../../features/lobby/components/MaintenanceNotice";
+import {
+  MapDetailsPanel,
+  MapPickerModal,
+  MapsPanel,
+  MapUploadPanel,
+} from "../../features/lobby/components/maps/MapPanels";
+import { HelpModal } from "../../features/lobby/components/modals/HelpModal";
+import { InviteModal } from "../../features/lobby/components/modals/InviteModal";
+import { SignInModal } from "../../features/lobby/components/modals/SignInModal";
+import { usePartyPanelState } from "../../features/lobby/hooks/usePartyPanelState";
 import { useQueueRulesetSelection } from "../../features/lobby/hooks/useQueueRulesetSelection";
 
 export type { LobbyContentRoute } from "../../features/lobby/lib/lobby-ui";
@@ -466,299 +441,48 @@ export default function LobbyScreen({
   };
 
   const discordProviderButton = showDiscordButton ? (
-    <LobbyActionButton
-      type="button"
-      onClick={onDiscordSignIn}
-      disabled={authLoading}
-      variant="secondary"
-      className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
-    >
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#5865f2] text-white shadow-sm">
-        <svg viewBox="0 0 127.14 96.36" className="h-3.5 w-4" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.04a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.04a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.52-51.11-18.9-72.15ZM42.45 65.69c-6.27 0-11.43-5.73-11.43-12.78s5.05-12.79 11.43-12.79 11.54 5.78 11.43 12.79-5.06 12.78-11.43 12.78Zm42.24 0c-6.27 0-11.43-5.73-11.43-12.78s5.05-12.79 11.43-12.79 11.54 5.78 11.43 12.79-5.05 12.78-11.43 12.78Z"
-          />
-        </svg>
-      </span>
-      {authLoading ? "Signing In..." : "Continue With Discord"}
-    </LobbyActionButton>
+    <DiscordProviderButton authLoading={authLoading} onClick={onDiscordSignIn} />
   ) : null;
 
   const signInButton =
     showGoogleButton || showDiscordButton ? (
-      <LobbyActionButton
-        type="button"
-        onClick={() => setOpenModal("signin")}
-        disabled={authLoading}
-        variant="secondary"
-        className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
-      >
-        {authLoading ? "Signing In..." : "Sign In"}
-      </LobbyActionButton>
+      <SignInButton authLoading={authLoading} onClick={() => setOpenModal("signin")}>
+        Sign In
+      </SignInButton>
     ) : (
-      <LobbyActionButton
-        type="button"
-        onClick={devLogin}
-        variant="secondary"
-        className="rounded-full px-4 py-2 text-xs"
-      >
-        {authLoading ? "Signing In..." : "Dev Login"}
-      </LobbyActionButton>
+      <SignInButton authLoading={authLoading} onClick={devLogin} rounded="full">
+        Dev Login
+      </SignInButton>
     );
 
   const googleProviderButton = showGoogleButton ? (
-    <LobbyActionButton
-      type="button"
-      onClick={onGoogleSignIn}
-      disabled={authLoading}
-      variant="secondary"
-      className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
-    >
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#111827] shadow-sm">
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
-          <path
-            fill="#4285F4"
-            d="M21.805 10.023h-9.81v3.955h5.627c-.242 1.272-.967 2.35-2.06 3.073v2.55h3.332c1.95-1.796 3.073-4.44 3.073-7.578 0-.662-.06-1.298-.162-1.999Z"
-          />
-          <path
-            fill="#34A853"
-            d="M11.995 22c2.79 0 5.132-.924 6.842-2.5l-3.332-2.55c-.924.62-2.102.987-3.51.987-2.699 0-4.985-1.822-5.805-4.272H2.758v2.63A10.329 10.329 0 0 0 11.995 22Z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M6.19 13.665a6.214 6.214 0 0 1-.324-1.967c0-.684.118-1.347.324-1.967v-2.63H2.758A10.329 10.329 0 0 0 1.663 11.7c0 1.66.398 3.232 1.095 4.598l3.432-2.633Z"
-          />
-          <path
-            fill="#EA4335"
-            d="M11.995 5.463c1.518 0 2.88.523 3.95 1.55l2.962-2.962C17.122 2.397 14.782 1.4 11.995 1.4 7.958 1.4 4.47 3.707 2.758 7.101l3.432 2.63c.82-2.45 3.106-4.268 5.805-4.268Z"
-          />
-        </svg>
-      </span>
-      {authLoading ? "Opening Google..." : "Continue With Google"}
-    </LobbyActionButton>
+    <GoogleProviderButton authLoading={authLoading} onClick={onGoogleSignIn} />
   ) : null;
 
   const newsPanel = (
-    <LobbyPanel
-      interactive
-      className="group w-full p-5"
-      style={{ animationDelay: "-3s" }}
-    >
-      <button
-        type="button"
-        onClick={() => setIsBlogExpanded((prev) => !prev)}
-        className="block w-full text-left"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#2ad18f] drop-shadow-sm">
-              {changelogEyebrow}
-            </span>
-            <h2 className="text-[20px] font-extrabold leading-tight tracking-tight text-white drop-shadow-md">
-              {changelogTitle}
-            </h2>
-          </div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors group-hover:bg-white/10 group-hover:text-white">
-            {isBlogExpanded ? (
-              <ChevronUp size={20} />
-            ) : (
-              <ChevronDown size={20} />
-            )}
-          </div>
-        </div>
-        <AnimatePresence>
-          {isBlogExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-5 space-y-4 border-t border-white/[0.06] pt-5">
-                <MarkdownContent
-                  markdown={changelogMarkdown || "No changelog content yet."}
-                  compact
-                />
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  {changelogUpdatedAt ? (
-                    <time
-                      dateTime={changelogUpdatedAt}
-                      className="text-[12px] font-semibold text-[#a9bfd4]/70"
-                    >
-                      Updated {formatChangelogDate(changelogUpdatedAt)}
-                    </time>
-                  ) : <span />}
-                  <Link
-                    href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
-                    className="inline-flex items-center gap-1 text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#77f0be] transition hover:text-white"
-                  >
-                    Read More
-                    <ArrowUpRight size={14} />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </button>
-    </LobbyPanel>
+    <NewsPanel
+      changelogEyebrow={changelogEyebrow}
+      changelogMarkdown={changelogMarkdown}
+      changelogSlug={changelogSlug}
+      changelogTitle={changelogTitle}
+      changelogUpdatedAt={changelogUpdatedAt}
+      expanded={isBlogExpanded}
+      onToggle={() => setIsBlogExpanded((prev) => !prev)}
+    />
   );
+  const donateCard = <DonateCard onSupportDonation={onSupportDonation} />;
+  const socialLinksCard = <SocialLinksCard />;
+  const onlineStatusCard = <OnlineStatusCard onlinePlayers={onlinePlayers} />;
 
-  const donateCard = (
-    <LobbyCardButton
-      onClick={() => void onSupportDonation()}
-      className="group flex w-full items-center gap-4 p-5"
-      style={{ animationDelay: "-0.75s" }}
-    >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ef476f]/14 text-[#f7a1b5]">
-        <Heart size={22} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#ee7f98]">
-          Donate
-        </span>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-[18px] font-extrabold tracking-tight text-white">
-              Support GeoDuels
-            </h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-[#a9bfd4]">
-              Help GeoDuels stay ad-free and in active development by donating :D
-            </p>
-          </div>
-          <ArrowUpRight
-            size={18}
-            className="shrink-0 text-white/50 transition-colors group-hover:text-white"
-          />
-        </div>
-      </div>
-    </LobbyCardButton>
-  );
-
-  const socialLinksCard = (
-    <LobbyPanel
-      className="flex w-full flex-col gap-4 p-5"
-      style={{ animationDelay: "-1s" }}
-    >
-      <span className="block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">
-        Community
-      </span>
-      <div className="flex flex-wrap gap-3">
-        {[
-          {
-            href: "https://discord.gg/xxz8V9UU7Z",
-            label: "Discord",
-            icon: <svg viewBox="0 0 127.14 96.36" className="h-5 w-5" aria-hidden="true"><path fill="currentColor" d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2.04a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2.04a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.52-51.11-18.9-72.15ZM42.45 65.69c-6.27 0-11.43-5.73-11.43-12.78s5.05-12.79 11.43-12.79 11.54 5.78 11.43 12.79-5.06 12.78-11.43 12.78Zm42.24 0c-6.27 0-11.43-5.73-11.43-12.78s5.05-12.79 11.43-12.79 11.54 5.78 11.43 12.79-5.05 12.78-11.43 12.78Z" /></svg>,
-          },
-          {
-            href: "https://github.com/sourcelocation/geoduels",
-            label: "GitHub",
-            icon: <Github size={20} />,
-          },
-          {
-            href: "http://twitter.com/sourceloc",
-            label: "Twitter",
-            icon: <Twitter size={20} />,
-          },
-          {
-            href: "https://youtube.com/@sourcelocation",
-            label: "YouTube",
-            icon: <Youtube size={20} />,
-          },
-        ].map((social) => (
-          <a
-            key={social.label}
-            href={social.href}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={social.label}
-            className="glass-panel glass-panel-interactive flex h-12 w-12 items-center justify-center rounded-full text-white"
-          >
-            {social.icon}
-          </a>
-        ))}
-      </div>
-    </LobbyPanel>
-  );
-
-  const onlineStatusCard = (
-    <LobbyPanel
-      className="flex w-full items-center gap-3 px-5 py-3"
-      style={{ animationDelay: "-0.5s" }}
-    >
-      <div className="status-dot-wrap relative flex h-4 w-4 shrink-0 items-center justify-center">
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#2ad18f]" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[12px] font-semibold text-[#2ad18f] transition-colors">
-          {onlinePlayers} Playing
-        </p>
-      </div>
-    </LobbyPanel>
-  );
-
-  const lobbyInviteURL =
-    typeof window !== "undefined" && privateLobby.inviteCode
-      ? `${window.location.origin}/party/${privateLobby.inviteCode}`
-      : "";
-  const privateLobbyLoading =
-    !privateLobby.snapshot &&
-    ["creating", "joining", "connecting", "reconnecting"].includes(
-      privateLobby.status,
-    );
-  const privateLobbyActive =
-    !!privateLobby.snapshot ||
-    privateLobby.status !== "idle";
-  const lobbyMembers = privateLobby.snapshot?.members || [];
-  const activeLobbyMatchId = privateLobby.snapshot?.activeMatchId || privateLobby.snapshot?.startedMatchId || "";
-  const lobbyMatchInProgress = privateLobby.snapshot?.state === "in_match" || privateLobby.snapshot?.state === "started";
-  const currentLobbyMember = lobbyMembers.find((member) => member.userId === userId);
-  const lobbyConfig = privateLobby.snapshot?.config || { ruleset: "moving", roundTimerMode: "none", pressureTimeLimitMs: 15000 };
-  const lobbyMode = privateLobby.snapshot?.mode || "duel";
-  const lobbyClockOn = lobbyConfig.roundTimerMode === "fixed";
-  const lobbyPressureOn =
-    (typeof lobbyConfig.pressureTimeLimitMs === "number" && lobbyConfig.pressureTimeLimitMs > 0) ||
-    lobbyConfig.roundTimerMode === "pressure";
-  const lobbyRoundSeconds = Math.round((lobbyConfig.roundTimeLimitMs || 45000) / 1000);
-  const lobbyPressureSeconds = lobbyPressureOn ? Math.round((lobbyConfig.pressureTimeLimitMs || 15000) / 1000) : 0;
-  const saveLobbyConfig = (patch: MatchConfig) => {
-    const next: MatchConfig = {
-      ...lobbyConfig,
-      ...patch,
-    };
-    if (next.roundTimerMode !== "fixed") {
-      next.roundTimerMode = "none";
-      next.roundTimeLimitMs = undefined;
-    } else {
-      next.roundTimeLimitMs = Math.max(10000, Math.min(120000, next.roundTimeLimitMs || 45000));
-    }
-    if ((next.pressureTimeLimitMs || 0) !== 15000) {
-      next.pressureTimeLimitMs = undefined;
-    }
-    void updatePrivateLobbySettings(next);
-  };
-  const saveLobbyMode = (mode: PartyMode) => {
-    void updatePrivateLobbySettings(lobbyConfig, mode);
-  };
-  const missingLobbyMembers = lobbyMembers.filter((member) => (member.presenceStatus || (member.connected ? "online" : "offline")) !== "online");
-  const teamACount = lobbyMembers.filter((member) => (member.teamId || "a") === "a").length;
-  const teamBCount = lobbyMembers.filter((member) => member.teamId === "b").length;
-  const canStartPrivateParty =
-    privateLobby.isOwner &&
-    privateLobby.snapshot?.state === "open" &&
-    (
-      (lobbyMode === "duel" && lobbyMembers.length === 2) ||
-      (lobbyMode === "team_duel" && lobbyMembers.length >= 2 && lobbyMembers.length <= 8 && teamACount > 0 && teamBCount > 0) ||
-      (lobbyMode === "free_for_all" && lobbyMembers.length >= 2 && lobbyMembers.length <= 8)
-    ) &&
-    missingLobbyMembers.length === 0;
-  const copyInvite = () => {
-    if (!lobbyInviteURL) return;
-    void navigator.clipboard?.writeText(lobbyInviteURL);
-    setInviteCopied(true);
-    window.setTimeout(() => setInviteCopied(false), 1600);
-  };
+  const partyPanelState = usePartyPanelState({
+    privateLobby,
+    userId,
+    updateSettings: updatePrivateLobbySettings,
+    setInviteCopied,
+  });
+  const privateLobbyActive = partyPanelState.active;
+  const lobbyConfig = partyPanelState.config;
+  const saveLobbyConfig = partyPanelState.saveConfig;
 
   const availableMaps = mapsQuery.data || [];
   const readyMaps = availableMaps.filter((item) => item.status === "ready");
@@ -771,30 +495,6 @@ export default function LobbyScreen({
     { scope: "mine", label: "My Maps" },
   ];
   const thumbnailURL = (item: Pick<CustomMap, "thumbnailVariant" | "thumbnailKey">) => mapThumbnailURL(item.thumbnailKey, item.thumbnailVariant);
-  const renderMapSearchControl = (id: string) => (
-    <div className="relative w-full sm:w-[260px]">
-      <label htmlFor={id} className="sr-only">Search maps</label>
-      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#77f0be]" size={16} />
-      <LobbyInput
-        id={id}
-        type="search"
-        value={mapSearchInput}
-        onChange={(event) => setMapSearchInput(event.target.value)}
-        placeholder="Search maps"
-        className="h-11 w-full rounded-xl py-2 pl-9 pr-10 font-semibold"
-      />
-      {mapSearchInput ? (
-        <button
-          type="button"
-          aria-label="Clear map search"
-          onClick={() => setMapSearchInput("")}
-          className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#a9bfd4] transition hover:bg-white/[0.08] hover:text-white"
-        >
-          <X size={15} />
-        </button>
-      ) : null}
-    </div>
-  );
   const mapPickerFlow = privateLobbyActive && privateLobby.isOwner && privateLobby.snapshot?.state === "open";
   const selectMapForParty = (item: CustomMap) => {
     if (privateLobbyActive && privateLobby.isOwner) {
@@ -838,1055 +538,142 @@ export default function LobbyScreen({
   );
   const mapsPanel = (
     <motion.div key="maps" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <LobbyPanel className="overflow-hidden rounded-3xl">
-        <div className="grid min-h-[640px] lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="border-b border-white/10 bg-black/20 p-4 lg:border-b-0 lg:border-r">
-            <div className="mb-4 flex items-center gap-2 text-white">
-              <MapIcon className="text-[#77f0be]" size={22} />
-              <span className="text-lg font-black">Maps</span>
-            </div>
-            <div className="grid gap-2">
-              {mapScopeLabels.map((item) => (
-                <button key={item.scope} type="button" onClick={() => setMapScope(item.scope)} className={`rounded-[14px] px-4 py-3 text-left text-sm font-extrabold transition ${mapScope === item.scope ? "bg-[#22d385] text-white" : "bg-white/[0.05] text-[#a9bfd4] hover:bg-white/[0.09]"}`}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </aside>
-          <section className="p-5 sm:p-7">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#77f0be]">{privateLobbyActive ? "Party Map Select" : "Map Browser"}</span>
-                <h2 className="mt-1 text-[30px] font-black text-white">{mapScopeLabels.find((item) => item.scope === mapScope)?.label}</h2>
-                <p className="mt-2 text-sm text-[#a9bfd4]">{privateLobbyActive ? "Click a ready map to select it for the upcoming party game." : "Browse official and community maps, inspect details, favorite the good stuff."}</p>
-              </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-                {renderMapSearchControl("map-browser-search")}
-                {mapScope === "community" ? (
-                  <div className="flex rounded-[14px] border border-white/10 bg-black/20 p-1">
-                    {(["trending", "popular", "new"] as MapSort[]).map((sort) => (
-                      <button key={sort} type="button" onClick={() => setMapSort(sort)} className={`rounded-[10px] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] ${mapSort === sort ? "bg-white text-[#10201a]" : "text-[#a9bfd4] hover:bg-white/[0.08]"}`}>
-                        {sort === "popular" ? "Most Popular" : sort}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {mapScope === "mine" && !canUploadCustomMaps ? (
-              <LobbyMutedBox className="mt-6">Sign in with a permanent account to create custom maps.</LobbyMutedBox>
-            ) : mapsQuery.isLoading ? (
-              <div className="mt-8 flex items-center gap-3 text-sm text-[#a9bfd4]"><Loader2 className="animate-spin" size={18} /> Loading maps...</div>
-            ) : readyMaps.length === 0 ? (
-              <LobbyMutedBox className="mt-8 border-dashed p-8 text-center">{hasMapSearch ? "No maps match your search." : "No maps in this section yet."}</LobbyMutedBox>
-            ) : (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {readyMaps.map((item) => (
-                  <LobbyPanel key={item.id} variant="subtle" className="overflow-hidden rounded-2xl p-0">
-                    {privateLobbyActive ? (
-                    <button type="button" onClick={() => selectMapForParty(item)} className="block w-full text-left">
-                      <div className="relative aspect-[16/9] overflow-hidden bg-[#10201a]">
-                        <img src={thumbnailURL(item)} alt="" className="h-full w-full object-cover opacity-90 transition hover:scale-[1.03]" />
-                        <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">{item.difficulty}</div>
-                        {item.system ? <div className="absolute right-3 top-3 rounded-full bg-[#22d385] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">Official</div> : null}
-                      </div>
-                      <div className="p-4">
-                        <h3 className="truncate text-base font-black text-white">{item.displayName}</h3>
-                        <p className="mt-1 truncate text-xs font-semibold text-[#8da6b5]">by {item.authorName || "GeoDuels"}</p>
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-[#a9bfd4]">
-                          <span>{item.locationCount.toLocaleString()} locations</span>
-                          <span>{item.playCount.toLocaleString()} plays</span>
-                          <span>{item.favoriteCount.toLocaleString()} favorites</span>
-                        </div>
-                      </div>
-                    </button>
-                    ) : (
-                    <Link href={`/maps/${encodeURIComponent(item.id)}`} className="block w-full text-left">
-                      <div className="relative aspect-[16/9] overflow-hidden bg-[#10201a]">
-                        <img src={thumbnailURL(item)} alt="" className="h-full w-full object-cover opacity-90 transition hover:scale-[1.03]" />
-                        <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">{item.difficulty}</div>
-                        {item.system ? <div className="absolute right-3 top-3 rounded-full bg-[#22d385] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">Official</div> : null}
-                      </div>
-                      <div className="p-4">
-                        <h3 className="truncate text-base font-black text-white">{item.displayName}</h3>
-                        <p className="mt-1 truncate text-xs font-semibold text-[#8da6b5]">by {item.authorName || "GeoDuels"}</p>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-bold text-[#a9bfd4]">
-                          <span className="inline-flex items-center gap-1" title="Locations"><MapIcon size={13} />{item.locationCount.toLocaleString()}</span>
-                          <span className="inline-flex items-center gap-1" title="Plays"><Play size={13} />{item.playCount.toLocaleString()}</span>
-                          <span className="inline-flex items-center gap-1" title="Favorites"><Star size={13} />{item.favoriteCount.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </Link>
-                    )}
-                  </LobbyPanel>
-                ))}
-              </div>
-            )}
-
-            {mapScope === "mine" && canUploadCustomMaps ? (
-              <div className="mt-7 rounded-[20px] border border-white/10 bg-black/20 p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#77f0be]">Upload Map</span>
-                    <p className="mt-2 text-sm font-semibold text-[#a9bfd4]">Create a custom map from a GeoDuels JSON file.</p>
-                  </div>
-                  <Link href="/maps/upload" className="inline-flex min-h-[42px] items-center justify-center rounded-[12px] bg-[#22d385] px-4 text-sm font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-[#2ae091]">
-                    <Upload className="mr-2" size={17} />
-                    Upload
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </LobbyPanel>
+      <MapsPanel
+        canUploadCustomMaps={canUploadCustomMaps}
+        hasMapSearch={hasMapSearch}
+        mapScope={mapScope}
+        mapScopeLabels={mapScopeLabels}
+        mapSearchInput={mapSearchInput}
+        mapSort={mapSort}
+        mapsLoading={mapsQuery.isLoading}
+        privateLobbyActive={privateLobbyActive}
+        readyMaps={readyMaps}
+        setMapScope={setMapScope}
+        setMapSearchInput={setMapSearchInput}
+        setMapSort={setMapSort}
+        selectMapForParty={selectMapForParty}
+        thumbnailURL={thumbnailURL}
+      />
     </motion.div>
   );
 
   const mapUploadPanel = (
     <motion.div key="map-upload" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <LobbyPanel className="p-4 sm:p-6">
-        <div className="space-y-5">
-          <Link href="/maps" className="inline-flex min-h-[38px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#d6e4ed] transition hover:bg-white/[0.12] hover:text-white">
-            <ArrowLeft size={16} />
-            Back
-          </Link>
-
-          <LobbyPanel variant="subtle" className="p-4 sm:p-5">
-            <div className="mb-5">
-              <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#77f0be]">Upload Map</span>
-              <h2 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight text-white sm:text-[36px]">Create a Custom Map</h2>
-              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#a9bfd4]">Choose a JSON file, thumbnail, difficulty, and public details for your GeoDuels map.</p>
-            </div>
-            {canUploadCustomMaps ? (
-              mapUploadForm
-            ) : (
-              <LobbyMutedBox>Sign in with a permanent account to create custom maps.</LobbyMutedBox>
-            )}
-          </LobbyPanel>
-        </div>
-      </LobbyPanel>
+      <MapUploadPanel canUploadCustomMaps={canUploadCustomMaps} mapUploadForm={mapUploadForm} />
     </motion.div>
   );
 
-  const mapDetailsPanelV2 = (
+  const mapDetailsPanel = (
     <motion.div key="map-details" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <LobbyPanel className="p-4 sm:p-6">
-        {selectedMapQuery.isLoading || !selectedMapDetails ? (
-          <div className="flex items-center gap-3 text-sm text-[#a9bfd4]">
-            <Loader2 className="animate-spin" size={18} /> Loading map details...
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <Link href="/maps" className="inline-flex min-h-[38px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#d6e4ed] transition hover:bg-white/[0.12] hover:text-white">
-              <ArrowLeft size={16} />
-              Back
-            </Link>
-
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-              <section
-                className="relative min-h-[280px] overflow-hidden rounded-[18px] border border-white/10 bg-cover bg-center"
-                style={{ backgroundImage: `url(${thumbnailURL(selectedMapDetails.map)})` }}
-              >
-                <div className="absolute inset-0 bg-black/40" />
-                <div className="relative flex min-h-[280px] flex-col justify-end p-5 sm:p-6">
-                  <div className="max-w-[720px]">
-                    <h2 className="text-[28px] font-extrabold leading-tight tracking-tight text-white sm:text-[36px]">
-                      {selectedMapDetails.map.displayName}
-                    </h2>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-[#d7e5ee]">
-                      <span>By {selectedMapDetails.map.authorName || "GeoDuels"}</span>
-                      <span className="rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#ffd166]">
-                        {selectedMapDetails.map.difficulty}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <LobbyPanel variant="subtle" className="p-4 sm:p-5">
-                <div className="grid gap-3">
-                  {[
-                    { label: "plays", value: selectedMapDetails.map.playCount, icon: <Play size={20} fill="currentColor" /> },
-                    { label: "locations", value: selectedMapDetails.map.locationCount, icon: <MapIcon size={20} /> },
-                    { label: "favorites", value: selectedMapDetails.map.favoriteCount, icon: <Heart size={20} /> },
-                  ].map((metric) => (
-                    <div key={metric.label} className="grid grid-cols-[64px_minmax(0,1fr)] overflow-hidden rounded-[12px] border border-white/10 bg-black/25">
-                      <div className="flex items-center justify-center bg-white/[0.06] text-[#77f0be]">{metric.icon}</div>
-                      <div className="px-4 py-3">
-                        <div className="text-[21px] font-extrabold leading-none text-white">{metric.value.toLocaleString()}</div>
-                        <div className="mt-1 text-[12px] font-bold lowercase text-[#a9bfd4]">{metric.label}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-4 text-[14px] font-medium leading-6 text-[#a9bfd4]">
-                  {selectedMapDetails.map.description || "No description has been added for this map yet."}
-                </p>
-              </LobbyPanel>
-            </div>
-
-            <LobbyPanel variant="subtle" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Moving</span>
-                <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Infinite Clock</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {mapPickerFlow ? (
-                  <LobbyActionButton type="button" onClick={() => selectMapForParty(selectedMapDetails.map)} size="lg" className="min-h-[46px] rounded-xl px-6">
-                    <MapIcon className="mr-2" size={18} />
-                    Use This Map
-                  </LobbyActionButton>
-                ) : (
-                  <LobbyActionButton type="button" onClick={() => playMapSingleplayer(selectedMapDetails.map)} disabled={singleplayerDisabled} size="lg" className="min-h-[46px] rounded-xl px-6">
-                    <Play className="mr-2" size={18} fill="currentColor" />
-                    Play
-                  </LobbyActionButton>
-                )}
-                {canInteractWithMaps ? (
-                  <LobbyActionButton type="button" variant="secondary" onClick={() => favoriteMapMutation.mutate({ mapId: selectedMapDetails.map.id, favorite: !selectedMapDetails.map.favorited })} size="lg" className="min-h-[46px] rounded-xl px-4">
-                    <Star className="mr-2" size={17} fill={selectedMapDetails.map.favorited ? "currentColor" : "none"} />
-                    {selectedMapDetails.map.favorited ? "Saved" : "Save"}
-                  </LobbyActionButton>
-                ) : null}
-                {selectedMapDetails.map.ownerUserId === userId && canUploadCustomMaps ? (
-                  <>
-                    {!selectedMapDetails.map.publishedAt ? <button type="button" onClick={() => publishMapMutation.mutate(selectedMapDetails.map.id)} className="rounded-[14px] border border-[#77f0be]/20 bg-[#77f0be]/10 px-4 text-xs font-black uppercase tracking-[0.08em] text-[#baf7dc]">Publish</button> : null}
-                    <label className="inline-flex min-h-[46px] cursor-pointer items-center rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
-                      <Upload className="mr-1.5" size={14} /> New Version
-                      <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file=event.target.files?.[0]; if(file) revisionMutation.mutate({mapId:selectedMapDetails.map.id,file}); event.currentTarget.value=""; }} />
-                    </label>
-                    <button type="button" onClick={() => deleteMap(selectedMapDetails.map)} className="rounded-[14px] border border-red-400/15 bg-red-400/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-red-200 hover:bg-red-400/10">Delete</button>
-                  </>
-                ) : null}
-              </div>
-            </LobbyPanel>
-
-            <LobbyPanel variant="subtle" className="p-4">
-              <h4 className="flex items-center gap-2 text-[18px] font-extrabold tracking-tight text-white"><MessageCircle size={18} /> Comments</h4>
-              {canInteractWithMaps ? (
-                <div className="mt-5 flex gap-3">
-                  <AvatarBadge
-                    avatarUrl={userAvatar}
-                    fallback={userAvatarFallback}
-                    alt={displayName || userEmail || "You"}
-                    size="sm"
-                    className="mt-1 h-10 w-10 shrink-0 border-white/15 bg-[#162130]"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <textarea
-                      value={commentBody}
-                      onFocus={() => setCommentComposerFocused(true)}
-                      onChange={(event)=>setCommentBody(event.target.value)}
-                      maxLength={1000}
-                      placeholder="Add a comment"
-                      rows={commentComposerFocused || commentBody ? 2 : 1}
-                      className="min-h-[36px] w-full resize-none border-0 border-b border-white/25 bg-transparent px-0 py-1.5 text-[15px] font-medium text-white outline-none placeholder:text-[#8da6b5] focus:border-[#2ad18f]"
-                    />
-                    {(commentComposerFocused || commentBody) ? (
-                    <div className="mt-3 flex justify-end gap-2">
-                      <button type="button" onClick={() => { setCommentBody(""); setCommentComposerFocused(false); }} className="rounded-full px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#a9bfd4] hover:bg-white/[0.08]">Cancel</button>
-                      <LobbyActionButton type="button" disabled={!commentBody.trim() || createCommentMutation.isPending} onClick={postMapComment} size="sm" className="rounded-full px-4 py-2">Comment</LobbyActionButton>
-                    </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : <p className="mt-3 text-xs text-[#8da6b5]">{accessToken ? "Upgrade your guest profile to comment." : "Sign in to comment."}</p>}
-              <div className="mt-7 grid gap-6">
-                {selectedMapDetails.comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <AvatarBadge
-                      avatarUrl={comment.avatarUrl}
-                      fallback={commentAvatarFallback(comment.userDisplayName)}
-                      alt={comment.userDisplayName}
-                      size="sm"
-                      className="h-10 w-10 shrink-0 border-white/15 bg-[#162130]"
-                    />
-	                    <div className="min-w-0 flex-1">
-	                      <div className="flex items-start justify-between gap-3">
-	                        <div className="min-w-0">
-	                          <div className="flex flex-wrap items-baseline gap-2">
-	                            <span className="truncate text-[14px] font-extrabold text-white">{comment.userDisplayName}</span>
-	                            <time dateTime={comment.createdAt} className="text-[13px] font-bold text-[#a9bfd4]/80">{formatCommentAge(comment.createdAt)}</time>
-	                            {commentDeletedLabel(comment.status) ? <span className="text-[13px] font-black text-red-300">{commentDeletedLabel(comment.status)}</span> : null}
-	                          </div>
-	                          <p className="mt-1 text-[15px] font-medium leading-6 text-[#eef6fb]">{comment.body}</p>
-	                        </div>
-	                        {comment.status === "visible" && (comment.canDelete || isAdmin || isModerator) && accessToken ? (
-	                          <div className="relative shrink-0">
-	                            <button type="button" onClick={() => setOpenCommentMenuId(openCommentMenuId === comment.id ? "" : comment.id)} className="flex h-8 w-8 items-center justify-center rounded-full text-[#a9bfd4] hover:bg-white/[0.08] hover:text-white" aria-label="Comment actions">
-	                              <MoreVertical size={17} />
-	                            </button>
-                            {openCommentMenuId === comment.id ? (
-                              <div className="absolute right-0 top-9 z-10 w-32 overflow-hidden rounded-[12px] border border-white/10 bg-[#101a20] py-1 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
-                                <button type="button" onClick={() => { setOpenCommentMenuId(""); deleteCommentMutation.mutate({ commentId: comment.id }); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold text-red-200 hover:bg-red-400/10">
-                                  <Trash2 size={14} />
-                                  Delete
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex items-center gap-4">
-                        {canInteractWithMaps ? (
-                          <button type="button" onClick={() => toggleCommentLike(comment.id)} className={`inline-flex items-center gap-2 rounded-full text-[13px] font-bold transition ${likedCommentIds[comment.id] ? "text-[#77f0be]" : "text-[#d6e4ed] hover:text-white"}`}>
-                            <Heart size={18} fill={likedCommentIds[comment.id] ? "currentColor" : "none"} />
-                            {likedCommentIds[comment.id] ? 1 : 0}
-                          </button>
-                        ) : null}
-                        {canInteractWithMaps && comment.status === "visible" ? <button type="button" onClick={() => { setReplyToCommentId(comment.id); setReplyBody(""); }} className="rounded-full px-2 py-1 text-[13px] font-extrabold text-white hover:bg-white/[0.08]">Reply</button> : null}
-                      </div>
-                      {replyToCommentId === comment.id ? (
-                        <div className="mt-4 flex gap-3">
-                          <AvatarBadge
-                            avatarUrl={userAvatar}
-                            fallback={userAvatarFallback}
-                            alt={displayName || userEmail || "You"}
-                            size="sm"
-                            className="mt-1 h-8 w-8 shrink-0 border-white/15 bg-[#162130]"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <textarea
-                              value={replyBody}
-                              onChange={(event) => setReplyBody(event.target.value)}
-                              maxLength={1000}
-                              autoFocus
-                              rows={2}
-                              placeholder={`Reply to @${comment.userDisplayName}`}
-                              className="min-h-[44px] w-full resize-none border-0 border-b border-white/25 bg-transparent px-0 py-1.5 text-[14px] font-medium text-white outline-none placeholder:text-[#8da6b5] focus:border-[#2ad18f]"
-                            />
-                            <div className="mt-3 flex justify-end gap-2">
-                              <button type="button" onClick={() => { setReplyToCommentId(""); setReplyBody(""); }} className="rounded-full px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#a9bfd4] hover:bg-white/[0.08]">Cancel</button>
-                              <button type="button" disabled={!replyBody.trim() || createCommentMutation.isPending} onClick={() => postMapReply(comment.id)} className="rounded-full bg-[#22d385] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white disabled:opacity-50">Reply</button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                      {comment.replies?.length ? (
-                        <button type="button" onClick={() => toggleCommentReplies(comment.id)} className="mt-3 inline-flex items-center gap-2 rounded-full px-2 py-1 text-[14px] font-extrabold text-[#77f0be] hover:bg-[#2ad18f]/10">
-                          <ChevronDown size={18} className={`transition ${expandedCommentIds[comment.id] ? "rotate-180" : ""}`} />
-                          {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}
-                        </button>
-                      ) : null}
-                      {expandedCommentIds[comment.id] ? (
-                        <div className="mt-4 grid gap-4 border-l border-white/[0.12] pl-4">
-                          {comment.replies?.map((reply) => (
-                            <div key={reply.id} className="flex gap-3">
-                              <AvatarBadge
-                                avatarUrl={reply.avatarUrl}
-                                fallback={commentAvatarFallback(reply.userDisplayName)}
-                                alt={reply.userDisplayName}
-                                size="sm"
-                                className="h-8 w-8 shrink-0 border-white/15 bg-white/[0.08] text-xs"
-                              />
-	                              <div className="min-w-0 flex-1">
-	                                <div className="flex items-start justify-between gap-3">
-	                                  <div className="min-w-0">
-	                                    <div className="flex flex-wrap items-baseline gap-2">
-	                                      <span className="truncate text-[13px] font-extrabold text-white">@{reply.userDisplayName}</span>
-	                                      <time dateTime={reply.createdAt} className="text-[12px] font-bold text-[#a9bfd4]/80">{formatCommentAge(reply.createdAt)}</time>
-	                                      {commentDeletedLabel(reply.status) ? <span className="text-[12px] font-black text-red-300">{commentDeletedLabel(reply.status)}</span> : null}
-	                                    </div>
-	                                    <p className="mt-1 text-[14px] font-medium leading-5 text-[#eef6fb]">{reply.body}</p>
-	                                  </div>
-	                                  {reply.status === "visible" && (reply.canDelete || isAdmin || isModerator) && accessToken ? (
-	                                    <button type="button" onClick={() => deleteCommentMutation.mutate({ commentId: reply.id })} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a9bfd4] hover:bg-red-400/10 hover:text-red-200" aria-label="Delete reply">
-	                                      <Trash2 size={14} />
-	                                    </button>
-	                                  ) : null}
-                                </div>
-                                <div className="mt-2 flex items-center gap-4">
-                                  {canInteractWithMaps ? (
-                                    <button type="button" onClick={() => toggleCommentLike(reply.id)} className={`inline-flex items-center gap-2 rounded-full text-[12px] font-bold transition ${likedCommentIds[reply.id] ? "text-[#77f0be]" : "text-[#d6e4ed] hover:text-white"}`}>
-                                      <Heart size={16} fill={likedCommentIds[reply.id] ? "currentColor" : "none"} />
-                                      {likedCommentIds[reply.id] ? 1 : 0}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </LobbyPanel>
-          </div>
-        )}
-      </LobbyPanel>
+      <MapDetailsPanel
+        accessToken={accessToken}
+        canInteractWithMaps={canInteractWithMaps}
+        canUploadCustomMaps={canUploadCustomMaps}
+        commentBody={commentBody}
+        commentComposerFocused={commentComposerFocused}
+        createCommentPending={createCommentMutation.isPending}
+        displayName={displayName}
+        expandedCommentIds={expandedCommentIds}
+        favoriteMap={(input) => favoriteMapMutation.mutate(input)}
+        isAdmin={isAdmin}
+        isModerator={isModerator}
+        likedCommentIds={likedCommentIds}
+        mapPickerFlow={mapPickerFlow}
+        onCancelComment={() => { setCommentBody(""); setCommentComposerFocused(false); }}
+        onDeleteComment={(commentId) => deleteCommentMutation.mutate({ commentId })}
+        onDeleteMap={deleteMap}
+        onPostComment={postMapComment}
+        onPostReply={postMapReply}
+        onPublishMap={(mapId) => publishMapMutation.mutate(mapId)}
+        onRevisionFile={(mapId, file) => revisionMutation.mutate({ mapId, file })}
+        onSetCommentBody={setCommentBody}
+        onSetCommentComposerFocused={setCommentComposerFocused}
+        onSetOpenCommentMenuId={setOpenCommentMenuId}
+        onSetReplyBody={setReplyBody}
+        onSetReplyToCommentId={setReplyToCommentId}
+        onToggleCommentLike={toggleCommentLike}
+        onToggleCommentReplies={toggleCommentReplies}
+        openCommentMenuId={openCommentMenuId}
+        playMapSingleplayer={playMapSingleplayer}
+        replyBody={replyBody}
+        replyToCommentId={replyToCommentId}
+        selectMapForParty={selectMapForParty}
+        selectedMapDetails={selectedMapDetails}
+        selectedMapLoading={selectedMapQuery.isLoading}
+        singleplayerDisabled={singleplayerDisabled}
+        thumbnailURL={thumbnailURL}
+        userAvatar={userAvatar}
+        userAvatarFallback={userAvatarFallback}
+        userEmail={userEmail}
+        userId={userId}
+      />
     </motion.div>
   );
 
   const privateLobbyPanel = privateLobbyActive ? (
-    <motion.div
-      key="private-lobby"
-      {...tabPanelMotion}
-      className="w-full max-w-[980px] pointer-events-auto"
-    >
-      <div className="glass-panel overflow-hidden rounded-[24px]">
-        <div className="relative min-h-[220px] p-5 sm:p-7">
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(42,209,143,0.16)_0%,rgba(10,23,26,0.74)_100%)]" />
-          <div className="relative z-10 flex flex-col gap-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <span className="mb-2 block text-[12px] font-black uppercase tracking-[0.16em] text-[#77f0be]">
-                  CUSTOM
-                </span>
-                <h2 className="text-[34px] font-black leading-tight tracking-tight text-white sm:text-[42px]">
-                  Private Party
-                </h2>
-                <p className="mt-2 max-w-[48ch] text-[14px] leading-6 text-[#a9bfd4]">
-                  {lobbyMatchInProgress
-                    ? "A game is in progress. Friends can still join the lobby and wait for the next one."
-                    : "Share the invite, wait for one opponent, then the leader starts the match."}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {privateLobby.inviteCode ? (
-                  <button
-                    type="button"
-                    onClick={copyInvite}
-                    className="inline-flex min-h-[42px] items-center justify-center rounded-[12px] border border-white/10 bg-white/[0.08] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/[0.12]"
-                  >
-                    <Copy className="mr-2 text-[#77f0be]" size={16} />
-                    {inviteCopied ? "Copied" : "Copy Invite"}
-                  </button>
-                ) : null}
-                {privateLobby.isMember && !(privateLobby.isOwner && lobbyMatchInProgress) ? (
-                  <button
-                    type="button"
-                    onClick={() => void leavePrivateLobby()}
-                    disabled={privateLobby.busy}
-                    className="inline-flex min-h-[42px] items-center justify-center rounded-[12px] border border-white/10 bg-white/[0.08] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/[0.12] disabled:opacity-50"
-                  >
-                    <LogOut className="mr-2" size={16} />
-                    Leave
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            {privateLobby.inviteCode ? (
-              <div className="rounded-[16px] border border-white/10 bg-black/20 px-4 py-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
-                  Invite Code
-                </p>
-                <p className="mt-1 font-mono text-[26px] font-black tracking-[0.18em] text-white">
-                  {privateLobby.inviteCode}
-                </p>
-              </div>
-            ) : null}
-
-            {lobbyMatchInProgress ? (
-              <div className="rounded-[16px] border border-[#77f0be]/20 bg-[#22d385]/10 px-4 py-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#77f0be]">
-                  Game In Progress
-                </p>
-                <p className="mt-1 text-sm font-semibold text-[#d8f7e9]">
-                  {!privateLobby.isMember
-                    ? "Join the lobby now and you will be ready for the next game."
-                    : currentLobbyMember?.inActiveMatch
-                    ? "You are part of this game and can reconnect whenever you are ready."
-                    : "You joined after this game started and will be able to play in the next one."}
-                </p>
-                {currentLobbyMember?.inActiveMatch && activeLobbyMatchId ? (
-                  <Link
-                    href={`/match/${encodeURIComponent(activeLobbyMatchId)}`}
-                    className="mt-3 inline-flex min-h-[42px] items-center justify-center rounded-[12px] bg-[#22d385] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-[#2ae091]"
-                  >
-                    <Play className="mr-2" size={16} fill="currentColor" />
-                    Reconnect to Game
-                  </Link>
-                ) : null}
-              </div>
-            ) : null}
-
-            {privateLobby.snapshot ? (
-              <div className="rounded-[16px] border border-white/10 bg-black/20 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  {!(privateLobby.isOwner && privateLobby.snapshot.state === "open") ? (
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
-                        Game Settings
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-white">
-                        {privateLobby.snapshot.mapName || lobbyConfig.mapId || "Official Map"} · {(lobbyConfig.ruleset === "nmpz" ? "NMPZ" : "Moving")} · {lobbyClockOn ? `${lobbyRoundSeconds}s clock` : "Infinite clock"} · {lobbyPressureOn ? `${lobbyPressureSeconds}s pressure` : "No pressure"}
-                      </p>
-                    </div>
-                  ) : null}
-                  {privateLobby.isOwner && privateLobby.snapshot.state === "open" ? (
-                    <div className="grid w-full gap-3 sm:max-w-[820px] sm:grid-cols-5">
-                      <label className="grid gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#6b8b80]">
-                          Mode
-                        </span>
-                        <select
-                          value={lobbyMode}
-                          onChange={(event) => saveLobbyMode(event.target.value as PartyMode)}
-                          disabled={privateLobby.busy}
-                          className="h-[40px] rounded-[10px] border border-white/10 bg-[#101a20]/90 px-3 text-[13px] font-bold text-white outline-none transition focus:border-[#2ad18f]/60 disabled:opacity-50"
-                        >
-                          <option value="duel">Duel</option>
-                          <option value="team_duel">Team Duel</option>
-                          <option value="free_for_all">Free For All</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#6b8b80]">
-                          Map
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setMapPickerOpen(true)}
-                          disabled={privateLobby.busy || mapsQuery.isLoading}
-                          className="inline-flex h-[40px] min-w-0 items-center justify-center rounded-[10px] border border-white/10 bg-[#101a20]/90 px-3 text-[13px] font-bold text-white outline-none transition hover:border-[#2ad18f]/50 hover:bg-white/[0.08] disabled:opacity-50"
-                        >
-                          <MapIcon className="mr-1.5 shrink-0 text-[#77f0be]" size={14} />
-                          <span className="truncate">{lobbyConfig.mapName || readyMaps.find((item) => item.id === lobbyConfig.mapId)?.displayName || "Select map"}</span>
-                        </button>
-                      </label>
-                      <label className="grid gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#6b8b80]">
-                          Rules
-                        </span>
-                        <select
-                          value={lobbyConfig.ruleset || "moving"}
-                          onChange={(event) => saveLobbyConfig({ ruleset: event.target.value as GameRuleset })}
-                          disabled={privateLobby.busy}
-                          className="h-[40px] rounded-[10px] border border-white/10 bg-[#101a20]/90 px-3 text-[13px] font-bold text-white outline-none transition focus:border-[#2ad18f]/60 disabled:opacity-50"
-                        >
-                          <option value="moving">Moving</option>
-                          <option value="nmpz">NMPZ</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#6b8b80]">
-                          Clock
-                        </span>
-                        <select
-                          value={lobbyClockOn ? String(lobbyRoundSeconds) : "infinite"}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            saveLobbyConfig(
-                              value === "infinite"
-                                ? { roundTimerMode: "none", roundTimeLimitMs: undefined }
-                                : { roundTimerMode: "fixed", roundTimeLimitMs: Number(value) * 1000 },
-                            );
-                          }}
-                          disabled={privateLobby.busy}
-                          className="h-[40px] rounded-[10px] border border-white/10 bg-[#101a20]/90 px-3 text-[13px] font-bold text-white outline-none transition focus:border-[#2ad18f]/60 disabled:opacity-50"
-                        >
-                          {CLOCK_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="grid gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#6b8b80]">
-                          Pressure
-                        </span>
-                        <select
-                          value={lobbyPressureOn ? "15" : "none"}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            saveLobbyConfig({
-                              pressureTimeLimitMs: value === "15" ? 15000 : undefined,
-                            });
-                          }}
-                          disabled={privateLobby.busy}
-                          className="h-[40px] rounded-[10px] border border-white/10 bg-[#101a20]/90 px-3 text-[13px] font-bold text-white outline-none transition focus:border-[#2ad18f]/60 disabled:opacity-50"
-                        >
-                          {PRESSURE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {privateLobbyLoading ? (
-              <div className="rounded-[18px] border border-white/10 bg-black/20 p-4">
-                <div className="flex min-h-[64px] items-center justify-center text-sm font-semibold text-[#a9bfd4]">
-                  <Loader2 className="mr-2 animate-spin text-[#77f0be]" size={18} />
-                  Connecting to lobby
-                </div>
-              </div>
-            ) : !privateLobby.isMember ? (
-              <div className="rounded-[18px] border border-white/10 bg-black/20 p-4">
-                <button
-                  type="button"
-                  onClick={() => void joinInviteLobby()}
-                  disabled={privateLobby.busy || authLoading}
-                  className="inline-flex min-h-[46px] w-full items-center justify-center rounded-[14px] bg-[#22d385] px-5 text-[14px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition hover:bg-[#2ae091] disabled:opacity-60"
-                >
-                  {privateLobby.busy ? (
-                    <Loader2 className="mr-2 animate-spin" size={18} />
-                  ) : (
-                    <UserPlus className="mr-2" size={18} />
-                  )}
-                  Join Party
-                </button>
-                {authError ? (
-                  <p className="mt-3 text-center text-xs font-semibold text-red-300">
-                    {authError}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            {privateLobby.snapshot ? (
-              <div className="grid gap-3">
-                {lobbyMembers.map((member) => {
-                  const isLeader = member.userId === privateLobby.snapshot?.ownerUserId;
-                  const isSelf = member.userId === userId;
-                  const presenceStatus = member.presenceStatus || (member.connected ? "online" : "offline");
-                  const lobbyStatus =
-                    presenceStatus === "online"
-                      ? "Online"
-                      : presenceStatus === "away"
-                        ? "Reconnecting"
-                        : "Offline";
-                  return (
-                    <div
-                      key={member.userId}
-                      className={`flex min-h-[72px] flex-col gap-3 rounded-[16px] border border-white/10 bg-white/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${presenceStatus === "offline" ? 'opacity-50' : ''}`}
-                    >
-	                      <div className="min-w-0">
-	                        <div className="flex items-center gap-2">
-	                          <p className="truncate text-[16px] font-extrabold text-white">
-	                            {member.displayName || member.userId}
-	                          </p>
-                          {isLeader ? (
-                            <span className="inline-flex items-center rounded-full bg-[#22d385]/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-[#77f0be]">
-                              <Crown className="mr-1" size={12} />
-                              Leader
-                            </span>
-	                          ) : null}
-	                        </div>
-	                        <p className="mt-1 text-[12px] font-semibold text-[#a9bfd4]">
-		                          {isSelf ? `You · ${lobbyStatus}` : lobbyStatus}
-	                        </p>
-	                        {lobbyMode === "team_duel" ? (
-	                          <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.12em]">
-                            <span className={lobbyTeamTextClass(member.teamId)}>
-                              {lobbyTeamLabel(member.teamId)}
-                            </span>
-                          </p>
-                        ) : null}
-                      </div>
-                      {lobbyMode === "team_duel" && isSelf && privateLobby.snapshot?.state === "open" ? (
-                        <div className="flex gap-2">
-                          {(["a", "b"] as const).map((teamId) => (
-                            <button
-                              key={teamId}
-                              type="button"
-                              onClick={() => void switchPrivateLobbyTeam(teamId)}
-                              disabled={privateLobby.busy || (member.teamId || "a") === teamId}
-                              className={`inline-flex min-h-[36px] items-center rounded-[10px] px-3 text-[11px] font-extrabold uppercase tracking-[0.08em] transition disabled:opacity-50 ${lobbyTeamPillClass(teamId, (member.teamId || "a") === teamId)}`}
-                            >
-                              {lobbyTeamLabel(teamId)}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                      {privateLobby.isOwner && privateLobby.snapshot?.state === "open" && !isSelf ? (
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void transferLobbyOwner(member.userId)}
-                            disabled={privateLobby.busy}
-                            className="inline-flex min-h-[36px] items-center rounded-[10px] border border-white/10 bg-white/[0.08] px-3 text-[11px] font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/[0.12] disabled:opacity-50"
-                          >
-                            <Crown className="mr-1.5" size={14} />
-                            Make Leader
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void kickLobbyMember(member.userId)}
-                            disabled={privateLobby.busy}
-                            className="inline-flex min-h-[36px] items-center rounded-[10px] border border-red-300/20 bg-red-400/10 px-3 text-[11px] font-extrabold uppercase tracking-[0.08em] text-red-100 transition hover:bg-red-400/15 disabled:opacity-50"
-                          >
-                            <UserMinus className="mr-1.5" size={14} />
-                            Kick
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {privateLobby.isOwner && privateLobby.snapshot?.state === "open" ? (
-              <button
-                type="button"
-                onClick={() => void startPrivateLobby()}
-                disabled={!canStartPrivateParty || privateLobby.busy}
-                className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[16px] bg-[#22d385] px-5 text-[15px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition hover:bg-[#2ae091] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {privateLobby.busy ? (
-                  <Loader2 className="mr-2 animate-spin" size={18} />
-                ) : (
-                  <Play className="mr-2" size={18} fill="currentColor" />
-                )}
-                {lobbyMode === "team_duel" ? "Start Team Duel" : lobbyMode === "free_for_all" ? "Start FFA" : "Start Duel"}
-              </button>
-            ) : privateLobby.isMember && privateLobby.snapshot?.state === "open" ? (
-              <div className="rounded-[16px] border border-white/10 bg-white/[0.06] px-4 py-3 text-center text-sm font-semibold text-[#a9bfd4]">
-                Waiting for the leader to start.
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </motion.div>
+    <PartyPanel
+      authError={authError}
+      authLoading={authLoading}
+      inviteCopied={inviteCopied}
+      joinInviteLobby={joinInviteLobby}
+      kickLobbyMember={kickLobbyMember}
+      leavePrivateLobby={leavePrivateLobby}
+      mapsLoading={mapsQuery.isLoading}
+      privateLobby={privateLobby}
+      readyMaps={readyMaps}
+      setMapPickerOpen={setMapPickerOpen}
+      startPrivateLobby={startPrivateLobby}
+      state={partyPanelState}
+      switchPrivateLobbyTeam={switchPrivateLobbyTeam}
+      transferLobbyOwner={transferLobbyOwner}
+      userId={userId}
+    />
   ) : null;
 
   const maintenanceBanner = maintenanceIsWarning ? (
-    <motion.div
-      initial={{ opacity: 0, y: -14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.22, ease: "easeOut" }}
-      className="mb-4 rounded-[24px] border border-[#f3cf68]/40 bg-[linear-gradient(135deg,rgba(242,197,67,0.22),rgba(115,75,0,0.28))] px-5 py-4 text-[#fff6d8] shadow-[0_12px_40px_rgba(91,63,7,0.24)] backdrop-blur-sm"
-    >
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ffe69a]">
-            Maintenance
-          </p>
-          <p className="mt-1 text-[15px] font-semibold text-white">
-            {maintenanceMessage || "Queueing has been paused."}
-          </p>
-        </div>
-        <p className="text-[15px] font-semibold text-[#ffefb5]">
-          {warningCountdown ? `${warningCountdown}` : "Soon"}
-        </p>
-      </div>
-    </motion.div>
+    <MaintenanceBanner message={maintenanceMessage} countdown={warningCountdown} />
   ) : null;
 
   const maintenanceOverlay = maintenanceIsActive ? (
-    <AppModalShell
-      title="Maintenance Break"
-      placement="center"
-      showHeader={false}
-      zIndexClassName="z-[2100]"
-      maxWidthClassName="max-w-[560px]"
-      panelClassName="p-7 sm:p-10"
-    >
-      <div className="flex flex-col items-center text-center">
-        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4c84c]/30 bg-[#f4c84c]/10">
-          <Loader2 size={30} className="animate-spin text-[#f4c84c]" />
-        </div>
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#f4d98a]">
-          Maintenance Break
-        </p>
-        <h2 className="mt-3 text-[30px] font-black tracking-tight text-white sm:text-[38px]">
-          We&apos;ll Be Back Shortly
-        </h2>
-        <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#d9e7f5]">
-          {maintenanceMessage ||
-            "GeoDuels is temporarily offline while we finish a scheduled upgrade."}
-        </p>
-        <div className="mt-6 rounded-[20px] border border-white/10 bg-white/5 px-5 py-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a9bfd4]">
-            Approximate Time
-          </p>
-          <p className="mt-2 text-[18px] font-extrabold text-white">
-            {activeEta || "A few minutes"}
-          </p>
-        </div>
-      </div>
-    </AppModalShell>
+    <MaintenanceOverlay message={maintenanceMessage} eta={activeEta} />
   ) : null;
 
-  const legalCard = (
-    <div className="pointer-events-auto flex w-full items-center justify-center px-1 py-1">
-      <div className="flex items-center gap-6">
-        <Link
-          href="/changelog"
-          className="text-[12px] font-semibold text-[#6b8b80] transition-colors hover:text-white"
-        >
-          Changelog
-        </Link>
-        <div className="h-1 w-1 rounded-full bg-[#6b8b80]/40" />
-        <Link
-          href="/privacy"
-          className="text-[12px] font-semibold text-[#6b8b80] transition-colors hover:text-white"
-        >
-          Privacy Policy
-        </Link>
-        <div className="h-1 w-1 rounded-full bg-[#6b8b80]/40" />
-        <Link
-          href="/terms"
-          className="text-[12px] font-semibold text-[#6b8b80] transition-colors hover:text-white"
-        >
-          Terms of Service
-        </Link>
-        <div className="h-1 w-1 rounded-full bg-[#6b8b80]/40" />
-        <span className="text-[12px] font-semibold text-[#6b8b80]">
-          {appVersion}
-        </span>
-      </div>
-    </div>
-  );
+  const legalCard = <LegalFooter appVersion={appVersion} />;
 
   const leaderboardPanel = (
-    <div className="glass-panel flex w-full max-w-[980px] flex-col gap-5 rounded-[24px] p-5 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#2ad18f]">
-            Season Ladder
-          </span>
-          <h2 className="text-[28px] font-extrabold tracking-tight text-white">
-            Leaderboard
-          </h2>
-          <p className="mt-2 text-[14px] text-[#a9bfd4]">
-            {leaderboardLoading
-              ? "Loading ranked players..."
-              : leaderboard?.totalPlayers
-                ? `${leaderboard.totalPlayers} ranked players`
-                : "No ranked players yet."}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-          <div className="rounded-2xl bg-black/30 p-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
-              Your Rank
-            </p>
-            <p className="mt-2 text-3xl font-black text-white">
-              {leaderboard?.selfRank ? `#${leaderboard.selfRank}` : "--"}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-black/30 p-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
-              Rating
-            </p>
-            <p className="mt-2 text-3xl font-black text-white">{mmr}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-[20px]">
-        <div className="grid grid-cols-[72px_minmax(0,1fr)_90px] gap-3 border-b border-white/[0.06] px-4 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80] sm:grid-cols-[72px_minmax(0,1fr)_110px_110px]">
-          <span>Rank</span>
-          <span>Player</span>
-          <span className="text-right">MMR</span>
-          <span className="hidden text-right sm:block">Win Rate</span>
-        </div>
-        <div className="divide-y divide-white/[0.06]">
-          {(leaderboard?.entries || []).map((entry) => {
-            const isSelf = entry.userId === userId;
-            const winsValue =
-              entry.gamesPlayed > 0
-                ? Math.round((entry.wins / entry.gamesPlayed) * 100)
-                : 0;
-            return (
-              <div
-                key={`${entry.rank}-${entry.userId}`}
-                className={`grid grid-cols-[72px_minmax(0,1fr)_90px] gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_minmax(0,1fr)_110px_110px] ${isSelf ? "bg-[#18382e]/70" : "bg-transparent"}`}
-              >
-                <div className="flex items-center">
-                  <span
-                    className={`inline-flex min-w-[48px] items-center justify-center rounded-full px-3 py-1 text-[12px] font-black ${entry.rank <= 3 ? "bg-[#2ad18f]/16 text-[#77f0be]" : "bg-white/[0.05] text-white"}`}
-                  >
-                    #{entry.rank}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate font-bold text-white">
-                    {entry.displayName || entry.userId}
-                  </p>
-                  <p className="truncate text-[12px] text-[#8caab0]">
-                    {isSelf ? "You" : `${entry.gamesPlayed} games`}
-                  </p>
-                </div>
-                <div className="flex items-center justify-end font-black text-white">
-                  {entry.mmr}
-                </div>
-                <div className="hidden items-center justify-end text-[#a9bfd4] sm:flex">
-                  {winsValue}%
-                </div>
-              </div>
-            );
-          })}
-          {leaderboardLoading ? (
-            <div className="px-4 py-10 text-center text-[14px] text-[#a9bfd4]">
-              Loading leaderboard...
-            </div>
-          ) : !leaderboard || leaderboard.entries.length === 0 ? (
-            <div className="px-4 py-10 text-center text-[14px] text-[#a9bfd4]">
-              No ranked players yet.
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
+    <LeaderboardPanel
+      leaderboard={leaderboard}
+      leaderboardLoading={leaderboardLoading}
+      mmr={mmr}
+      userId={userId}
+    />
   );
 
-  // Modal renderers inside LobbyScreen
-  const renderHelpModal = () => (
-    <AppModalShell title="Help" onClose={() => setOpenModal(null)}>
-      <div className="space-y-5 text-[15px] leading-relaxed text-[#a9bfd4]">
-        <div className="glass-panel rounded-xl p-4">
-          <h3 className="mb-2 font-bold text-white tracking-wide">
-            1. Rules of the Game
-          </h3>
-          <p>
-            You and your opponent will be dropped into the same random street
-            view location somewhere in the world. Your goal is to figure out
-            where you are and place your guess on the map.
-          </p>
-        </div>
-        <div className="glass-panel rounded-xl p-4">
-          <h3 className="mb-2 font-bold text-white tracking-wide">
-            2. How to Join
-          </h3>
-          <p>
-            Click "PLAY" on the main menu to enter the matchmaking queue. We'll
-            automatically find you an opponent with a similar skill rating
-            (MMR).
-          </p>
-        </div>
-        <div className="glass-panel rounded-xl p-4">
-          <h3 className="mb-2 font-bold text-white tracking-wide">
-            3. How Duels Work
-          </h3>
-          <p>
-            Both players start with 6,000 HP. The first person to guess starts a
-            countdown timer. When the round ends, whoever is closer to the
-            actual location deals damage to the other player based on the
-            distance difference. The game ends when a player's HP hits 0!
-          </p>
-        </div>
-      </div>
-    </AppModalShell>
+  const renderHelpModal = () => <HelpModal onClose={() => setOpenModal(null)} />;
+
+  const renderInviteLobbyModal = () => (
+    <InviteModal
+      inviteCodeInput={inviteCodeInput}
+      setInviteCodeInput={setInviteCodeInput}
+      busy={privateLobby.busy}
+      authLoading={authLoading}
+      maintenanceIsActive={maintenanceIsActive}
+      playPaused={playPaused}
+      authError={authError}
+      createInviteLobby={createInviteLobby}
+      joinInviteLobby={joinInviteLobby}
+      onClose={() => setOpenModal(null)}
+    />
   );
-
-  const renderInviteLobbyModal = () => {
-    const normalizedInviteCode = inviteCodeInput.trim().toUpperCase();
-    const inviteActionsDisabled =
-      privateLobby.busy || authLoading || maintenanceIsActive;
-
-    return (
-      <AppModalShell title="Private Party" onClose={() => setOpenModal(null)}>
-        <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => {
-              void (async () => {
-                if (await createInviteLobby()) {
-                  setOpenModal(null);
-                }
-              })();
-            }}
-            disabled={inviteActionsDisabled || playPaused}
-            className="inline-flex min-h-[48px] w-full items-center justify-center rounded-[14px] bg-[#22d385] px-5 text-[14px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition hover:bg-[#2ae091] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {privateLobby.busy ? (
-              <Loader2 className="mr-2 animate-spin" size={18} />
-            ) : (
-              <UserPlus className="mr-2" size={18} />
-            )}
-            Create Party
-          </button>
-          {authError ? (
-            <p className="text-center text-xs font-semibold text-red-300">
-              {authError}
-            </p>
-          ) : null}
-
-          <div className="rounded-[18px] border border-white/10 bg-black/20 p-4">
-            <label
-              htmlFor="invite-code-input"
-              className="mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]"
-            >
-              Join With Code
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                id="invite-code-input"
-                value={inviteCodeInput}
-                onChange={(event) =>
-                  setInviteCodeInput(event.target.value.toUpperCase())
-                }
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" || !normalizedInviteCode) return;
-                  void (async () => {
-                    if (await joinInviteLobby(normalizedInviteCode)) {
-                      setOpenModal(null);
-                    }
-                  })();
-                }}
-                disabled={inviteActionsDisabled}
-                className="min-h-[46px] min-w-0 flex-1 rounded-[14px] border border-white/10 bg-[#101a20]/80 px-4 font-mono text-[15px] font-black uppercase tracking-[0.16em] text-white outline-none transition focus:border-[#2ad18f]/60 disabled:opacity-60"
-                placeholder="CODE"
-                maxLength={16}
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  void (async () => {
-                    if (await joinInviteLobby(normalizedInviteCode)) {
-                      setOpenModal(null);
-                    }
-                  })();
-                }}
-                disabled={inviteActionsDisabled || !normalizedInviteCode}
-                className="inline-flex min-h-[46px] items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.08] px-5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Join
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </AppModalShell>
-    );
-  };
 
   const renderSignInModal = () => (
-    <AppModalShell
-      title="Sign In"
+    <SignInModal
+      googleProviderButton={googleProviderButton}
+      discordProviderButton={discordProviderButton}
+      fallbackButton={signInButton}
+      authError={authError}
       onClose={() => setOpenModal(null)}
-      placement="center"
-    >
-      <div className="space-y-3">
-        {googleProviderButton ? (
-          <div
-            onClick={() => setOpenModal(null)}
-            className="flex justify-center"
-          >
-            {googleProviderButton}
-          </div>
-        ) : null}
-        {discordProviderButton ? (
-          <div
-            onClick={() => setOpenModal(null)}
-            className="flex justify-center"
-          >
-            {discordProviderButton}
-          </div>
-        ) : null}
-        {!googleProviderButton && !discordProviderButton ? (
-          <div className="flex justify-center">{signInButton}</div>
-        ) : null}
-        {authError ? (
-          <p className="text-center text-xs font-semibold text-red-300">
-            {authError}
-          </p>
-        ) : null}
-      </div>
-    </AppModalShell>
+    />
   );
 
   const renderProfileModal = () => (
@@ -1925,115 +712,31 @@ export default function LobbyScreen({
   );
 
   const inviteLobbyCard = (
-    <button
-      type="button"
-      onClick={() => setOpenModal("invite")}
+    <InviteLobbyCard
       disabled={authLoading || nicknameSaving || playPaused || maintenanceIsActive}
-      className="glass-panel glass-panel-interactive lobby-feature-card group flex w-full items-center gap-4 rounded-[20px] p-5 text-left transition disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2ad18f]/14 text-[#77f0be]">
-        <UserPlus size={22} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">
-          CUSTOM
-        </span>
-        <h3 className="text-[18px] font-extrabold tracking-tight text-white">
-          Private Party
-        </h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-[#a9bfd4]">
-          Create a lobby or join your friend
-        </p>
-      </div>
-      <ArrowUpRight
-        size={18}
-        className="shrink-0 text-white/50 transition-colors group-hover:text-white"
-      />
-    </button>
+      onClick={() => setOpenModal("invite")}
+    />
   );
 
-  const privateLobbyErrorNotice = privateLobby.error ? (
-    <div
-      role="alert"
-      className="mb-4 flex w-full max-w-[1160px] items-start gap-3 rounded-[18px] border border-red-300/20 bg-red-500/10 px-4 py-3 text-left text-sm font-semibold leading-6 text-red-100 shadow-[0_14px_40px_rgba(0,0,0,0.22)] pointer-events-auto sm:px-5"
-    >
-      <Shield className="mt-0.5 shrink-0 text-red-200" size={18} />
-      <span>{privateLobby.error}</span>
-    </div>
-  ) : null;
+  const privateLobbyErrorNotice = <PrivateLobbyErrorNotice message={privateLobby.error} />;
   const mapPickerModal = mapPickerOpen ? (
-    <AppModalShell
-      title="Select Map"
+    <MapPickerModal
+      canUploadCustomMaps={canUploadCustomMaps}
+      hasMapSearch={hasMapSearch}
+      lobbyConfig={lobbyConfig}
+      mapScope={mapScope}
+      mapScopeLabels={mapScopeLabels}
+      mapSearchInput={mapSearchInput}
+      mapSort={mapSort}
+      mapsLoading={mapsQuery.isLoading}
       onClose={() => setMapPickerOpen(false)}
-      placement="center"
-      maxWidthClassName="max-w-[1040px]"
-      panelClassName="p-4 sm:p-5"
-      contentClassName="space-y-4"
-    >
-      <div className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
-        <aside className="grid gap-2 rounded-[18px] border border-white/10 bg-black/20 p-3 lg:content-start">
-          {mapScopeLabels.map((item) => (
-            <button
-              key={item.scope}
-              type="button"
-              onClick={() => setMapScope(item.scope)}
-              className={`rounded-[12px] px-3 py-2.5 text-left text-xs font-black uppercase tracking-[0.08em] transition ${mapScope === item.scope ? "bg-[#22d385] text-white" : "bg-white/[0.05] text-[#a9bfd4] hover:bg-white/[0.09]"}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </aside>
-        <section className="min-w-0">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#77f0be]">Party Map</p>
-              <h3 className="mt-1 text-2xl font-black text-white">{mapScopeLabels.find((item) => item.scope === mapScope)?.label}</h3>
-            </div>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-              {renderMapSearchControl("party-map-search")}
-              {mapScope === "community" ? (
-                <div className="flex rounded-[14px] border border-white/10 bg-black/20 p-1">
-                  {(["trending", "popular", "new"] as MapSort[]).map((sort) => (
-                    <button key={sort} type="button" onClick={() => setMapSort(sort)} className={`rounded-[10px] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] ${mapSort === sort ? "bg-white text-[#10201a]" : "text-[#a9bfd4] hover:bg-white/[0.08]"}`}>
-                      {sort === "popular" ? "Most Popular" : sort}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {mapScope === "mine" && !canUploadCustomMaps ? (
-            <div className="mt-5 rounded-[16px] border border-white/10 bg-black/20 p-5 text-sm font-semibold text-[#a9bfd4]">Sign in with a permanent account to use your custom maps.</div>
-          ) : mapsQuery.isLoading ? (
-            <div className="mt-6 flex items-center gap-3 text-sm text-[#a9bfd4]"><Loader2 className="animate-spin" size={18} /> Loading maps...</div>
-          ) : readyMaps.length === 0 ? (
-            <div className="mt-6 rounded-[18px] border border-dashed border-white/15 bg-black/15 p-8 text-center text-sm text-[#a9bfd4]">{hasMapSearch ? "No ready maps match your search." : "No ready maps in this section yet."}</div>
-          ) : (
-            <div className="mt-5 grid max-h-[56vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
-              {readyMaps.map((item) => (
-                <button key={item.id} type="button" onClick={() => selectMapForParty(item)} className="overflow-hidden rounded-[16px] border border-white/10 bg-black/25 text-left transition hover:border-[#77f0be]/50 hover:bg-white/[0.06]">
-                  <div className="relative aspect-[16/9] overflow-hidden bg-[#10201a]">
-                    <img src={thumbnailURL(item)} alt="" className="h-full w-full object-cover opacity-90 transition hover:scale-[1.03]" />
-                    <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">{item.difficulty}</div>
-                    {item.id === lobbyConfig.mapId ? <div className="absolute right-3 top-3 rounded-full bg-[#22d385] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">Selected</div> : null}
-                  </div>
-                  <div className="p-3">
-                    <h4 className="truncate text-sm font-black text-white">{item.displayName}</h4>
-                    <p className="mt-1 truncate text-xs font-semibold text-[#8da6b5]">by {item.authorName || "GeoDuels"}</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-bold text-[#a9bfd4]">
-                      <span className="inline-flex items-center gap-1" title="Locations"><MapIcon size={13} />{item.locationCount.toLocaleString()}</span>
-                      <span className="inline-flex items-center gap-1" title="Plays"><Play size={13} />{item.playCount.toLocaleString()}</span>
-                      <span className="inline-flex items-center gap-1" title="Favorites"><Star size={13} />{item.favoriteCount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-    </AppModalShell>
+      readyMaps={readyMaps}
+      selectMapForParty={selectMapForParty}
+      setMapScope={setMapScope}
+      setMapSearchInput={setMapSearchInput}
+      setMapSort={setMapSort}
+      thumbnailURL={thumbnailURL}
+    />
   ) : null;
   const showPartyPanel = privateLobbyActive && contentRoute !== "maps" && contentRoute !== "map-details" && contentRoute !== "map-upload";
   const visualNavIndex = Math.max(0, NAV_ITEMS.findIndex((item) => item.route === visualNavRoute));
@@ -2062,132 +765,25 @@ export default function LobbyScreen({
         {mapPickerModal}
       </AnimatePresence>
 
-      {/* Header */}
-      <header className="sticky top-0 z-20 px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5 lg:px-8 lg:pb-6 lg:pt-6">
-        <AnimatePresence>{maintenanceBanner}</AnimatePresence>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4 lg:gap-6">
-          <div className="flex items-center gap-3 sm:gap-5">
-            <button
-              onClick={() => setOpenModal("help")}
-              className="text-[#a9bfd4] transition-colors hover:text-white"
-              aria-label="Help"
-            >
-              <HelpCircle
-                size={20}
-                strokeWidth={2}
-                className="sm:h-[22px] sm:w-[22px]"
-              />
-            </button>
-            {isAdmin ? (
-              <Link
-                href="/admin"
-                prefetch={false}
-                className="inline-flex items-center gap-2 rounded-full border border-[#2ad18f]/35 bg-[#2ad18f]/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#b9f5da] transition hover:bg-[#2ad18f]/18 sm:text-[12px]"
-              >
-                <Shield size={14} />
-                Admin
-              </Link>
-            ) : null}
-          </div>
-
-          <div className="flex min-w-0 items-center justify-center">
-            <Link href="/" aria-label="GeoDuels home" className="inline-flex">
-              <img
-                src="/logo.v2.png"
-                alt="GeoDuels"
-                width={140}
-                height={38}
-                className="h-auto w-[112px] sm:w-[140px]"
-              />
-            </Link>
-          </div>
-
-          {userId && userEmail ? (
-            <div
-              className="group flex min-w-0 items-center justify-self-end gap-2.5 cursor-pointer sm:gap-3"
-              onClick={() => {
-                setOpenModal("profile");
-              }}
-            >
-              <div className="flex min-w-0 max-w-[7.5rem] flex-col items-end justify-center sm:max-w-none">
-            <PlayerNameWithBadge
-              name={displayName || userEmail || "Player"}
-              isAdmin={isAdmin}
-              selectedBadge={null}
-              nameClassName="text-[12px] font-bold leading-tight text-white transition-colors group-hover:text-emerald-100 sm:text-[15px]"
-            />
-                <div className="mt-0.5 flex items-center text-[10px] font-bold text-[#2ad18f] sm:text-[12px]">
-                  <RatingTrophyIcon className="mr-1 h-3 w-3" />
-                  {mmr}
-                  <PlayerBadge badge={selectedBadge} size="sm" className="ml-1" />
-                </div>
-              </div>
-              <AvatarBadge
-                avatarUrl={userAvatar}
-                fallback={userAvatarFallback}
-                alt={displayName || userEmail || "Player"}
-                size="sm"
-                className="h-9 w-9 border-[1.5px] border-white/20 bg-[#162130] transition-colors group-hover:border-white/40 sm:h-[42px] sm:w-[42px]"
-              />
-            </div>
-          ) : (
-            <div className="pointer-events-auto justify-self-end">
-              {signInButton}
-            </div>
-          )}
-        </div>
-
-        {!showPartyPanel ? (
-          <div className="flex justify-center pt-5 sm:pt-6">
-            <div className="relative flex h-9 w-full max-w-[340px] items-center justify-center pointer-events-auto sm:h-10 sm:max-w-[400px] lg:max-w-[440px]">
-              {NAV_ITEMS.map((item, idx) => {
-                const isActive = item.route === visualNavRoute;
-                const offset = idx - visualNavIndex;
-
-                return (
-                  <motion.div
-                    key={item.route}
-                    initial={false}
-                    animate={{
-                      x: offset * 104,
-                      scale: isActive ? 1.05 : 0.95,
-                      opacity: isActive ? 1 : 0.4,
-                    }}
-                    transition={{ type: "spring", stiffness: 350, damping: 35 }}
-                    className={`absolute font-bold text-[15px] tracking-[0.18em] transition-colors duration-200 sm:text-[16px] lg:text-[17px] ${isQueueing ? "cursor-not-allowed text-[#a9bfd4]/50" : "cursor-pointer"}`}
-                    style={{
-                      color: isActive
-                        ? isQueueing
-                          ? "#8cb0a1"
-                          : "#ffffff"
-                        : "#a9bfd4",
-                      transformOrigin: "center",
-                    }}
-                  >
-                    {isQueueing ? (
-                      <span className="cursor-not-allowed">{item.label}</span>
-                    ) : (
-                      <Link
-                        href={item.href}
-                        prefetch
-                        onClick={() => {
-                          try {
-                            window.sessionStorage.setItem(lobbyRouteStorageKey, currentNavRoute);
-                          } catch {
-                            // Navigation still works if session storage is unavailable.
-                          }
-                        }}
-                      >
-                        {item.label}
-                      </Link>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </header>
+      <LobbyHeader
+        currentNavRoute={currentNavRoute}
+        displayName={displayName}
+        isAdmin={isAdmin}
+        isQueueing={isQueueing}
+        maintenanceBanner={maintenanceBanner}
+        mmr={mmr}
+        selectedBadge={selectedBadge}
+        setOpenHelp={() => setOpenModal("help")}
+        setOpenProfile={() => setOpenModal("profile")}
+        showPartyPanel={showPartyPanel}
+        signInButton={signInButton}
+        userAvatar={userAvatar}
+        userAvatarFallback={userAvatarFallback}
+        userEmail={userEmail}
+        userId={userId}
+        visualNavIndex={visualNavIndex}
+        visualNavRoute={visualNavRoute}
+      />
 
       {/* Main Content Area */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-start px-4 pb-10 pt-4 pointer-events-none sm:px-6 sm:pb-12 sm:pt-8">
@@ -2236,7 +832,7 @@ export default function LobbyScreen({
           )}
 
           {!showPartyPanel && contentRoute === "maps" && mapsPanel}
-          {!showPartyPanel && contentRoute === "map-details" && mapDetailsPanelV2}
+          {!showPartyPanel && contentRoute === "map-details" && mapDetailsPanel}
           {!showPartyPanel && contentRoute === "map-upload" && mapUploadPanel}
 
           {!showPartyPanel && contentRoute === "friends" && (

@@ -23,7 +23,7 @@ export function Tabs<T extends string>({ value, items, onChange, className }: Ta
           className={cn(
             "min-h-9 rounded-md px-3 text-xs font-black uppercase tracking-[0.12em] transition",
             value === item.id
-              ? "bg-accentPrimary text-[#06130d]"
+              ? "bg-accentPrimary text-white"
               : "text-inkMuted hover:bg-white/10 hover:text-white",
           )}
         >

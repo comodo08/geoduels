@@ -7,7 +7,7 @@ type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-accentPrimary text-[#06130d] shadow-[0_10px_24px_rgba(42,209,143,0.28)] hover:bg-[#45dfa3]",
+    "border-transparent bg-accentPrimary text-white shadow-[0_10px_24px_rgba(42,209,143,0.28)] hover:bg-accentPrimaryDeep",
   secondary:
     "border-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]",
   ghost:

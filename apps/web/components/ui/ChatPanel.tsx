@@ -151,7 +151,7 @@ export default function ChatPanel({
               type="submit"
               aria-label="Send message"
               disabled={!body.trim()}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#22d385] text-white transition hover:bg-[#2ae091] disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accentPrimary text-white transition hover:bg-accentPrimaryDeep disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Send size={16} strokeWidth={2.5} />
             </button>

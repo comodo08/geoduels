@@ -543,7 +543,7 @@ export default function InGameScene({
                 animate={{ y: 0, opacity: 1, scale: 1 }}
                 transition={{ duration: 0.22, ease: 'easeOut', delay: 0.12 }}
                 onClick={canAdvanceRound ? onAdvanceRound : onLeaveGame}
-                className="mx-auto inline-flex items-center justify-center rounded-[16px] bg-[#22d385] px-8 py-[16px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#2ae091] hover:shadow-[0_6px_24px_rgba(34,211,133,0.4)] active:scale-[0.98]"
+                className="mx-auto inline-flex items-center justify-center rounded-[16px] bg-accentPrimary px-8 py-[16px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(42,209,143,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-accentPrimaryDeep hover:shadow-[0_6px_24px_rgba(42,209,143,0.4)] active:scale-[0.98]"
               >
                 {canAdvanceRound ? 'Next Round' : 'Back To Lobby'}
               </motion.button>

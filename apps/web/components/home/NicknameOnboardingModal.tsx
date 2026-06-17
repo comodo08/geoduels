@@ -43,7 +43,7 @@ export default function NicknameOnboardingModal({
           type="button"
           onClick={onSubmit}
           disabled={nicknameSaving}
-          className="flex w-full items-center justify-center rounded-[16px] bg-[#22d385] py-[14px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#2ae091] hover:shadow-[0_6px_24px_rgba(34,211,133,0.4)] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-[0_4px_16px_rgba(34,211,133,0.3)]"
+          className="flex w-full items-center justify-center rounded-[16px] bg-accentPrimary py-[14px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(42,209,143,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-accentPrimaryDeep hover:shadow-[0_6px_24px_rgba(42,209,143,0.4)] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-[0_4px_16px_rgba(42,209,143,0.3)]"
         >
           {nicknameSaving ? "Saving..." : "Continue"}
         </button>
