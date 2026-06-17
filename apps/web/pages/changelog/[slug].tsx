@@ -1,7 +1,7 @@
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
-import Link from "next/link";
 import MarkdownContent from "../../components/ui/MarkdownContent";
+import { PageShell } from "../../components/ui/PageShell";
 import { requestChangelogPost } from "../../features/changelog/changelog-client";
 import type { ChangelogPost } from "../../features/changelog/types";
 import { createRuntimeConfig } from "../../lib/runtime-config";
@@ -54,12 +54,9 @@ export default function ChangelogPostPage({ post }: ChangelogPostPageProps) {
         <meta property="og:url" content={canonicalURL} />
         <meta property="article:modified_time" content={post.updatedAt} />
       </Head>
-      <main className="min-h-screen bg-[#0a1018] px-4 py-10 text-[#f4f9ff] sm:px-6">
-        <article className="mx-auto max-w-3xl">
-          <Link href="/changelog" className="text-sm font-bold text-[#77f0be] hover:text-white">
-            Changelog
-          </Link>
-          <header className="mt-8 border-b border-white/10 pb-8">
+      <PageShell variant="operational" backHref="/changelog" backLabel="Changelog" maxWidthClassName="max-w-3xl">
+        <article>
+          <header className="border-b border-white/10 pb-8">
             <time dateTime={post.updatedAt} className="text-xs font-bold uppercase tracking-[0.16em] text-[#77f0be]">
               Updated {formatDate(post.updatedAt)}
             </time>
@@ -72,7 +69,7 @@ export default function ChangelogPostPage({ post }: ChangelogPostPageProps) {
           </header>
           <MarkdownContent markdown={post.markdown} className="mt-8" />
         </article>
-      </main>
+      </PageShell>
     </>
   );
 }

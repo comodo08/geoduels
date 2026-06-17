@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
 import {
-  CheckCircle2,
   Github,
   HelpCircle,
   Heart,
   Play,
   Loader2,
-  Pencil,
-  Check,
   ChevronDown,
   ChevronUp,
   ArrowLeft,
@@ -52,42 +49,43 @@ import {
   type MapSort,
 } from "../../features/maps/lib/maps-client";
 import { useFavoriteMap, useMapComments, useMapDetails, useMapList, useMapManagement } from "../../features/maps/lib/map-hooks";
-import { mapThumbnailOptions, mapThumbnailURL } from "../../features/maps/lib/map-thumbnails";
+import { mapThumbnailURL } from "../../features/maps/lib/map-thumbnails";
+import {
+  CLOCK_OPTIONS,
+  NAV_ITEMS,
+  PRESSURE_OPTIONS,
+  commentAvatarFallback,
+  commentDeletedLabel,
+  formatApproximateTime,
+  formatChangelogDate,
+  formatCommentAge,
+  formatQueueElapsed,
+  formatRelativeDuration,
+  isLobbyNavRoute,
+  isMapScope,
+  lobbyRouteStorageKey,
+  lobbyTeamLabel,
+  lobbyTeamPillClass,
+  lobbyTeamTextClass,
+  parseTime,
+  type LobbyContentRoute,
+} from "../../features/lobby/lib/lobby-ui";
+import {
+  LobbyActionButton,
+  LobbyCardButton,
+  LobbyInput,
+  LobbyMutedBox,
+  LobbyPanel,
+} from "../../features/lobby/components/lobby-primitives";
+import { MapUploadForm } from "../../features/lobby/components/MapUploadForm";
+import { PlayPanel } from "../../features/lobby/components/PlayPanel";
+import { LobbyTutorialSection } from "../../features/lobby/components/LobbyTutorialSection";
+import { ProfileModal } from "../../features/lobby/components/ProfileModal";
+import { useQueueRulesetSelection } from "../../features/lobby/hooks/useQueueRulesetSelection";
+
+export type { LobbyContentRoute } from "../../features/lobby/lib/lobby-ui";
 
 type PartyModal = "help" | "profile" | "invite" | "signin" | null;
-
-const CLOCK_OPTIONS = [
-  { value: "infinite", label: "Infinite" },
-  { value: "30", label: "30s" },
-  { value: "45", label: "45s" },
-  { value: "60", label: "60s" },
-  { value: "90", label: "90s" },
-  { value: "120", label: "120s" },
-] as const;
-
-const PRESSURE_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "15", label: "15s" },
-] as const;
-
-function lobbyTeamLabel(teamId?: string) {
-  return teamId === "b" ? "Team Blue" : "Team Red";
-}
-
-function lobbyTeamTextClass(teamId?: string) {
-  return teamId === "b" ? "text-[#93c5fd]" : "text-[#fca5a5]";
-}
-
-function lobbyTeamPillClass(teamId?: string, active = false) {
-  if (teamId === "b") {
-    return active
-      ? "bg-[#2563eb] text-white"
-      : "border border-[#60a5fa]/25 bg-[#2563eb]/15 text-[#bfdbfe] hover:bg-[#2563eb]/25";
-  }
-  return active
-    ? "bg-[#dc2626] text-white"
-    : "border border-[#f87171]/25 bg-[#dc2626]/15 text-[#fecaca] hover:bg-[#dc2626]/25";
-}
 
 type PrivateLobbyView = {
   status: PartyRuntimeStatus;
@@ -98,12 +96,6 @@ type PrivateLobbyView = {
   busy: boolean;
   error: string;
 };
-
-function isMapScope(value: unknown): value is MapScope {
-  return value === "official" || value === "community" || value === "favorites" || value === "mine";
-}
-
-export type LobbyContentRoute = "play" | "friends" | "maps" | "map-details" | "map-upload" | "top" | "party";
 
 type Props = {
   contentRoute?: LobbyContentRoute;
@@ -181,19 +173,6 @@ const defaultPrivateLobby: PrivateLobbyView = {
   error: "",
 };
 
-const NAV_ITEMS: Array<{ label: string; route: LobbyContentRoute; href: string }> = [
-  { label: "FRIENDS", route: "friends", href: "/friends" },
-  { label: "PLAY", route: "play", href: "/" },
-  { label: "MAPS", route: "maps", href: "/maps" },
-  { label: "TOP", route: "top", href: "/top" },
-];
-
-const lobbyRouteStorageKey = "geoduels.lobbyRoute";
-
-function isLobbyNavRoute(value: string): value is LobbyContentRoute {
-  return NAV_ITEMS.some((item) => item.route === value);
-}
-
 const tabPanelMotion = {
   initial: {
     opacity: 0,
@@ -215,77 +194,6 @@ const tabPanelMotion = {
     ease: [0.16, 1, 0.3, 1] as const,
   },
 };
-
-function parseTime(value?: string) {
-  if (!value) return null;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function formatRelativeDuration(ms: number) {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0)
-    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-  return `${seconds}s`;
-}
-
-function formatApproximateTime(ms: number) {
-  const totalMinutes = Math.max(1, Math.ceil(ms / 60000));
-  if (totalMinutes >= 60) {
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return minutes === 0
-      ? `about ${hours} hour${hours === 1 ? "" : "s"}`
-      : `about ${hours}h ${minutes}m`;
-  }
-  return `about ${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
-}
-
-function formatQueueElapsed(ms: number) {
-  const totalSeconds = ms > 0 ? Math.max(1, Math.ceil(ms / 1000)) : 0;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
-
-function formatChangelogDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
-
-function formatCommentAge(value: string) {
-  const ms = Date.parse(value);
-  if (!Number.isFinite(ms)) return "";
-  const seconds = Math.max(1, Math.floor((Date.now() - ms) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
-}
-
-function commentAvatarFallback(name: string) {
-  return (name.trim() || "?").slice(0, 1).toUpperCase();
-}
-
-function commentDeletedLabel(status: string) {
-  return status === "visible" ? "" : "(deleted)";
-}
 
 export default function LobbyScreen({
   contentRoute = "play",
@@ -353,16 +261,11 @@ export default function LobbyScreen({
   onDeleteAccount = async () => { },
 }: Props) {
   const [openModal, setOpenModal] = useState<PartyModal>(null);
-  const [profileTab, setProfileTab] = useState<"account" | "stats" | "badges">("stats");
-  const [inspectedBadgeId, setInspectedBadgeId] = useState("");
-  const [hoveredBadgeId, setHoveredBadgeId] = useState("");
-  const [isEditingProfileName, setIsEditingProfileName] = useState(false);
   const [isBlogExpanded, setIsBlogExpanded] = useState(false);
-  const [queueRulesets, setQueueRulesets] = useState<GameRuleset[]>(["moving"]);
+  const { queueRulesets, toggleQueueRuleset } = useQueueRulesetSelection();
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [mapName, setMapName] = useState("");
   const [mapDescription, setMapDescription] = useState("");
   const [mapDifficulty, setMapDifficulty] = useState<"easy" | "normal" | "hard">("normal");
@@ -503,38 +406,9 @@ export default function LobbyScreen({
     return () => window.clearInterval(timer);
   }, [maintenance, status]);
 
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("geoduels.queueRulesets");
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(parsed)) {
-        const next = parsed.filter((item): item is GameRuleset => item === "moving" || item === "nmpz");
-        setQueueRulesets(Array.from(new Set(next)));
-      }
-    } catch {
-      setQueueRulesets(["moving"]);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("geoduels.queueRulesets", JSON.stringify(queueRulesets));
-    } catch {
-      // Ignore storage failures; defaults still work.
-    }
-  }, [queueRulesets]);
-
   const isQueueing = status === "queueing";
   const isSingleplayerLoading = status === "matched_connecting";
   const canUseRankedQueue = !!userId && !isGuest;
-  const toggleQueueRuleset = (ruleset: GameRuleset) => {
-    setQueueRulesets((current) => {
-      if (current.includes(ruleset)) {
-        return current.filter((item) => item !== ruleset);
-      }
-      return [...current, ruleset];
-    });
-  };
   const queueElapsedLabel = formatQueueElapsed(
     queueStartedAt ? nowMs - queueStartedAt : 0,
   );
@@ -552,17 +426,6 @@ export default function LobbyScreen({
   const linkedProviderCount = linkedProviders.filter((provider) =>
     provider === "google" || provider === "discord"
   ).length;
-  const profileTabs: Array<{ id: "account" | "stats" | "badges"; label: string }> = [
-    { id: "stats", label: "Stats" },
-    { id: "badges", label: "Badges" },
-    { id: "account", label: "Account" },
-  ];
-  const focusedBadge =
-    badges.find((badge) => badge.id === hoveredBadgeId) ||
-    badges.find((badge) => badge.id === inspectedBadgeId) ||
-    badges.find((badge) => badge.id === selectedBadge?.id) ||
-    badges[0] ||
-    null;
   const maintenanceStartMs = parseTime(maintenance?.startsAt);
   const maintenanceEndMs = parseTime(maintenance?.endsAt);
   const maintenanceIsWarning = maintenance?.phase === "warning";
@@ -603,11 +466,12 @@ export default function LobbyScreen({
   };
 
   const discordProviderButton = showDiscordButton ? (
-    <button
+    <LobbyActionButton
       type="button"
       onClick={onDiscordSignIn}
       disabled={authLoading}
-      className="glass-panel glass-panel-interactive group inline-flex items-center justify-center gap-3 rounded-[20px] px-3 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
+      variant="secondary"
+      className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
     >
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#5865f2] text-white shadow-sm">
         <svg viewBox="0 0 127.14 96.36" className="h-3.5 w-4" aria-hidden="true">
@@ -618,35 +482,38 @@ export default function LobbyScreen({
         </svg>
       </span>
       {authLoading ? "Signing In..." : "Continue With Discord"}
-    </button>
+    </LobbyActionButton>
   ) : null;
 
   const signInButton =
     showGoogleButton || showDiscordButton ? (
-      <button
+      <LobbyActionButton
         type="button"
         onClick={() => setOpenModal("signin")}
         disabled={authLoading}
-        className="glass-panel glass-panel-interactive group inline-flex items-center justify-center gap-3 rounded-[20px] px-3 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
+        variant="secondary"
+        className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
       >
         {authLoading ? "Signing In..." : "Sign In"}
-      </button>
+      </LobbyActionButton>
     ) : (
-      <button
+      <LobbyActionButton
         type="button"
         onClick={devLogin}
-        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white transition hover:bg-white/10"
+        variant="secondary"
+        className="rounded-full px-4 py-2 text-xs"
       >
         {authLoading ? "Signing In..." : "Dev Login"}
-      </button>
+      </LobbyActionButton>
     );
 
   const googleProviderButton = showGoogleButton ? (
-    <button
+    <LobbyActionButton
       type="button"
       onClick={onGoogleSignIn}
       disabled={authLoading}
-      className="glass-panel glass-panel-interactive group inline-flex items-center justify-center gap-3 rounded-[20px] px-3 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
+      variant="secondary"
+      className="rounded-2xl px-3 py-2.5 text-xs sm:px-4"
     >
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#111827] shadow-sm">
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
@@ -669,12 +536,13 @@ export default function LobbyScreen({
         </svg>
       </span>
       {authLoading ? "Opening Google..." : "Continue With Google"}
-    </button>
+    </LobbyActionButton>
   ) : null;
 
   const newsPanel = (
-    <div
-      className="glass-panel glass-panel-interactive lobby-feature-card group w-full rounded-[20px] p-5"
+    <LobbyPanel
+      interactive
+      className="group w-full p-5"
       style={{ animationDelay: "-3s" }}
     >
       <button
@@ -734,14 +602,13 @@ export default function LobbyScreen({
           )}
         </AnimatePresence>
       </button>
-    </div>
+    </LobbyPanel>
   );
 
   const donateCard = (
-    <button
-      type="button"
+    <LobbyCardButton
       onClick={() => void onSupportDonation()}
-      className="glass-panel glass-panel-interactive lobby-feature-card group flex w-full items-center gap-4 rounded-[20px] p-5 text-left"
+      className="group flex w-full items-center gap-4 p-5"
       style={{ animationDelay: "-0.75s" }}
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ef476f]/14 text-[#f7a1b5]">
@@ -766,12 +633,12 @@ export default function LobbyScreen({
           />
         </div>
       </div>
-    </button>
+    </LobbyCardButton>
   );
 
   const socialLinksCard = (
-    <div
-      className="glass-panel lobby-feature-card flex w-full flex-col gap-4 rounded-[20px] p-5"
+    <LobbyPanel
+      className="flex w-full flex-col gap-4 p-5"
       style={{ animationDelay: "-1s" }}
     >
       <span className="block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">
@@ -812,12 +679,12 @@ export default function LobbyScreen({
           </a>
         ))}
       </div>
-    </div>
+    </LobbyPanel>
   );
 
   const onlineStatusCard = (
-    <div
-      className="glass-panel lobby-feature-card flex w-full items-center gap-3 rounded-[20px] px-[20px] py-3"
+    <LobbyPanel
+      className="flex w-full items-center gap-3 px-5 py-3"
       style={{ animationDelay: "-0.5s" }}
     >
       <div className="status-dot-wrap relative flex h-4 w-4 shrink-0 items-center justify-center">
@@ -828,7 +695,7 @@ export default function LobbyScreen({
           {onlinePlayers} Playing
         </p>
       </div>
-    </div>
+    </LobbyPanel>
   );
 
   const lobbyInviteURL =
@@ -903,19 +770,18 @@ export default function LobbyScreen({
     { scope: "favorites", label: "Favorites" },
     { scope: "mine", label: "My Maps" },
   ];
-  const selectedThumbnail = mapThumbnailOptions.find((item) => item.key === mapThumbnailKey) || mapThumbnailOptions[0];
   const thumbnailURL = (item: Pick<CustomMap, "thumbnailVariant" | "thumbnailKey">) => mapThumbnailURL(item.thumbnailKey, item.thumbnailVariant);
   const renderMapSearchControl = (id: string) => (
     <div className="relative w-full sm:w-[260px]">
       <label htmlFor={id} className="sr-only">Search maps</label>
       <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#77f0be]" size={16} />
-      <input
+      <LobbyInput
         id={id}
         type="search"
         value={mapSearchInput}
         onChange={(event) => setMapSearchInput(event.target.value)}
         placeholder="Search maps"
-        className="h-11 w-full rounded-[14px] border border-white/10 bg-black/25 py-2 pl-9 pr-10 text-sm font-semibold text-white outline-none transition placeholder:text-[#6f8998] focus:border-[#77f0be]/60 focus:bg-black/35"
+        className="h-11 w-full rounded-xl py-2 pl-9 pr-10 font-semibold"
       />
       {mapSearchInput ? (
         <button
@@ -929,10 +795,6 @@ export default function LobbyScreen({
       ) : null}
     </div>
   );
-  const filteredThumbnailOptions = mapThumbnailOptions.filter((item) => {
-    const q = mapThumbnailSearch.trim().toLowerCase();
-    return item.category === mapThumbnailCategory && (!q || item.label.toLowerCase().includes(q) || item.search.toLowerCase().includes(q) || item.key.includes(q));
-  });
   const mapPickerFlow = privateLobbyActive && privateLobby.isOwner && privateLobby.snapshot?.state === "open";
   const selectMapForParty = (item: CustomMap) => {
     if (privateLobbyActive && privateLobby.isOwner) {
@@ -952,48 +814,31 @@ export default function LobbyScreen({
     });
   };
   const mapUploadForm = (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="grid gap-3">
-        <input value={mapName} onChange={(event)=>setMapName(event.target.value)} maxLength={80} placeholder="Map name" disabled={isGuest} className="h-11 rounded-[12px] border border-white/10 bg-black/25 px-3 text-sm font-semibold text-white outline-none focus:border-[#2ad18f]/60 disabled:opacity-50" />
-        <textarea value={mapDescription} onChange={(event)=>setMapDescription(event.target.value)} maxLength={500} placeholder="Description (optional)" disabled={isGuest} className="min-h-20 resize-none rounded-[12px] border border-white/10 bg-black/25 p-3 text-sm text-white outline-none focus:border-[#2ad18f]/60 disabled:opacity-50" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <select value={mapDifficulty} onChange={(event)=>setMapDifficulty(event.target.value as "easy"|"normal"|"hard")} disabled={isGuest} className="h-11 rounded-[12px] border border-white/10 bg-[#101a20] px-3 text-sm font-bold text-white outline-none disabled:opacity-50"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select>
-          <input value={mapThumbnailSearch} onChange={(event)=>setMapThumbnailSearch(event.target.value)} placeholder="Search thumbnails" disabled={isGuest} className="h-11 rounded-[12px] border border-white/10 bg-black/25 px-3 text-sm font-semibold text-white outline-none focus:border-[#2ad18f]/60 disabled:opacity-50" />
-        </div>
-        <div className="rounded-[14px] border border-white/10 bg-black/20 p-3">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {(["generic", "continents", "countries"] as const).map((category) => (
-              <button key={category} type="button" onClick={()=>setMapThumbnailCategory(category)} className={`rounded-[10px] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] ${mapThumbnailCategory === category ? "bg-white text-[#10201a]" : "bg-white/[0.06] text-[#a9bfd4] hover:bg-white/[0.1]"}`}>
-                {category}
-              </button>
-            ))}
-          </div>
-          <div className="grid max-h-[320px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-            {filteredThumbnailOptions.map((option) => (
-              <button key={option.key} type="button" onClick={()=>setMapThumbnailKey(option.key)} className={`overflow-hidden rounded-[12px] border text-left transition ${mapThumbnailKey === option.key ? "border-[#77f0be] bg-[#77f0be]/10" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                <img src={mapThumbnailURL(option.key)} alt="" className="aspect-[16/9] w-full object-cover" />
-                <div className="p-2 text-[11px] font-black text-white">{option.label}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-        <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-[14px] border border-dashed border-white/20 bg-black/20 px-4 text-center text-sm font-semibold text-[#a9bfd4] hover:border-[#2ad18f]/50">
-          <Upload className="mb-2 text-[#2ad18f]" size={22} />{mapFile ? mapFile.name : "Choose JSON file"}
-          <input type="file" accept=".json,application/json" className="hidden" disabled={isGuest} onChange={(event)=>{setMapFile(event.target.files?.[0]||null);setMapUploadError("");}} />
-        </label>
-      </div>
-      <div className="grid content-start gap-3">
-        <img src={mapThumbnailURL(mapThumbnailKey)} alt="" className="aspect-[16/9] w-full rounded-[14px] object-cover" />
-        <p className="text-xs font-bold text-[#a9bfd4]">Selected: <span className="text-white">{selectedThumbnail.label}</span></p>
-        {mapUploadError ? <p className="text-xs font-semibold text-red-300">{mapUploadError}</p> : null}
-        <button type="button" disabled={isGuest || !mapName.trim() || !mapFile || createMapMutation.isPending} onClick={()=>createMapMutation.mutate()} className="inline-flex h-11 items-center justify-center rounded-[12px] bg-[#22d385] text-sm font-extrabold uppercase tracking-[0.08em] text-white disabled:cursor-not-allowed disabled:opacity-50">{createMapMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={17}/> : <Upload className="mr-2" size={17}/>}Upload</button>
-        <p className="text-[11px] leading-5 text-[#6f8998]">Limits: 10 maps, 100,000 locations per map, 250,000 active locations per account, 3 uploads/hour.</p>
-      </div>
-    </div>
+    <MapUploadForm
+      isGuest={isGuest}
+      mapName={mapName}
+      setMapName={setMapName}
+      mapDescription={mapDescription}
+      setMapDescription={setMapDescription}
+      mapDifficulty={mapDifficulty}
+      setMapDifficulty={setMapDifficulty}
+      mapThumbnailKey={mapThumbnailKey}
+      setMapThumbnailKey={setMapThumbnailKey}
+      mapThumbnailCategory={mapThumbnailCategory}
+      setMapThumbnailCategory={setMapThumbnailCategory}
+      mapThumbnailSearch={mapThumbnailSearch}
+      setMapThumbnailSearch={setMapThumbnailSearch}
+      mapFile={mapFile}
+      setMapFile={setMapFile}
+      mapUploadError={mapUploadError}
+      setMapUploadError={setMapUploadError}
+      uploadPending={createMapMutation.isPending}
+      onUpload={() => createMapMutation.mutate()}
+    />
   );
   const mapsPanel = (
     <motion.div key="maps" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <div className="glass-panel overflow-hidden rounded-[24px]">
+      <LobbyPanel className="overflow-hidden rounded-3xl">
         <div className="grid min-h-[640px] lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="border-b border-white/10 bg-black/20 p-4 lg:border-b-0 lg:border-r">
             <div className="mb-4 flex items-center gap-2 text-white">
@@ -1030,15 +875,15 @@ export default function LobbyScreen({
             </div>
 
             {mapScope === "mine" && !canUploadCustomMaps ? (
-              <div className="mt-6 rounded-[16px] border border-white/10 bg-black/20 p-5 text-sm font-semibold text-[#a9bfd4]">Sign in with a permanent account to create custom maps.</div>
+              <LobbyMutedBox className="mt-6">Sign in with a permanent account to create custom maps.</LobbyMutedBox>
             ) : mapsQuery.isLoading ? (
               <div className="mt-8 flex items-center gap-3 text-sm text-[#a9bfd4]"><Loader2 className="animate-spin" size={18} /> Loading maps...</div>
             ) : readyMaps.length === 0 ? (
-              <div className="mt-8 rounded-[18px] border border-dashed border-white/15 bg-black/15 p-8 text-center text-sm text-[#a9bfd4]">{hasMapSearch ? "No maps match your search." : "No maps in this section yet."}</div>
+              <LobbyMutedBox className="mt-8 border-dashed p-8 text-center">{hasMapSearch ? "No maps match your search." : "No maps in this section yet."}</LobbyMutedBox>
             ) : (
               <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {readyMaps.map((item) => (
-                  <article key={item.id} className="overflow-hidden rounded-[18px] border border-white/10 bg-black/25">
+                  <LobbyPanel key={item.id} variant="subtle" className="overflow-hidden rounded-2xl p-0">
                     {privateLobbyActive ? (
                     <button type="button" onClick={() => selectMapForParty(item)} className="block w-full text-left">
                       <div className="relative aspect-[16/9] overflow-hidden bg-[#10201a]">
@@ -1074,7 +919,7 @@ export default function LobbyScreen({
                       </div>
                     </Link>
                     )}
-                  </article>
+                  </LobbyPanel>
                 ))}
               </div>
             )}
@@ -1095,100 +940,20 @@ export default function LobbyScreen({
             ) : null}
           </section>
         </div>
-      </div>
-      {contentRoute === "map-details" ? (
-        <div className="mt-5 rounded-[22px] border border-white/10 bg-[#071114]/95 p-5 sm:p-6">
-          {selectedMapQuery.isLoading || !selectedMapDetails ? (
-            <div className="flex items-center gap-3 text-sm text-[#a9bfd4]"><Loader2 className="animate-spin" size={18} /> Loading map details...</div>
-          ) : (
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-              <div>
-                <Link href="/maps" className="mb-3 inline-flex text-xs font-black uppercase tracking-[0.12em] text-[#77f0be]">Back to maps</Link>
-                <img src={thumbnailURL(selectedMapDetails.map)} alt="" className="aspect-[16/9] w-full rounded-[18px] object-cover" />
-                <h3 className="mt-4 text-2xl font-black text-white">{selectedMapDetails.map.displayName}</h3>
-                <p className="mt-1 text-sm text-[#a9bfd4]">by {selectedMapDetails.map.authorName || "GeoDuels"} · {selectedMapDetails.map.difficulty} · {selectedMapDetails.map.locationCount.toLocaleString()} locations</p>
-                {selectedMapDetails.map.description ? <p className="mt-3 text-sm leading-6 text-[#8da6b5]">{selectedMapDetails.map.description}</p> : null}
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  {selectedMapDetails.countryStats.slice(0, 12).map((stat) => (
-                    <div key={stat.country} className="rounded-[12px] border border-white/10 bg-white/[0.04] p-3">
-                      <div className="truncate text-xs font-bold text-[#a9bfd4]">{stat.country}</div>
-                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#22d385]" style={{ width: `${Math.max(6, Math.round((stat.locationCount / Math.max(1, selectedMapDetails.map.locationCount)) * 100))}%` }} /></div>
-                      <div className="mt-1 text-[11px] font-black text-white">{stat.locationCount.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <aside>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => selectMapForParty(selectedMapDetails.map)} className="rounded-[12px] bg-[#22d385] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white">Use in Party</button>
-                  {canInteractWithMaps ? <button type="button" onClick={() => favoriteMapMutation.mutate({ mapId: selectedMapDetails.map.id, favorite: !selectedMapDetails.map.favorited })} className="rounded-[12px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white">{selectedMapDetails.map.favorited ? "Unfavorite" : "Favorite"}</button> : null}
-                  {selectedMapDetails.map.ownerUserId === userId && canUploadCustomMaps ? (
-                    <>
-                      {!selectedMapDetails.map.publishedAt ? <button type="button" onClick={() => publishMapMutation.mutate(selectedMapDetails.map.id)} className="rounded-[12px] border border-[#77f0be]/20 bg-[#77f0be]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#baf7dc]">Publish</button> : null}
-                      <label className="inline-flex cursor-pointer items-center rounded-[12px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
-                        <Upload className="mr-1.5" size={14} /> New Version
-                        <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file=event.target.files?.[0]; if(file) revisionMutation.mutate({mapId:selectedMapDetails.map.id,file}); event.currentTarget.value=""; }} />
-                      </label>
-                      <button type="button" onClick={() => deleteMap(selectedMapDetails.map)} className="rounded-[12px] border border-red-400/15 bg-red-400/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-red-200 hover:bg-red-400/10">Delete</button>
-                    </>
-                  ) : null}
-                </div>
-                <div className="mt-5 rounded-[18px] border border-white/10 bg-black/20 p-4">
-                  <h4 className="flex items-center gap-2 text-sm font-black text-white"><MessageCircle size={16} /> Comments</h4>
-                  {canInteractWithMaps ? (
-                    <div className="mt-3">
-                      <textarea value={commentBody} onChange={(event)=>setCommentBody(event.target.value)} maxLength={1000} placeholder="Add a comment" className="min-h-20 w-full resize-none rounded-[12px] border border-white/10 bg-black/25 p-3 text-sm text-white outline-none focus:border-[#2ad18f]/60" />
-                      <button type="button" disabled={!commentBody.trim() || createCommentMutation.isPending} onClick={postMapComment} className="mt-2 rounded-[10px] bg-[#22d385] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-white disabled:opacity-50">Post</button>
-                    </div>
-                  ) : <p className="mt-3 text-xs text-[#8da6b5]">{accessToken ? "Upgrade your guest profile to comment." : "Sign in to comment."}</p>}
-                  <div className="mt-4 grid gap-3">
-                    {selectedMapDetails.comments.map((comment) => (
-                      <div key={comment.id} className="rounded-[14px] border border-white/10 bg-white/[0.04] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-black text-white">
-                              {comment.userDisplayName}
-                              {commentDeletedLabel(comment.status) ? <span className="ml-2 text-xs font-black text-red-300">{commentDeletedLabel(comment.status)}</span> : null}
-                            </p>
-                            <p className="mt-1 text-sm leading-5 text-[#a9bfd4]">{comment.body}</p>
-                          </div>
-                          {comment.status === "visible" && (comment.canDelete || isAdmin || isModerator) && accessToken ? <button type="button" onClick={() => deleteCommentMutation.mutate({ commentId: comment.id })} className="text-red-200 hover:text-red-100"><Trash2 size={15} /></button> : null}
-                        </div>
-                        {canInteractWithMaps && comment.status === "visible" ? <button type="button" onClick={() => { setReplyToCommentId(comment.id); setReplyBody(""); }} className="mt-2 text-[11px] font-black uppercase tracking-[0.08em] text-[#77f0be]">Reply</button> : null}
-                        {comment.replies?.map((reply) => (
-                          <div key={reply.id} className="mt-3 border-l border-white/10 pl-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm leading-5 text-[#a9bfd4]">
-                                <span className="font-black text-white">{reply.userDisplayName}</span>
-                                {commentDeletedLabel(reply.status) ? <span className="ml-2 text-xs font-black text-red-300">{commentDeletedLabel(reply.status)}</span> : null}
-                                {" "}{reply.body}
-                              </p>
-                              {reply.status === "visible" && (reply.canDelete || isAdmin || isModerator) && accessToken ? <button type="button" onClick={() => deleteCommentMutation.mutate({ commentId: reply.id })} className="text-red-200 hover:text-red-100"><Trash2 size={14} /></button> : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-            </div>
-          )}
-        </div>
-      ) : null}
+      </LobbyPanel>
     </motion.div>
   );
 
   const mapUploadPanel = (
     <motion.div key="map-upload" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <div className="rounded-[20px] border border-white/10 bg-white/[0.045] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
+      <LobbyPanel className="p-4 sm:p-6">
         <div className="space-y-5">
           <Link href="/maps" className="inline-flex min-h-[38px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-4 text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#d6e4ed] transition hover:bg-white/[0.12] hover:text-white">
             <ArrowLeft size={16} />
             Back
           </Link>
 
-          <section className="rounded-[18px] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-md sm:p-5">
+          <LobbyPanel variant="subtle" className="p-4 sm:p-5">
             <div className="mb-5">
               <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#77f0be]">Upload Map</span>
               <h2 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight text-white sm:text-[36px]">Create a Custom Map</h2>
@@ -1197,104 +962,17 @@ export default function LobbyScreen({
             {canUploadCustomMaps ? (
               mapUploadForm
             ) : (
-              <div className="rounded-[16px] border border-white/10 bg-black/20 p-5 text-sm font-semibold text-[#a9bfd4]">Sign in with a permanent account to create custom maps.</div>
+              <LobbyMutedBox>Sign in with a permanent account to create custom maps.</LobbyMutedBox>
             )}
-          </section>
+          </LobbyPanel>
         </div>
-      </div>
-    </motion.div>
-  );
-
-  const mapDetailsPanel = (
-    <motion.div key="map-details" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <div className="rounded-[22px] border border-white/10 bg-[#071114]/95 p-5 sm:p-6">
-        {selectedMapQuery.isLoading || !selectedMapDetails ? (
-          <div className="flex items-center gap-3 text-sm text-[#a9bfd4]">
-            <Loader2 className="animate-spin" size={18} /> Loading map details...
-          </div>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div>
-              <Link href="/maps" className="mb-3 inline-flex text-xs font-black uppercase tracking-[0.12em] text-[#77f0be]">Back to maps</Link>
-              <img src={thumbnailURL(selectedMapDetails.map)} alt="" className="aspect-[16/9] w-full rounded-[18px] object-cover" />
-              <h3 className="mt-4 text-2xl font-black text-white">{selectedMapDetails.map.displayName}</h3>
-              <p className="mt-1 text-sm text-[#a9bfd4]">by {selectedMapDetails.map.authorName || "GeoDuels"} · {selectedMapDetails.map.difficulty} · {selectedMapDetails.map.locationCount.toLocaleString()} locations</p>
-              {selectedMapDetails.map.description ? <p className="mt-3 text-sm leading-6 text-[#8da6b5]">{selectedMapDetails.map.description}</p> : null}
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                {selectedMapDetails.countryStats.slice(0, 12).map((stat) => (
-                  <div key={stat.country} className="rounded-[12px] border border-white/10 bg-white/[0.04] p-3">
-                    <div className="truncate text-xs font-bold text-[#a9bfd4]">{stat.country}</div>
-                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-[#22d385]" style={{ width: `${Math.max(6, Math.round((stat.locationCount / Math.max(1, selectedMapDetails.map.locationCount)) * 100))}%` }} />
-                    </div>
-                    <div className="mt-1 text-[11px] font-black text-white">{stat.locationCount.toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <aside>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => selectMapForParty(selectedMapDetails.map)} className="rounded-[12px] bg-[#22d385] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white">Use in Party</button>
-                {canInteractWithMaps ? <button type="button" onClick={() => favoriteMapMutation.mutate({ mapId: selectedMapDetails.map.id, favorite: !selectedMapDetails.map.favorited })} className="rounded-[12px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white">{selectedMapDetails.map.favorited ? "Unfavorite" : "Favorite"}</button> : null}
-                {selectedMapDetails.map.ownerUserId === userId && canUploadCustomMaps ? (
-                  <>
-                    {!selectedMapDetails.map.publishedAt ? <button type="button" onClick={() => publishMapMutation.mutate(selectedMapDetails.map.id)} className="rounded-[12px] border border-[#77f0be]/20 bg-[#77f0be]/10 px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#baf7dc]">Publish</button> : null}
-                    <label className="inline-flex cursor-pointer items-center rounded-[12px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
-                      <Upload className="mr-1.5" size={14} /> New Version
-                      <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file=event.target.files?.[0]; if(file) revisionMutation.mutate({mapId:selectedMapDetails.map.id,file}); event.currentTarget.value=""; }} />
-                    </label>
-                    <button type="button" onClick={() => deleteMap(selectedMapDetails.map)} className="rounded-[12px] border border-red-400/15 bg-red-400/[0.06] px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-red-200 hover:bg-red-400/10">Delete</button>
-                  </>
-                ) : null}
-              </div>
-              <div className="mt-5 rounded-[18px] border border-white/10 bg-black/20 p-4">
-                <h4 className="flex items-center gap-2 text-sm font-black text-white"><MessageCircle size={16} /> Comments</h4>
-                {canInteractWithMaps ? (
-                  <div className="mt-3">
-                    <textarea value={commentBody} onChange={(event)=>setCommentBody(event.target.value)} maxLength={1000} placeholder="Add a comment" className="min-h-20 w-full resize-none rounded-[12px] border border-white/10 bg-black/25 p-3 text-sm text-white outline-none focus:border-[#2ad18f]/60" />
-                    <button type="button" disabled={!commentBody.trim() || createCommentMutation.isPending} onClick={postMapComment} className="mt-2 rounded-[10px] bg-[#22d385] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-white disabled:opacity-50">Post</button>
-                  </div>
-                ) : <p className="mt-3 text-xs text-[#8da6b5]">{accessToken ? "Upgrade your guest profile to comment." : "Sign in to comment."}</p>}
-                <div className="mt-4 grid gap-3">
-                  {selectedMapDetails.comments.map((comment) => (
-                    <div key={comment.id} className="rounded-[14px] border border-white/10 bg-white/[0.04] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black text-white">
-                            {comment.userDisplayName}
-                            {commentDeletedLabel(comment.status) ? <span className="ml-2 text-xs font-black text-red-300">{commentDeletedLabel(comment.status)}</span> : null}
-                          </p>
-                          <p className="mt-1 text-sm leading-5 text-[#a9bfd4]">{comment.body}</p>
-                        </div>
-                        {comment.status === "visible" && (comment.canDelete || isAdmin || isModerator) && accessToken ? <button type="button" onClick={() => deleteCommentMutation.mutate({ commentId: comment.id })} className="text-red-200 hover:text-red-100"><Trash2 size={15} /></button> : null}
-                      </div>
-                      {canInteractWithMaps && comment.status === "visible" ? <button type="button" onClick={() => { setReplyToCommentId(comment.id); setReplyBody(""); }} className="mt-2 text-[11px] font-black uppercase tracking-[0.08em] text-[#77f0be]">Reply</button> : null}
-                      {comment.replies?.map((reply) => (
-                        <div key={reply.id} className="mt-3 border-l border-white/10 pl-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm leading-5 text-[#a9bfd4]">
-                              <span className="font-black text-white">{reply.userDisplayName}</span>
-                              {commentDeletedLabel(reply.status) ? <span className="ml-2 text-xs font-black text-red-300">{commentDeletedLabel(reply.status)}</span> : null}
-                              {" "}{reply.body}
-                            </p>
-                            {reply.status === "visible" && (reply.canDelete || isAdmin || isModerator) && accessToken ? <button type="button" onClick={() => deleteCommentMutation.mutate({ commentId: reply.id })} className="text-red-200 hover:text-red-100"><Trash2 size={14} /></button> : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          </div>
-        )}
-      </div>
+      </LobbyPanel>
     </motion.div>
   );
 
   const mapDetailsPanelV2 = (
     <motion.div key="map-details" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <div className="glass-panel rounded-[20px] p-4 sm:p-6">
+      <LobbyPanel className="p-4 sm:p-6">
         {selectedMapQuery.isLoading || !selectedMapDetails ? (
           <div className="flex items-center gap-3 text-sm text-[#a9bfd4]">
             <Loader2 className="animate-spin" size={18} /> Loading map details...
@@ -1327,7 +1005,7 @@ export default function LobbyScreen({
                 </div>
               </section>
 
-              <section className="rounded-[18px] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-md sm:p-5">
+              <LobbyPanel variant="subtle" className="p-4 sm:p-5">
                 <div className="grid gap-3">
                   {[
                     { label: "plays", value: selectedMapDetails.map.playCount, icon: <Play size={20} fill="currentColor" /> },
@@ -1346,31 +1024,31 @@ export default function LobbyScreen({
                 <p className="mt-4 text-[14px] font-medium leading-6 text-[#a9bfd4]">
                   {selectedMapDetails.map.description || "No description has been added for this map yet."}
                 </p>
-              </section>
+              </LobbyPanel>
             </div>
 
-            <section className="flex flex-col gap-3 rounded-[18px] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+            <LobbyPanel variant="subtle" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
                 <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Moving</span>
                 <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Infinite Clock</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {mapPickerFlow ? (
-                  <button type="button" onClick={() => selectMapForParty(selectedMapDetails.map)} className="inline-flex min-h-[46px] items-center justify-center rounded-[14px] bg-[#22d385] px-6 text-sm font-black uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.28)] transition hover:bg-[#2ae091]">
+                  <LobbyActionButton type="button" onClick={() => selectMapForParty(selectedMapDetails.map)} size="lg" className="min-h-[46px] rounded-xl px-6">
                     <MapIcon className="mr-2" size={18} />
                     Use This Map
-                  </button>
+                  </LobbyActionButton>
                 ) : (
-                  <button type="button" onClick={() => playMapSingleplayer(selectedMapDetails.map)} disabled={singleplayerDisabled} className="inline-flex min-h-[46px] items-center justify-center rounded-[14px] bg-[#22d385] px-6 text-sm font-black uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition hover:bg-[#2ae091] disabled:cursor-not-allowed disabled:opacity-60">
+                  <LobbyActionButton type="button" onClick={() => playMapSingleplayer(selectedMapDetails.map)} disabled={singleplayerDisabled} size="lg" className="min-h-[46px] rounded-xl px-6">
                     <Play className="mr-2" size={18} fill="currentColor" />
                     Play
-                  </button>
+                  </LobbyActionButton>
                 )}
                 {canInteractWithMaps ? (
-                  <button type="button" onClick={() => favoriteMapMutation.mutate({ mapId: selectedMapDetails.map.id, favorite: !selectedMapDetails.map.favorited })} className="inline-flex min-h-[46px] items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-sm font-black uppercase tracking-[0.08em] text-white transition hover:bg-white/[0.1]">
+                  <LobbyActionButton type="button" variant="secondary" onClick={() => favoriteMapMutation.mutate({ mapId: selectedMapDetails.map.id, favorite: !selectedMapDetails.map.favorited })} size="lg" className="min-h-[46px] rounded-xl px-4">
                     <Star className="mr-2" size={17} fill={selectedMapDetails.map.favorited ? "currentColor" : "none"} />
                     {selectedMapDetails.map.favorited ? "Saved" : "Save"}
-                  </button>
+                  </LobbyActionButton>
                 ) : null}
                 {selectedMapDetails.map.ownerUserId === userId && canUploadCustomMaps ? (
                   <>
@@ -1383,9 +1061,9 @@ export default function LobbyScreen({
                   </>
                 ) : null}
               </div>
-            </section>
+            </LobbyPanel>
 
-            <section className="rounded-[18px] border border-white/10 bg-white/[0.045] p-4 backdrop-blur-md">
+            <LobbyPanel variant="subtle" className="p-4">
               <h4 className="flex items-center gap-2 text-[18px] font-extrabold tracking-tight text-white"><MessageCircle size={18} /> Comments</h4>
               {canInteractWithMaps ? (
                 <div className="mt-5 flex gap-3">
@@ -1409,7 +1087,7 @@ export default function LobbyScreen({
                     {(commentComposerFocused || commentBody) ? (
                     <div className="mt-3 flex justify-end gap-2">
                       <button type="button" onClick={() => { setCommentBody(""); setCommentComposerFocused(false); }} className="rounded-full px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#a9bfd4] hover:bg-white/[0.08]">Cancel</button>
-                      <button type="button" disabled={!commentBody.trim() || createCommentMutation.isPending} onClick={postMapComment} className="rounded-full bg-[#22d385] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white disabled:opacity-50">Comment</button>
+                      <LobbyActionButton type="button" disabled={!commentBody.trim() || createCommentMutation.isPending} onClick={postMapComment} size="sm" className="rounded-full px-4 py-2">Comment</LobbyActionButton>
                     </div>
                     ) : null}
                   </div>
@@ -1536,10 +1214,10 @@ export default function LobbyScreen({
                   </div>
                 ))}
               </div>
-            </section>
+            </LobbyPanel>
           </div>
         )}
-      </div>
+      </LobbyPanel>
     </motion.div>
   );
 
@@ -2212,351 +1890,38 @@ export default function LobbyScreen({
   );
 
   const renderProfileModal = () => (
-    <AppModalShell
-      title="Profile"
-      onClose={() => {
-        setOpenModal(null);
-        setIsEditingProfileName(false);
-      }}
-    >
-      <div className="glass-panel flex items-center gap-4 rounded-2xl p-5">
-        <AvatarBadge
-          avatarUrl={userAvatar}
-          fallback={userAvatarFallback}
-          alt={displayName || userEmail || "Guest"}
-          size="lg"
-          className="border-white/20 bg-[#162130]"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {isEditingProfileName && !isGuest ? (
-              <input
-                value={nicknameInput}
-                onChange={(e) => onChangeNickname(e.target.value)}
-                disabled={nicknameSaving}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    void (async () => {
-                      const saved = await onSaveNickname();
-                      if (saved) {
-                        setIsEditingProfileName(false);
-                      }
-                    })();
-                  }
-                  if (e.key === "Escape") {
-                    setIsEditingProfileName(false);
-                    onChangeNickname(displayName || userEmail || "");
-                  }
-                }}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#101a20] px-3 py-2 text-base font-bold text-white outline-none transition focus:border-[#2ad18f]/60"
-                placeholder="Enter nickname"
-                maxLength={14}
-                autoFocus
-              />
-            ) : (
-              <PlayerNameWithBadge
-                name={displayName || userEmail || "Guest"}
-                isAdmin={isAdmin}
-                selectedBadge={null}
-                nameClassName="text-xl font-bold text-white"
-                wrapperClassName="min-w-0"
-              />
-            )}
-            {userId && !isGuest ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (isEditingProfileName) {
-                    void (async () => {
-                      const saved = await onSaveNickname();
-                      if (saved) {
-                        setIsEditingProfileName(false);
-                      }
-                    })();
-                    return;
-                  }
-                  onChangeNickname(displayName || userEmail || "");
-                  setIsEditingProfileName(true);
-                }}
-                disabled={nicknameSaving}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label={
-                  isEditingProfileName ? "Save nickname" : "Edit nickname"
-                }
-              >
-                {nicknameSaving ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : isEditingProfileName ? (
-                  <Check size={16} />
-                ) : (
-                  <Pencil size={16} />
-                )}
-              </button>
-            ) : null}
-          </div>
-          {isGuest || selectedBadge ? (
-            <div className="mt-1 flex items-center gap-2 text-sm text-[#a9bfd4]">
-              {isGuest ? <span>Guest profile</span> : null}
-              <PlayerBadge badge={selectedBadge} size="sm" />
-            </div>
-          ) : null}
-          {nicknameError ? (
-            <p className="mt-2 text-xs font-semibold text-red-400">
-              {nicknameError}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-black/20 p-1">
-        {profileTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setProfileTab(tab.id)}
-            className={`min-h-[38px] rounded-xl text-[11px] font-black uppercase tracking-[0.12em] transition ${profileTab === tab.id ? "bg-[#2ad18f] text-[#06130d]" : "text-[#a9bfd4] hover:bg-white/10 hover:text-white"}`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {profileTab === "stats" ? (
-        <div className="mt-4 grid grid-cols-1 gap-3 text-center uppercase tracking-wider text-[#a9bfd4] sm:grid-cols-3">
-          <div className="glass-panel rounded-xl p-3 py-4">
-            <p className="text-[11px] font-bold">MMR</p>
-            <p className="mt-1.5 text-2xl font-black text-white">{mmr}</p>
-          </div>
-          <div className="glass-panel rounded-xl p-3 py-4">
-            <p className="text-[11px] font-bold">Games</p>
-            <p className="mt-1.5 text-2xl font-black text-white">{gamesPlayed}</p>
-          </div>
-          <div className="glass-panel rounded-xl p-3 py-4">
-            <p className="text-[11px] font-bold">Winrate</p>
-            <p className="mt-1.5 text-2xl font-black text-white">{winsPct}%</p>
-          </div>
-        </div>
-      ) : null}
-
-      {profileTab === "badges" ? (
-        <div className="mt-4">
-          <div className="grid grid-cols-4 gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-6">
-            {badges.map((badge) => {
-              const owned = !!badge.owned;
-              const selected = selectedBadge?.id === badge.id;
-              const focused = focusedBadge?.id === badge.id;
-              return (
-                <button
-                  key={badge.id}
-                  type="button"
-                  onMouseEnter={() => setHoveredBadgeId(badge.id)}
-                  onMouseLeave={() => setHoveredBadgeId("")}
-                  onFocus={() => setHoveredBadgeId(badge.id)}
-                  onBlur={() => setHoveredBadgeId("")}
-                  onClick={() => {
-                    setInspectedBadgeId(badge.id);
-                    if (owned) void onSelectBadge(selected ? "" : badge.id);
-                  }}
-                  className={`relative flex aspect-square items-center justify-center rounded-2xl border transition ${focused ? "border-[#2ad18f]/70 bg-[#123f2d]/45" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"} ${selected ? "shadow-[0_0_24px_rgba(42,209,143,0.24)]" : ""}`}
-                  aria-label={badge.label}
-                >
-                  <PlayerBadge badge={badge} size="lg" muted={!owned} />
-                  {selected ? (
-                    <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#2ad18f] shadow-[0_0_10px_rgba(42,209,143,0.8)]" />
-                  ) : null}
-                  {!owned ? (
-                    <span className="absolute inset-x-2 bottom-1.5 rounded-full bg-black/40 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-white/45">
-                      Locked
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          {focusedBadge ? (
-            <div className="mt-3 h-[112px] rounded-2xl border border-white/10 bg-black/25 p-4">
-              <div className="flex h-full items-start justify-between gap-3 overflow-hidden">
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-white">{focusedBadge.label}</p>
-                  <p className="mt-1 max-h-[48px] overflow-hidden text-xs leading-relaxed text-[#a9bfd4]">
-                    {focusedBadge.description}
-                  </p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${focusedBadge.owned ? "bg-[#2ad18f]/18 text-[#8ff0c2]" : "bg-white/[0.06] text-white/45"}`}>
-                  {selectedBadge?.id === focusedBadge.id
-                    ? "Shown"
-                    : focusedBadge.owned
-                      ? "Available"
-                      : "Locked"}
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {profileTab === "account" && userId && !isGuest ? (
-        <div className="glass-panel mt-6 rounded-xl p-4">
-          <div className="mb-4 rounded-xl border border-white/10 bg-black/15 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
-              Email
-            </p>
-            <p className="mt-1 truncate text-sm font-semibold text-white">
-              {userEmail || "No email on this account"}
-            </p>
-          </div>
-          <p className="mb-3 text-center text-[12px] font-semibold uppercase tracking-[0.14em] text-[#8cb0a1]">
-            Sign-in Methods
-          </p>
-          <div className="space-y-3">
-            {showGoogleButton ? (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/15 p-3">
-                <div>
-                  <p className="text-sm font-bold text-white">Google</p>
-                  <p className="text-xs text-[#a9bfd4]">
-                    {hasGoogleProvider ? "Linked" : "Not linked"}
-                  </p>
-                </div>
-                {hasGoogleProvider ? (
-                  <button
-                    type="button"
-                    onClick={() => onUnlinkAuthProvider("google")}
-                    disabled={authLoading || linkedProviderCount <= 1}
-                    className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Unlink
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onLinkAuthProvider("google")}
-                    disabled={authLoading}
-                    className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Link
-                  </button>
-                )}
-              </div>
-            ) : null}
-            {showDiscordButton ? (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/15 p-3">
-                <div>
-                  <p className="text-sm font-bold text-white">Discord</p>
-                  <p className="text-xs text-[#a9bfd4]">
-                    {hasDiscordProvider ? "Linked" : "Not linked"}
-                  </p>
-                </div>
-                {hasDiscordProvider ? (
-                  <button
-                    type="button"
-                    onClick={() => onUnlinkAuthProvider("discord")}
-                    disabled={authLoading || linkedProviderCount <= 1}
-                    className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Unlink
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onLinkAuthProvider("discord")}
-                    disabled={authLoading}
-                    className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Link
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
-          {authError ? (
-            <p className="mt-3 text-center text-xs font-semibold text-red-300">
-              {authError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-      {profileTab === "account" && userId && isGuest ? (
-        <div className="glass-panel mt-6 rounded-xl p-4">
-          <p className="mb-3 text-center text-[12px] font-semibold uppercase tracking-[0.14em] text-[#8cb0a1]">
-            Save Progress
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {showGoogleButton ? (
-              <button
-                type="button"
-                onClick={() => onUpgradeGuestWithProvider("google")}
-                disabled={authLoading}
-                className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Google
-              </button>
-            ) : null}
-            {showDiscordButton ? (
-              <button
-                type="button"
-                onClick={() => onUpgradeGuestWithProvider("discord")}
-                disabled={authLoading}
-                className="rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Discord
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {profileTab === "account" && userId ? (
-        <div className="mt-6 rounded-xl border border-red-500/25 bg-red-950/20 p-4">
-          <p className="text-center text-[12px] font-semibold uppercase tracking-[0.14em] text-red-200">
-            Delete Account
-          </p>
-          <p className="mt-2 text-center text-xs leading-relaxed text-red-100/70">
-            This signs you out, removes sign-in links, and clears your profile.
-            Match and moderation records are retained.
-          </p>
-          <input
-            value={deleteConfirmation}
-            onChange={(event) => setDeleteConfirmation(event.target.value)}
-            placeholder="Type DELETE"
-            className="mt-4 w-full rounded-xl border border-red-300/20 bg-black/25 px-3 py-2 text-center text-sm font-bold tracking-[0.18em] text-white outline-none transition placeholder:text-red-100/35 focus:border-red-300/50"
-          />
-          <button
-            type="button"
-            onClick={async () => {
-              if (deleteConfirmation !== "DELETE") return;
-              try {
-                await onDeleteAccount();
-                setOpenModal(null);
-              } catch {
-                // The model surfaces the failure in the profile modal.
-              }
-            }}
-            disabled={authLoading || deleteConfirmation !== "DELETE"}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-500/15 py-3 text-[13px] font-bold uppercase tracking-wider text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {authLoading ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Trash2 size={16} />
-            )}
-            Delete Account
-          </button>
-        </div>
-      ) : null}
-
-      {profileTab === "account" && userId ? (
-        <button
-          type="button"
-          onClick={() => {
-            setOpenModal(null);
-            onLogout();
-          }}
-          className="mt-6 w-full rounded-xl border border-red-500/30 bg-red-500/10 py-3 text-[14px] font-bold uppercase tracking-wider text-red-400 transition hover:bg-red-500/20"
-        >
-          Sign Out
-        </button>
-      ) : null}
-    </AppModalShell>
+    <ProfileModal
+      userId={userId}
+      userEmail={userEmail}
+      displayName={displayName}
+      userAvatar={userAvatar}
+      isGuest={isGuest}
+      isAdmin={isAdmin}
+      selectedBadge={selectedBadge}
+      badges={badges}
+      mmr={mmr}
+      gamesPlayed={gamesPlayed}
+      winsPct={winsPct}
+      authLoading={authLoading}
+      authError={authError}
+      nicknameInput={nicknameInput}
+      nicknameError={nicknameError}
+      nicknameSaving={nicknameSaving}
+      linkedProviderCount={linkedProviderCount}
+      showGoogleButton={showGoogleButton}
+      showDiscordButton={showDiscordButton}
+      hasGoogleProvider={hasGoogleProvider}
+      hasDiscordProvider={hasDiscordProvider}
+      onChangeNickname={onChangeNickname}
+      onSaveNickname={onSaveNickname}
+      onSelectBadge={onSelectBadge}
+      onLinkAuthProvider={onLinkAuthProvider}
+      onUnlinkAuthProvider={onUnlinkAuthProvider}
+      onUpgradeGuestWithProvider={onUpgradeGuestWithProvider}
+      onDeleteAccount={onDeleteAccount}
+      onLogout={onLogout}
+      onClose={() => setOpenModal(null)}
+    />
   );
 
   const inviteLobbyCard = (
@@ -2741,7 +2106,6 @@ export default function LobbyScreen({
             <div
               className="group flex min-w-0 items-center justify-self-end gap-2.5 cursor-pointer sm:gap-3"
               onClick={() => {
-                setIsEditingProfileName(false);
                 setOpenModal("profile");
               }}
             >
@@ -2833,166 +2197,32 @@ export default function LobbyScreen({
           {showPartyPanel ? privateLobbyPanel : null}
 
           {!showPartyPanel && contentRoute === "play" && (
-            <motion.div
-              key="play"
-              {...tabPanelMotion}
-              className="flex w-full max-w-[1160px] flex-col items-center gap-5 pointer-events-auto lg:grid lg:grid-cols-[minmax(0,480px)_minmax(280px,360px)] lg:items-start lg:justify-center lg:gap-6"
-            >
-              <div className="flex w-full max-w-[480px] flex-col gap-5 lg:max-w-none">
-                <div className="glass-panel lobby-feature-card relative flex w-full flex-col gap-4 rounded-[20px] p-5 transition-colors duration-500 sm:p-8">
-                  <div
-                    className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ${isQueueing ? "opacity-95" : "opacity-80"} bg-[linear-gradient(180deg,rgba(72,128,106,0.28)_0%,rgba(22,42,34,0.78)_100%)]`}
-                  />
-
-                  {/* Decorative background mountains */}
-                  <div
-                    className={`absolute inset-x-0 bottom-0 pointer-events-none h-full transition-opacity duration-500 ${isQueueing ? "opacity-[0.24]" : "opacity-[0.32]"}`}
-                  >
-                    <img
-                      src="/mountains.v1.svg"
-                      alt=""
-                      aria-hidden="true"
-                      className="absolute inset-0 h-full w-full object-cover object-center"
-                      style={{ objectPosition: "center bottom" }}
-                    />
-                  </div>
-
-                  {/* Content over background */}
-                  <div className="relative z-10 mt-1 flex flex-col sm:mt-2">
-                    <span className="mb-1 text-[12px] font-bold uppercase tracking-[0.16em] text-[#8cb0a1] drop-shadow-sm">
-                      {duelModeLabel}
-                    </span>
-                    <h2 className="mb-2 text-[36px] font-extrabold leading-tight tracking-tight text-white drop-shadow-md sm:text-[44px]">
-                      Duel
-                    </h2>
-                  </div>
-
-                  <div className="relative z-10 mx-auto mt-1 flex w-full flex-col px-0 pb-1 sm:mt-2 sm:px-2">
-                    {queueError && (
-                      <p className="mb-3 text-center text-xs font-semibold text-red-300">
-                        {queueError}
-                      </p>
-                    )}
-                    {!isQueueing ? (
-                      <div className="mb-3 overflow-hidden rounded-[14px] border border-white/10 bg-black/25">
-                        {([
-                          ["moving", "Moving"],
-                          ["nmpz", "NMPZ"],
-                        ] as const).map(([ruleset, label]) => (
-                          <button
-                            key={ruleset}
-                            type="button"
-                            aria-pressed={queueRulesets.includes(ruleset)}
-                            onClick={() => toggleQueueRuleset(ruleset)}
-                            className={`flex min-h-[44px] w-full items-center justify-between px-4 text-left text-[13px] font-extrabold uppercase tracking-[0.08em] transition ${
-                              queueRulesets.includes(ruleset)
-                                ? "bg-[#22d385]/12 text-[#d7ffec]"
-                                : "text-white/70 hover:bg-white/[0.07] hover:text-white"
-                            }`}
-                          >
-                            <span>{label}</span>
-                            <span className="flex h-[18px] w-[18px] items-center justify-center">
-                              {queueRulesets.includes(ruleset) ? (
-                                <CheckCircle2
-                                  size={18}
-                                  strokeWidth={2.5}
-                                  className="text-[#22d385]"
-                                />
-                              ) : null}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {!isQueueing ? (
-                      <button
-                        onClick={onRankedPlay}
-                        disabled={duelDisabled}
-                        className="w-full flex items-center justify-center rounded-[16px] bg-[#22d385] py-[14px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(34,211,133,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#2ae091] hover:shadow-[0_6px_24px_rgba(34,211,133,0.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 disabled:hover:bg-[#22d385] disabled:hover:shadow-[0_4px_16px_rgba(34,211,133,0.3)]"
-                      >
-                        <Play
-                          fill="currentColor"
-                          size={20}
-                          className="mr-2.5"
-                        />
-                        {queuePaused || playPaused || maintenanceIsActive
-                          ? "Paused"
-                          : primaryButtonLabel}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={cancelQueue}
-                        className="group w-full flex items-center justify-center rounded-[16px] border border-white/[0.1] bg-white/[0.08] py-[14px] text-[14px] font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-white/[0.12]"
-                      >
-                        <Loader2
-                          size={18}
-                          className="mr-3 animate-spin text-[#2ad18f] transition-colors group-hover:text-[#3deb9e]"
-                        />
-                        <span className="text-accentPrimary">{queueElapsedLabel}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  className="glass-panel lobby-feature-card relative flex min-h-[240px] w-full flex-col justify-between rounded-[20px] p-5 transition-colors duration-500 sm:min-h-[260px] sm:p-8"
-                  style={{ animationDelay: "-2s" }}
-                >
-                  <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(72,106,128,0.28)_0%,rgba(22,34,42,0.85)_100%)] opacity-80 transition-opacity duration-500" />
-
-                  {/* Decorative background mountains */}
-                  <div className="absolute inset-x-0 bottom-0 h-full pointer-events-none opacity-[0.25] transition-opacity duration-500">
-                    <img
-                      src="/mountains.v1.svg"
-                      alt=""
-                      aria-hidden="true"
-                      className="absolute inset-0 h-full w-full object-cover object-center opacity-50"
-                      style={{
-                        objectPosition: "center bottom",
-                        filter: "hue-rotate(190deg)",
-                      }}
-                    />
-                  </div>
-
-                  {/* Content over background */}
-                  <div className="relative z-10 mt-1 flex flex-col sm:mt-2">
-                    <span className="mb-1 text-[12px] font-bold uppercase tracking-[0.16em] text-[#8caab0] drop-shadow-sm">
-                      Casual
-                    </span>
-                    <h2 className="mb-2 text-[36px] font-extrabold leading-tight tracking-tight text-white drop-shadow-md sm:text-[44px]">
-                      Singleplayer
-                    </h2>
-                    <span className="text-[15px] font-medium text-white/90 drop-shadow-sm sm:text-[16px]">
-                      Practice indefinitely
-                    </span>
-                  </div>
-
-                  <div className="relative z-10 mx-auto mt-5 flex h-full w-full flex-col justify-end px-0 pb-1 sm:mt-6 sm:px-2">
-                    <button
-                      onClick={() => startSingleplayer()}
-                      disabled={singleplayerDisabled}
-                      className="w-full flex items-center justify-center rounded-[16px] bg-[#3b82f6] py-[14px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(59,130,246,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#4b8df8] hover:shadow-[0_6px_24px_rgba(59,130,246,0.4)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
-                    >
-                      {isSingleplayerLoading ? (
-                        <Loader2 size={20} className="mr-2.5 animate-spin" />
-                      ) : (
-                        <Play fill="currentColor" size={20} className="mr-2.5" />
-                      )}
-                      {isSingleplayerLoading ? "Loading..." : playPaused || maintenanceIsActive ? "Paused" : "Play"}
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="flex w-full max-w-[480px] flex-col gap-5 lg:sticky lg:top-8 lg:max-w-none">
-                {onlineStatusCard}
-                {newsPanel}
-                {donateCard}
-                {socialLinksCard}
-              </div>
-            </motion.div>
+            <PlayPanel
+              isQueueing={isQueueing}
+              isSingleplayerLoading={isSingleplayerLoading}
+              queueError={queueError}
+              queueRulesets={queueRulesets}
+              toggleQueueRuleset={toggleQueueRuleset}
+              onRankedPlay={onRankedPlay}
+              cancelQueue={cancelQueue}
+              startSingleplayer={startSingleplayer}
+              duelDisabled={duelDisabled}
+              singleplayerDisabled={singleplayerDisabled}
+              queuePaused={queuePaused}
+              playPaused={playPaused}
+              maintenanceIsActive={maintenanceIsActive}
+              primaryButtonLabel={primaryButtonLabel}
+              queueElapsedLabel={queueElapsedLabel}
+              duelModeLabel={duelModeLabel}
+              sideCards={
+                <>
+                  {onlineStatusCard}
+                  {newsPanel}
+                  {donateCard}
+                  {socialLinksCard}
+                </>
+              }
+            />
           )}
 
           {!showPartyPanel && contentRoute === "top" && (
@@ -3022,58 +2252,7 @@ export default function LobbyScreen({
 
         {!showPartyPanel && contentRoute === "play" ? (
           <>
-            <section
-              aria-labelledby="geoduels-seo-heading"
-              className="glass-panel mt-8 w-full max-w-[1220px] rounded-[24px] p-6 pointer-events-auto sm:mt-[156px] sm:p-8"
-            >
-              <div className="space-y-6 text-left">
-                <div className="max-w-3xl space-y-3">
-                  <span className="inline-flex rounded-full border border-[#2ad18f]/30 bg-[#2ad18f]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#7de3b7]">
-                    Tutorial
-                  </span>
-                  <h1
-                    id="geoduels-seo-heading"
-                    className="text-[30px] font-extrabold leading-tight tracking-tight text-white sm:text-[40px]"
-                  >
-                    GeoDuels
-                  </h1>
-                  <p className="text-[15px] leading-7 text-[#a9bfd4] sm:text-[16px]">
-                    A free GeoGuessr-inspired Street View game. Queue for ranked
-                    matches against other players, with friends, or jump into singleplayer.
-                  </p>
-                </div>
-
-                <div className="grid gap-5 lg:grid-cols-3">
-                  <section className="glass-panel rounded-[18px] p-5">
-                    <h2 className="text-[18px] font-extrabold tracking-tight text-white">
-                      How to Play?
-                    </h2>
-                    <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
-                      Find the location, place your guess. The closer you are, the
-                      more points you get.
-                    </p>
-                  </section>
-                  
-                  <section className="glass-panel rounded-[18px] p-5">
-                    <h2 className="text-[18px] font-extrabold tracking-tight text-white">
-                      100% Free (seriously)
-                    </h2>
-                    <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
-                      No subscriptions to play, no pay-to-win. Considered one of the best GeoGuessr free alternatives.
-                    </p>
-                  </section>
-
-                  <section className="glass-panel rounded-[18px] p-5">
-                    <h2 className="text-[18px] font-extrabold tracking-tight text-white">
-                      Ranked & Casual
-                    </h2>
-                    <p className="mt-3 text-[14px] leading-7 text-[#a9bfd4]">
-                      Climb the ladder or practice in casual mode, which not many GeoGuessr alternatives offer.
-                    </p>
-                  </section>
-                </div>
-              </div>
-            </section>
+            <LobbyTutorialSection />
             <div className="mt-4 w-full max-w-[1220px] px-6 sm:px-8">
               {legalCard}
             </div>

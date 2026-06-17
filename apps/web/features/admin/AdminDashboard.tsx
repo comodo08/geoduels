@@ -4,34 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   ArrowLeft,
   Ban,
-  Bell,
-  Bug,
   ChevronRight,
-  ClipboardList,
   ExternalLink,
-  FileText,
   Gavel,
-  History,
-  KeyRound,
   LineChart,
-  Map,
-  PlayCircle,
-  Search,
-  Shield,
   ShieldAlert,
-  UserCog,
-  Users,
-  Wrench,
 } from "lucide-react";
-import type React from "react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
+import { AdminDetailRow as DetailRow, AdminMetric as Metric, AdminPanel as Panel } from "./components/admin-primitives";
+import { formatAdminDate, fromLocalDateTime, localDateTime, slugify } from "./lib/admin-format";
 import {
   requestAdminAddIPSignupBan,
   requestAdminBanPlayer,
@@ -63,6 +50,20 @@ import {
   requestAdminUpdateChangelogPost,
   requestAdminUploadCurrentMap,
 } from "./lib/admin-client";
+import { adminNav, moderationViews, pathFromRouter } from "./lib/admin-navigation";
+import type {
+  EnforcementAction,
+  IPBan,
+  MatchHistory,
+  ModerationCase,
+  ModerationEvidence,
+  ModerationMatch,
+  ModerationTimelineItem,
+  Player,
+  PlayerDetail,
+  PlayerReport,
+  UserRoleGrant,
+} from "./types";
 import type { ChangelogPost, ChangelogPostInput } from "../changelog/types";
 import { useHomeModel } from "../home/model/useHomeModel";
 import type { MaintenanceStatus } from "../matchmaking/lib/queue-client";
@@ -71,265 +72,6 @@ import { getRuntimeConfig } from "../../lib/runtime-config";
 const SimpleMDE = dynamic(() => import("react-simplemde-editor"), {
   ssr: false,
 });
-
-type Player = {
-  userId: string;
-  email?: string;
-  displayName: string;
-  avatarUrl?: string;
-  mmr: number;
-  gamesPlayed: number;
-  wins: number;
-  rankedGamesPlayed: number;
-  isGuest?: boolean;
-  isAdmin: boolean;
-  isModerator: boolean;
-  isBanned: boolean;
-  banReason?: string;
-  bannedAt?: string;
-  lastIpAddress?: string;
-  reportMutedUntil?: string;
-  identities?: AdminUserIdentity[];
-};
-
-type AdminUserIdentity = {
-  provider: string;
-  providerUserId: string;
-  email?: string;
-  providerName?: string;
-  lastSeenAt?: string;
-  deletedAt?: string;
-};
-
-type ModerationCase = {
-  id: number;
-  targetUserId: string;
-  targetDisplayName: string;
-  status: string;
-  queue?: string;
-  source?: string;
-  priority: string;
-  score: number;
-  riskScore?: number;
-  riskBreakdown?: Record<string, unknown>;
-  confidence?: number;
-  reportCount: number;
-  uniqueReporterCount: number;
-  categories: Record<string, number>;
-  assignedTo?: string;
-  latestActivityAt: string;
-};
-
-type PlayerReport = {
-  id: number;
-  matchId: string;
-  reporterUserId: string;
-  reporterName: string;
-  category: string;
-  reason?: string;
-  reporterWeight: number;
-  createdAt: string;
-};
-
-type ModerationEvidence = {
-  id: number;
-  evidenceType: string;
-  matchId?: string;
-  roundId?: string;
-  detectorVersion?: string;
-  ruleId?: string;
-  score: number;
-  weight: number;
-  payload?: Record<string, unknown>;
-};
-
-type ModerationTimelineItem = {
-  id: number;
-  eventType: string;
-  actorUserId?: string;
-  reasonCode?: string;
-  body?: string;
-  createdAt: string;
-};
-
-type ModerationMatch = {
-  matchId: string;
-  mode?: string;
-  startedAt?: string;
-  endedAt?: string;
-  winnerUserId?: string;
-  roundCount: number;
-  players: Array<{
-    userId: string;
-    displayName: string;
-    totalScore: number;
-    finalHp: number;
-  }>;
-};
-
-type MatchHistory = {
-  matchId: string;
-  mode: string;
-  startedAt?: string;
-  endedAt: string;
-  winnerUserId?: string;
-};
-
-type PlayerDetail = {
-  player: Player;
-  stats: {
-    totalMatches: number;
-    rankedMatches: number;
-    duelMatches: number;
-    singleplayerRuns: number;
-    wins: number;
-    losses: number;
-  };
-  eloHistory: Array<{
-    date: string;
-    mmr: number;
-    delta: number;
-    played: number;
-  }>;
-  matches: MatchHistory[];
-};
-
-type EnforcementAction = {
-  id: number;
-  targetUserId: string;
-  targetName?: string;
-  actorUserId?: string;
-  actorName?: string;
-  sourceCaseId?: number;
-  actionType: string;
-  reasonCode?: string;
-  reasonNote?: string;
-  createdAt: string;
-};
-
-type UserRoleGrant = {
-  userId: string;
-  displayName?: string;
-  email?: string;
-  role: string;
-  grantedBy?: string;
-  grantedAt: string;
-  reason?: string;
-};
-
-type IPBan = {
-  id: number;
-  ipAddress: string;
-  reason?: string;
-  createdAt: string;
-};
-
-const moderationViews = new Set([
-  "active",
-  "mine",
-  "unclaimed",
-  "watching",
-  "auto-detection",
-  "escalated",
-  "archive",
-]);
-
-const nav = [
-  {
-    title: "Moderation",
-    items: [
-      { href: "/admin/moderation/active", label: "Active Cases", icon: ClipboardList },
-      { href: "/admin/moderation/mine", label: "Mine", icon: UserCog },
-      { href: "/admin/moderation/unclaimed", label: "Unclaimed", icon: PlayCircle },
-      { href: "/admin/moderation/watching", label: "Watching", icon: Search },
-      { href: "/admin/moderation/escalated", label: "Escalated", icon: Gavel },
-      { href: "/admin/moderation/auto-detection", label: "Auto Detection", icon: Shield },
-      { href: "/admin/moderation/archive", label: "Archive", icon: Archive },
-    ],
-  },
-  {
-    title: "Players",
-    items: [
-      { href: "/admin/players", label: "Player Search", icon: Users },
-      { href: "/admin/enforcement", label: "Enforcement", icon: Gavel },
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
-      { href: "/admin/operations/maintenance", label: "Maintenance", icon: Wrench },
-      { href: "/admin/operations/seasons", label: "Seasons", icon: History },
-      { href: "/admin/operations/notifications", label: "Notifications", icon: Bell },
-      { href: "/admin/content/maps", label: "Maps", icon: Map },
-      { href: "/admin/content/changelog", label: "Changelog", icon: FileText },
-    ],
-  },
-  {
-    title: "Access",
-    items: [{ href: "/admin/access/roles", label: "Roles", icon: KeyRound }],
-  },
-  {
-    title: "Debug",
-    items: [{ href: "/admin/debug/test-reports", label: "Test Reports", icon: Bug }],
-  },
-];
-
-function pathFromRouter(router: ReturnType<typeof useRouter>) {
-  const rawPath = router.query.path;
-  if (Array.isArray(rawPath) && rawPath.length > 0) return rawPath;
-  const tab = router.query.tab;
-  if (typeof tab === "string") return [tab];
-  return ["moderation", "active"];
-}
-
-function localDateTime(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 16);
-}
-
-function fromLocalDateTime(value: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
-}
-
-function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 120);
-}
-
-function formatAdminDate(value?: string) {
-  if (!value) return "Never";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Never";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function Panel(props: { children: React.ReactNode; className?: string }) {
-  return (
-    <section
-      className={`rounded-lg border border-slate-800 bg-slate-950/70 shadow-sm ${props.className || ""}`}
-    >
-      {props.children}
-    </section>
-  );
-}
 
 export default function AdminPage() {
   const config = getRuntimeConfig();
@@ -384,7 +126,7 @@ export default function AdminPage() {
               <h1 className="mt-1 text-xl font-black text-white">Admin Console</h1>
             </Link>
             <nav className="space-y-5">
-              {nav.map((group) => (
+              {adminNav.map((group) => (
                 <div key={group.title}>
                   <p className="mb-2 px-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
                     {group.title}
@@ -785,15 +527,6 @@ function ModerationRoute(props: {
   );
 }
 
-function Metric(props: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-slate-800 bg-slate-900/60 p-3">
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.label}</p>
-      <p className="mt-1 text-lg font-black text-white">{props.value}</p>
-    </div>
-  );
-}
-
 function PlayersRoute(props: {
   config: ReturnType<typeof getRuntimeConfig>;
   accessToken: string;
@@ -1022,15 +755,6 @@ function PlayerDetailRoute(props: {
           </div>
         </Panel>
       ) : null}
-    </div>
-  );
-}
-
-function DetailRow(props: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-slate-900 pb-2 last:border-0 last:pb-0">
-      <span className="shrink-0 text-slate-500">{props.label}</span>
-      <span className="break-all text-right font-semibold text-slate-200">{props.value}</span>
     </div>
   );
 }

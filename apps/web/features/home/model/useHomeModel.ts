@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RESULT_ANIMATION_CONFIG } from "../../../components/ui/round-result-animation-config";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
+import type { AuthSessionSnapshot } from "../../auth/session";
 import { selectActiveChatConversationId } from "../../chat/lib/chat-scope";
 import {
   requestCompleteOnboarding,
@@ -22,7 +23,6 @@ import {
   markUserNotificationRead,
   type UserNotification,
 } from "../../auth/lib/auth-client";
-import type { AuthSessionSnapshot } from "../../auth/session";
 import {
   type LobbyTeamId,
   type PartyMode,
@@ -36,70 +36,14 @@ import {
   fetchResumableSession,
   type MatchConfig,
 } from "../../matchmaking/lib/queue-client";
-
-type AuthResponseUser = {
-  id?: string;
-  email?: string;
-  display_name?: string;
-  avatar_url?: string;
-  isGuest?: boolean;
-  isAdmin?: boolean;
-  isModerator?: boolean;
-};
-
-type AuthResponse = {
-  accessToken?: string;
-  onboardingRequired?: boolean;
-  authMigrationRequired?: boolean;
-  recoveryAvailable?: boolean;
-  linkedProviders?: string[];
-  canPlay?: boolean;
-  suggestedNickname?: string;
-  authURL?: string;
-  user?: AuthResponseUser;
-};
-
-type GuestVerificationView = HomeModel["view"]["overlays"]["guestVerification"];
-
-function currentReturnTo() {
-  if (typeof window === "undefined") return "/";
-  const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  return path.startsWith("/") ? path : "/";
-}
-
-function clearGoogleAuthParams(url: URL) {
-  url.searchParams.delete("googleAuth");
-  url.searchParams.delete("googleAuthError");
-  url.searchParams.delete("auth");
-  url.searchParams.delete("authError");
-  url.searchParams.delete("provider");
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
-
-function buildSessionFromAuthResponse(
-  data: AuthResponse,
-  fallback: { userId: string; nicknameInput: string },
-): AuthSessionSnapshot {
-  return {
-    userId:
-      typeof data.user?.id === "string" && data.user.id
-        ? data.user.id
-        : fallback.userId,
-    accessToken: data.accessToken || "",
-    onboardingRequired: !!data.onboardingRequired,
-    authMigrationRequired: !!data.authMigrationRequired,
-    recoveryAvailable: !!data.recoveryAvailable,
-    linkedProviders: Array.isArray(data.linkedProviders)
-      ? data.linkedProviders.filter((provider): provider is string => typeof provider === "string")
-      : [],
-    canPlay: typeof data.canPlay === "boolean" ? data.canPlay : !data.onboardingRequired && !data.authMigrationRequired,
-    nicknameInput: data.suggestedNickname || fallback.nicknameInput,
-  };
-}
+import {
+  buildSessionFromAuthResponse,
+  clearGoogleAuthParams,
+  currentReturnTo,
+  getErrorMessage,
+  type AuthResponse,
+  type GuestVerificationView,
+} from "./auth-session-model";
 
 export function useHomeModel(options?: {
   routeMatchId?: string | null;
