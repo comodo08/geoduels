@@ -45,10 +45,9 @@ import {
   requestAdminRevokeRole,
   requestAdminRoles,
   requestAdminRemoveIPSignupBan,
-  requestAdminRolloverRankedSeason,
+  requestAdminSetRankedSeasonResetRule,
   requestAdminUnbanPlayer,
   requestAdminUpdateChangelogPost,
-  requestAdminUploadCurrentMap,
 } from "./lib/admin-client";
 import { adminNav, moderationViews, pathFromRouter } from "./lib/admin-navigation";
 import type {
@@ -766,6 +765,13 @@ function formatDate(value?: string) {
   return date.toLocaleString();
 }
 
+function formatUTCDate(value?: string) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString(undefined, { timeZone: "UTC", timeZoneName: "short" });
+}
+
 function EloHistoryChart(props: { points: PlayerDetail["eloHistory"]; fallbackMmr: number }) {
   const points = props.points || [];
   if (!points.length) {
@@ -829,9 +835,6 @@ function OperationsRoute(props: {
   canManageAdmin: boolean;
   refreshAdminData: () => Promise<void>;
 }) {
-  const [mapFile, setMapFile] = useState<File | null>(null);
-  const [mapKey, setMapKey] = useState("a-source-world");
-  const [mapStatus, setMapStatus] = useState("");
   const [selectedChangelogId, setSelectedChangelogId] = useState<number | "new">("new");
   const [changelogDraft, setChangelogDraft] = useState<ChangelogPostInput>({
     slug: "",
@@ -849,7 +852,7 @@ function OperationsRoute(props: {
   const [webhook, setWebhook] = useState("");
   const [ipAddress, setIPAddress] = useState("");
   const [ipReason, setIPReason] = useState("");
-  const [nextSeason, setNextSeason] = useState("");
+  const [monthlyResetDay, setMonthlyResetDay] = useState("1");
 
   const maintenanceQuery = useQuery({
     queryKey: ["admin-maintenance", props.accessToken],
@@ -928,6 +931,11 @@ function OperationsRoute(props: {
     setWebhook(settingsQuery.data?.discordWebhookUrl || "");
   }, [settingsQuery.data?.discordWebhookUrl]);
 
+  useEffect(() => {
+    if (typeof seasonQuery.data?.monthlyResetDay !== "number") return;
+    setMonthlyResetDay(String(seasonQuery.data.monthlyResetDay));
+  }, [seasonQuery.data?.monthlyResetDay]);
+
   const saveMaintenance = useMutation({
     mutationFn: () =>
       requestAdminPutMaintenance(props.config, props.accessToken, {
@@ -971,16 +979,6 @@ function OperationsRoute(props: {
     mutationFn: () => requestAdminPutModerationSettings(props.config, props.accessToken, { discordWebhookUrl: webhook }),
     onSuccess: props.refreshAdminData,
   });
-  const uploadMap = useMutation({
-    mutationFn: () => {
-      if (!mapFile) throw new Error("Select a map file first");
-      return requestAdminUploadCurrentMap(props.config, props.accessToken, mapFile, mapKey);
-    },
-    onSuccess: async (result: { revisionId?: string; rowCount?: number }) => {
-      setMapStatus(`Uploaded ${result.revisionId || "revision"} with ${result.rowCount || 0} rows.`);
-      await props.refreshAdminData();
-    },
-  });
   const addIPBan = useMutation({
     mutationFn: () => requestAdminAddIPSignupBan(props.config, props.accessToken, ipAddress, ipReason),
     onSuccess: props.refreshAdminData,
@@ -989,8 +987,8 @@ function OperationsRoute(props: {
     mutationFn: (ip: string) => requestAdminRemoveIPSignupBan(props.config, props.accessToken, ip),
     onSuccess: props.refreshAdminData,
   });
-  const rollover = useMutation({
-    mutationFn: () => requestAdminRolloverRankedSeason(props.config, props.accessToken, nextSeason),
+  const saveSeasonResetRule = useMutation({
+    mutationFn: () => requestAdminSetRankedSeasonResetRule(props.config, props.accessToken, Number(monthlyResetDay)),
     onSuccess: props.refreshAdminData,
   });
 
@@ -1048,23 +1046,25 @@ function OperationsRoute(props: {
           <Panel className="p-4">
             <h3 className="font-black text-white">Ranked Season</h3>
             <p className="mt-2 text-sm text-slate-400">Active: {seasonQuery.data?.activeSeasonId || "loading"}</p>
-            <div className="mt-4 flex gap-2">
-              <Input value={nextSeason} onChange={(event) => setNextSeason(event.target.value)} placeholder="Next season ID" />
-              <Button disabled={!nextSeason.trim()} onClick={() => void rollover.mutateAsync()}>Rollover</Button>
+            <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr]">
+              <Input
+                type="number"
+                min={1}
+                max={28}
+                value={monthlyResetDay}
+                onChange={(event) => setMonthlyResetDay(event.target.value)}
+                placeholder="Reset day"
+              />
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
+                <p>Monthly on day {seasonQuery.data?.monthlyResetDay || "--"} at 21:00 UTC</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Next reset: {seasonQuery.data?.nextResetAt ? formatUTCDate(seasonQuery.data.nextResetAt) : "Not scheduled"}
+                </p>
+              </div>
             </div>
-          </Panel>
-        ) : null}
-
-        {props.leaf === "maps" ? (
-          <Panel className="p-4">
-            <h3 className="font-black text-white">Maps</h3>
-            <Select className="mt-4 w-full" value={mapKey} onChange={(event) => setMapKey(event.target.value)}>
-              <option value="a-source-world">A Source World</option>
-              <option value="a-location-world">A Location World</option>
-            </Select>
-            <Input className="mt-3 w-full" type="file" accept=".json,application/json" onChange={(event) => setMapFile(event.target.files?.[0] || null)} />
-            <Button className="mt-3" disabled={!mapFile} onClick={() => void uploadMap.mutateAsync()}>Upload</Button>
-            <p className="mt-3 text-sm text-slate-400">{mapStatus || "No upload yet."}</p>
+            <div className="mt-4">
+              <Button disabled={Number(monthlyResetDay) < 1 || Number(monthlyResetDay) > 28} onClick={() => void saveSeasonResetRule.mutateAsync()}>Save Reset Rule</Button>
+            </div>
           </Panel>
         ) : null}
 

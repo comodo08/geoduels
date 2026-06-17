@@ -212,14 +212,17 @@ type ModerationSettings struct {
 }
 
 type RankedSeasonSettings struct {
-	ActiveSeasonID string `json:"activeSeasonId"`
+	ActiveSeasonID  string     `json:"activeSeasonId"`
+	MonthlyResetDay int        `json:"monthlyResetDay"`
+	NextResetAt     *time.Time `json:"nextResetAt,omitempty"`
+	LastResetAt     *time.Time `json:"lastResetAt,omitempty"`
 }
 
-type RankedSeasonRolloverResult struct {
+type RankedSeasonResetResult struct {
 	PreviousSeasonID string `json:"previousSeasonId"`
 	ActiveSeasonID   string `json:"activeSeasonId"`
-	BadgesAwarded    int    `json:"badgesAwarded"`
 	PlayersSeeded    int    `json:"playersSeeded"`
+	ResetAt          string `json:"resetAt"`
 }
 
 type RefreshTokenRecord struct {

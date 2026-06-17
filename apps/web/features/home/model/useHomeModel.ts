@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RESULT_ANIMATION_CONFIG } from "../../../components/ui/round-result-animation-config";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
@@ -56,7 +56,6 @@ export function useHomeModel(options?: {
   const runtimeRef = useRef(getHomeRuntime(config));
   const { sessionController, matchController, matchRouteController, gameController, lobbyController, chatController, sfxController } =
     runtimeRef.current;
-  const [homeResumeMatchId, setHomeResumeMatchId] = useState("");
   const [guestVerification, setGuestVerification] =
     useState<GuestVerificationView>({
       open: false,
@@ -75,7 +74,7 @@ export function useHomeModel(options?: {
   const onPrivateLobbyEntered = options?.onPrivateLobbyEntered;
   const onPrivateLobbyLeft = options?.onPrivateLobbyLeft;
   const isMatchRoute = routeContext === "match";
-  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const queryClient = useQueryClient();
 
   const auth = useSyncExternalStore(
     sessionController.subscribe,
@@ -112,6 +111,39 @@ export function useHomeModel(options?: {
     sessionController,
     auth,
     enabled: !isMatchRoute,
+  });
+
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", auth.userId || "anonymous"],
+    enabled: !isMatchRoute && !!auth.userId && !!auth.accessToken && !auth.onboardingRequired,
+    queryFn: async () => {
+      const session = await sessionController.ensureFreshSession(60_000, {
+        allowOnboarding: false,
+      });
+      if (!session?.accessToken) {
+        return { notifications: [] };
+      }
+      return requestUserNotifications(config, session.accessToken);
+    },
+    refetchInterval: 60_000,
+    refetchOnMount: false,
+    staleTime: 60_000,
+  });
+
+  const resumableSessionQuery = useQuery({
+    queryKey: ["session-resumable", auth.userId || "anonymous"],
+    enabled: !isMatchRoute && !lobbyInviteCode && !!auth.userId && !auth.onboardingRequired,
+    queryFn: async ({ signal }) => {
+      const session = await sessionController.ensureFreshSession(60_000, {
+        allowOnboarding: false,
+      });
+      if (!session?.accessToken) {
+        return { status: "none" as const };
+      }
+      return fetchResumableSession(config, session.accessToken, signal);
+    },
+    refetchOnMount: false,
+    staleTime: 60_000,
   });
 
   const refreshSessionMutation = useMutation({
@@ -477,55 +509,6 @@ export function useHomeModel(options?: {
   }, [isMatchRoute, sessionController]);
 
   useEffect(() => {
-    if (isMatchRoute || lobbyInviteCode) {
-      setHomeResumeMatchId("");
-      return;
-    }
-    const session = sessionController.getSessionSnapshot();
-    if (!session || session.onboardingRequired) {
-      setHomeResumeMatchId("");
-      return;
-    }
-
-    let cancelled = false;
-    const controller = new AbortController();
-    void (async () => {
-      const ensured = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: false,
-      });
-      if (!ensured || cancelled) {
-        if (!cancelled) setHomeResumeMatchId("");
-        return;
-      }
-      const resumable = await fetchResumableSession(
-        config,
-        ensured.accessToken,
-        controller.signal,
-      );
-      if (cancelled) return;
-      setHomeResumeMatchId(
-        resumable.status === "match" ? resumable.matchId : "",
-      );
-    })().catch(() => {
-      if (!cancelled) {
-        setHomeResumeMatchId("");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [
-    auth.userId,
-    auth.onboardingRequired,
-    config,
-    isMatchRoute,
-    lobbyInviteCode,
-    sessionController,
-  ]);
-
-  useEffect(() => {
     if (isMatchRoute || !lobbyInviteCode) {
       return;
     }
@@ -599,26 +582,6 @@ export function useHomeModel(options?: {
     }
   }, [match.snapshot, auth.userId, sessionController]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!auth.userId || !auth.accessToken || auth.onboardingRequired) {
-      setNotifications([]);
-      return;
-    }
-    const refresh = async () => {
-      const result = await requestUserNotifications(config, auth.accessToken);
-      if (!cancelled) {
-        setNotifications(result.notifications || []);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [auth.userId, auth.accessToken, auth.onboardingRequired]);
-
   const routeSourcePartyId =
     matchRoute.replacement && "sourcePartyId" in matchRoute.replacement
       ? matchRoute.replacement.sourcePartyId || ""
@@ -649,6 +612,12 @@ export function useHomeModel(options?: {
     auth.onboardingRequired,
     chatController,
   ]);
+
+  const homeResumeMatchId =
+    resumableSessionQuery.data?.status === "match"
+      ? resumableSessionQuery.data.matchId
+      : "";
+  const notifications = notificationsQuery.data?.notifications || [];
 
   const baseView = deriveHomeModel({
     auth,
@@ -1167,8 +1136,13 @@ export function useHomeModel(options?: {
 
   const dismissNotification = async (notificationId: number) => {
     const notification = notifications.find((item) => item.id === notificationId);
-    setNotifications((current) =>
-      current.filter((notification) => notification.id !== notificationId),
+    queryClient.setQueryData<{ notifications: UserNotification[] }>(
+      ["notifications", auth.userId || "anonymous"],
+      (current) => ({
+        notifications: (current?.notifications || []).filter(
+          (notification) => notification.id !== notificationId,
+        ),
+      }),
     );
     if (!auth.accessToken) return;
     await markUserNotificationRead(config, auth.accessToken, notificationId);

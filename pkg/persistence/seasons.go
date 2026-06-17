@@ -4,65 +4,111 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
+const (
+	defaultMonthlySeasonResetDay = 1
+	seasonResetHourUTC           = 21
+)
+
+var rankedSeasonIDPattern = regexp.MustCompile(`^s(\d+)(?:\.\d+)?$`)
+
 func (s *pgStore) GetRankedSeasonSettings() (RankedSeasonSettings, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	seasonID, err := s.activeSeasonID(ctx)
+	settings, err := rankedSeasonSettingsTx(ctx, s.pool)
 	if err != nil {
 		return RankedSeasonSettings{}, err
 	}
-	return RankedSeasonSettings{ActiveSeasonID: seasonID}, nil
+	return settingsWithNextReset(settings, time.Now().UTC()), nil
 }
 
-func (s *pgStore) RolloverRankedSeason(nextSeasonID string) (RankedSeasonRolloverResult, error) {
-	nextSeasonID = strings.TrimSpace(nextSeasonID)
-	if nextSeasonID == "" {
-		return RankedSeasonRolloverResult{}, errors.New("season id required")
+func (s *pgStore) SetRankedSeasonResetRule(monthlyResetDay int) (RankedSeasonSettings, error) {
+	if err := validateMonthlyResetDay(monthlyResetDay); err != nil {
+		return RankedSeasonSettings{}, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	defer tx.Rollback(ctx)
+	settings, err := rankedSeasonSettingsForUpdateTx(ctx, tx)
+	if err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	settings.MonthlyResetDay = monthlyResetDay
+	now := time.Now().UTC()
+	currentResetAt := monthlySeasonResetAt(now.Year(), now.Month(), monthlyResetDay)
+	if !now.Before(currentResetAt) && (settings.LastResetAt == nil || settings.LastResetAt.Before(currentResetAt)) {
+		settings.LastResetAt = &currentResetAt
+	}
+	if err := writeRankedSeasonSettingsTx(ctx, tx, settings); err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	return settingsWithNextReset(settings, now), nil
+}
+
+func (s *pgStore) RunDueRankedSeasonReset(now time.Time) (RankedSeasonResetResult, bool, error) {
+	now = now.UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return RankedSeasonRolloverResult{}, err
+		return RankedSeasonResetResult{}, false, err
 	}
 	defer tx.Rollback(ctx)
-	previousSeasonID, err := activeSeasonIDTx(ctx, tx)
+
+	settings, err := rankedSeasonSettingsForUpdateTx(ctx, tx)
 	if err != nil {
-		return RankedSeasonRolloverResult{}, err
+		return RankedSeasonResetResult{}, false, err
+	}
+	resetAt := monthlySeasonResetAt(now.Year(), now.Month(), settings.MonthlyResetDay)
+	if now.Before(resetAt) || (settings.LastResetAt != nil && !settings.LastResetAt.Before(resetAt)) {
+		return RankedSeasonResetResult{}, false, nil
+	}
+	nextSeasonID, err := nextRankedSeasonID(settings.ActiveSeasonID)
+	if err != nil {
+		return RankedSeasonResetResult{}, false, err
+	}
+	seeded, err := advanceRankedSeasonTx(ctx, tx, settings.ActiveSeasonID, nextSeasonID)
+	if err != nil {
+		return RankedSeasonResetResult{}, false, err
+	}
+	previousSeasonID := settings.ActiveSeasonID
+	settings.ActiveSeasonID = nextSeasonID
+	settings.LastResetAt = &resetAt
+	if err := writeRankedSeasonSettingsTx(ctx, tx, settings); err != nil {
+		return RankedSeasonResetResult{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return RankedSeasonResetResult{}, false, err
+	}
+	return RankedSeasonResetResult{
+		PreviousSeasonID: previousSeasonID,
+		ActiveSeasonID:   nextSeasonID,
+		PlayersSeeded:    seeded,
+		ResetAt:          resetAt.Format(time.RFC3339),
+	}, true, nil
+}
+
+func advanceRankedSeasonTx(ctx context.Context, tx pgx.Tx, previousSeasonID, nextSeasonID string) (int, error) {
+	if strings.TrimSpace(previousSeasonID) == "" || strings.TrimSpace(nextSeasonID) == "" {
+		return 0, errors.New("season id required")
 	}
 	if previousSeasonID == nextSeasonID {
-		return RankedSeasonRolloverResult{}, errors.New("season is already active")
-	}
-	badgeTag, err := tx.Exec(ctx, `
-		with ranked as (
-			select
-				r.user_id,
-				row_number() over (order by r.mmr desc, r.updated_at asc, r.user_id asc)::int as rank
-			from ranks r
-			join users u on u.id = r.user_id
-			where r.mode = $1
-				and r.season_id = $2
-				and coalesce(u.account_type, 'registered') <> 'guest'
-				and u.banned_at is null
-		)
-		insert into user_badges(user_id, badge_code, badge_season_id, rank)
-		select
-			user_id,
-			$3,
-			$2,
-			rank
-		from ranked
-		where rank between 1 and 100
-		on conflict (user_id, badge_code, badge_season_id) do nothing
-	`, modeDuel, previousSeasonID, badgeCodeSeasonRank)
-	if err != nil {
-		return RankedSeasonRolloverResult{}, err
+		return 0, errors.New("season is already active")
 	}
 	seedTag, err := tx.Exec(ctx, `
 		insert into ranks(user_id, mode, season_id, mmr, rd)
@@ -72,7 +118,7 @@ func (s *pgStore) RolloverRankedSeason(nextSeasonID string) (RankedSeasonRollove
 		on conflict (user_id, mode, season_id) do nothing
 	`, modeDuel, nextSeasonID, initialMMR, initialRatingRD)
 	if err != nil {
-		return RankedSeasonRolloverResult{}, err
+		return 0, err
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into ranked_stats(user_id, mode, season_id, games_played, wins)
@@ -81,31 +127,9 @@ func (s *pgStore) RolloverRankedSeason(nextSeasonID string) (RankedSeasonRollove
 		where coalesce(u.account_type, 'registered') <> 'guest'
 		on conflict (user_id, mode, season_id) do nothing
 	`, modeDuel, nextSeasonID); err != nil {
-		return RankedSeasonRolloverResult{}, err
+		return 0, err
 	}
-	settings := RankedSeasonSettings{ActiveSeasonID: nextSeasonID}
-	payload, err := json.Marshal(settings)
-	if err != nil {
-		return RankedSeasonRolloverResult{}, err
-	}
-	if _, err := tx.Exec(ctx, `
-		insert into site_settings(key, value_json, updated_at)
-		values('ranked_season', $1::jsonb, now())
-		on conflict (key) do update set
-			value_json = excluded.value_json,
-			updated_at = now()
-	`, string(payload)); err != nil {
-		return RankedSeasonRolloverResult{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return RankedSeasonRolloverResult{}, err
-	}
-	return RankedSeasonRolloverResult{
-		PreviousSeasonID: previousSeasonID,
-		ActiveSeasonID:   nextSeasonID,
-		BadgesAwarded:    int(badgeTag.RowsAffected()),
-		PlayersSeeded:    int(seedTag.RowsAffected()),
-	}, nil
+	return int(seedTag.RowsAffected()), nil
 }
 
 func (s *pgStore) activeSeasonID(ctx context.Context) (string, error) {
@@ -117,6 +141,14 @@ type seasonQuerier interface {
 }
 
 func activeSeasonIDTx(ctx context.Context, q seasonQuerier) (string, error) {
+	settings, err := rankedSeasonSettingsTx(ctx, q)
+	if err != nil {
+		return "", err
+	}
+	return settings.ActiveSeasonID, nil
+}
+
+func rankedSeasonSettingsTx(ctx context.Context, q seasonQuerier) (RankedSeasonSettings, error) {
 	var raw string
 	err := q.QueryRow(ctx, `
 		select value_json::text
@@ -125,17 +157,113 @@ func activeSeasonIDTx(ctx context.Context, q seasonQuerier) (string, error) {
 	`).Scan(&raw)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return defaultSeasonID, nil
+			return normalizeRankedSeasonSettings(RankedSeasonSettings{}), nil
 		}
-		return "", err
+		return RankedSeasonSettings{}, err
 	}
 	var settings RankedSeasonSettings
 	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
-		return defaultSeasonID, nil
+		return normalizeRankedSeasonSettings(RankedSeasonSettings{}), nil
 	}
-	seasonID := strings.TrimSpace(settings.ActiveSeasonID)
-	if seasonID == "" {
-		return defaultSeasonID, nil
+	return normalizeRankedSeasonSettings(settings), nil
+}
+
+func rankedSeasonSettingsForUpdateTx(ctx context.Context, tx pgx.Tx) (RankedSeasonSettings, error) {
+	defaultSettings := normalizeRankedSeasonSettings(RankedSeasonSettings{})
+	payload, err := json.Marshal(defaultSettings)
+	if err != nil {
+		return RankedSeasonSettings{}, err
 	}
-	return seasonID, nil
+	if _, err := tx.Exec(ctx, `
+		insert into site_settings(key, value_json, updated_at)
+		values('ranked_season', $1::jsonb, now())
+		on conflict (key) do nothing
+	`, string(payload)); err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	var raw string
+	if err := tx.QueryRow(ctx, `
+		select value_json::text
+		from site_settings
+		where key = 'ranked_season'
+		for update
+	`).Scan(&raw); err != nil {
+		return RankedSeasonSettings{}, err
+	}
+	var settings RankedSeasonSettings
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		settings = defaultSettings
+	}
+	return normalizeRankedSeasonSettings(settings), nil
+}
+
+func writeRankedSeasonSettingsTx(ctx context.Context, tx pgx.Tx, settings RankedSeasonSettings) error {
+	normalized := normalizeRankedSeasonSettings(settings)
+	normalized.NextResetAt = nil
+	payload, err := json.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		insert into site_settings(key, value_json, updated_at)
+		values('ranked_season', $1::jsonb, now())
+		on conflict (key) do update set
+			value_json = excluded.value_json,
+			updated_at = now()
+	`, string(payload))
+	return err
+}
+
+func normalizeRankedSeasonSettings(settings RankedSeasonSettings) RankedSeasonSettings {
+	settings.ActiveSeasonID = strings.TrimSpace(settings.ActiveSeasonID)
+	if settings.ActiveSeasonID == "" {
+		settings.ActiveSeasonID = defaultSeasonID
+	}
+	if validateMonthlyResetDay(settings.MonthlyResetDay) != nil {
+		settings.MonthlyResetDay = defaultMonthlySeasonResetDay
+	}
+	if settings.LastResetAt != nil {
+		lastResetAt := settings.LastResetAt.UTC()
+		settings.LastResetAt = &lastResetAt
+	}
+	return settings
+}
+
+func settingsWithNextReset(settings RankedSeasonSettings, now time.Time) RankedSeasonSettings {
+	settings = normalizeRankedSeasonSettings(settings)
+	nextResetAt := nextMonthlySeasonResetAt(now.UTC(), settings.MonthlyResetDay, settings.LastResetAt)
+	settings.NextResetAt = &nextResetAt
+	return settings
+}
+
+func validateMonthlyResetDay(day int) error {
+	if day < 1 || day > 28 {
+		return errors.New("monthly reset day must be between 1 and 28")
+	}
+	return nil
+}
+
+func monthlySeasonResetAt(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, seasonResetHourUTC, 0, 0, 0, time.UTC)
+}
+
+func nextMonthlySeasonResetAt(now time.Time, day int, lastResetAt *time.Time) time.Time {
+	current := monthlySeasonResetAt(now.Year(), now.Month(), day)
+	if now.Before(current) || (lastResetAt == nil || lastResetAt.Before(current)) {
+		return current
+	}
+	return monthlySeasonResetAt(now.AddDate(0, 1, 0).Year(), now.AddDate(0, 1, 0).Month(), day)
+}
+
+func nextRankedSeasonID(seasonID string) (string, error) {
+	seasonID = strings.TrimSpace(seasonID)
+	matches := rankedSeasonIDPattern.FindStringSubmatch(seasonID)
+	if len(matches) != 2 {
+		return "", fmt.Errorf("invalid ranked season id %q", seasonID)
+	}
+	current, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("s%d", current+1), nil
 }

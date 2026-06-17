@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 
+	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/persistence"
 )
@@ -188,7 +189,7 @@ func (a *api) createMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer closeFile()
-	if err := rejectAbusiveMapText(r.FormValue("displayName"), r.FormValue("description")); err != nil {
+	if err := contentfilter.RejectAbusiveText(r.FormValue("displayName"), r.FormValue("description")); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -253,7 +254,7 @@ func (a *api) updateMap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := rejectAbusiveMapText(update.DisplayName, update.Description); err != nil {
+	if err := contentfilter.RejectAbusiveText(update.DisplayName, update.Description); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -300,6 +301,72 @@ func (a *api) publishMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := catalog.PublishCustomMap(userID, mux.Vars(r)["id"])
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSONResponse(w, item)
+}
+
+func (a *api) setMapOfficial(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	item, err := catalog.SetMapOfficial(admin.Sub, mux.Vars(r)["id"], true)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSONResponse(w, item)
+}
+
+func (a *api) unsetMapOfficial(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	item, err := catalog.SetMapOfficial(admin.Sub, mux.Vars(r)["id"], false)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSONResponse(w, item)
+}
+
+func (a *api) setGameplayMapRole(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	item, err := catalog.SetGameplayMapRole(admin.Sub, mux.Vars(r)["id"], mux.Vars(r)["role"])
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -391,7 +458,7 @@ func (a *api) createMapComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := rejectAbusiveMapText(input.Body); err != nil {
+	if err := contentfilter.RejectAbusiveText(input.Body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -462,18 +529,6 @@ func mapUploadFile(w http.ResponseWriter, r *http.Request) (io.Reader, func(), e
 func writeJSONResponse(w http.ResponseWriter, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(value)
-}
-
-func rejectAbusiveMapText(values ...string) error {
-	for _, value := range values {
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-		if err := nicknameAbusive(value); err != nil {
-			return errors.New("content failed safety check")
-		}
-	}
-	return nil
 }
 
 func atoiDefault(raw string, fallback int) int {

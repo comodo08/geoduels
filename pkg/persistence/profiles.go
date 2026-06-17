@@ -202,6 +202,9 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 		if err := rows.Scan(&code, &seasonID, &rank); err != nil {
 			return nil, nil, err
 		}
+		if code == badgeCodeSeasonRank {
+			continue
+		}
 		badge, ok := badgeFromParts(code, seasonID, rank, true)
 		if !ok {
 			continue
@@ -211,6 +214,17 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
+	}
+	seasonBadges, err := s.earnedSeasonRankBadges(ctx, []string{userID})
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, badge := range seasonBadges[userID] {
+		if owned[badge.ID] {
+			continue
+		}
+		owned[badge.ID] = true
+		badges = append(badges, badge)
 	}
 	for _, badge := range badgeTemplates() {
 		if !owned[badge.ID] {

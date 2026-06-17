@@ -165,7 +165,7 @@ function SingleplayerModeCard(props: {
     <LobbyPanel className="lobby-feature-card relative flex min-h-[240px] w-full flex-col justify-between p-5 transition-colors duration-500 sm:min-h-[260px] sm:p-8" style={{ animationDelay: "-2s" }}>
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(72,106,128,0.28)_0%,rgba(22,34,42,0.85)_100%)] opacity-80 transition-opacity duration-500" />
       <ModeMountains hueRotate active={false} />
-      <ModeHeading eyebrow="Casual" title="Singleplayer" subtitle="Practice indefinitely" eyebrowClassName="text-[#8caab0]" />
+      <ModeHeading eyebrow="Casual" title="Singleplayer" subtitle="Moving allowed" eyebrowClassName="text-[#8caab0]" />
 
       <div className="relative z-10 mx-auto mt-5 flex h-full w-full flex-col justify-end px-0 pb-1 sm:mt-6 sm:px-2">
         <button

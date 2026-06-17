@@ -47,7 +47,8 @@ export function useLobbyData({
     queryFn: async () => fetchLobbyStatus(config),
     enabled: onlinePlayersEnabled,
     refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchOnMount: false,
+    staleTime: 30_000,
   });
 
   const profileQuery = useQuery({
@@ -83,7 +84,8 @@ export function useLobbyData({
       }
       return resp.json();
     },
-    staleTime: 30_000,
+    refetchOnMount: false,
+    staleTime: 60_000,
   });
 
   const leaderboardQuery = useQuery({
@@ -99,13 +101,16 @@ export function useLobbyData({
       }
       return requestLeaderboard(config, accessToken);
     },
-    staleTime: 30_000,
+    refetchOnMount: false,
+    staleTime: 60_000,
   });
 
   const changelogQuery = useQuery({
     queryKey: ["lobby-changelog"],
     queryFn: async () => requestLobbyChangelog(config),
     enabled,
+    refetchOnMount: false,
+    staleTime: 5 * 60_000,
   });
 
   useEffect(() => {

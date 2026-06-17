@@ -56,7 +56,7 @@ describe("shared UI primitives", () => {
   });
 
   it("renders empty states with optional actions", () => {
-    render(<EmptyState title="No maps" action={<Button>Upload</Button>} />);
+    render(<EmptyState title="No maps" message="Create or browse a map." action={<Button>Upload</Button>} />);
 
     expect(screen.getByText("No maps")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();

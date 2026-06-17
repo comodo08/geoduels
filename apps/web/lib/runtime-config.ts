@@ -58,7 +58,7 @@ export function createRuntimeConfig(source?: Partial<WindowRuntimeConfig>): Runt
   const defaults: WindowRuntimeConfig = {
     NEXT_PUBLIC_QUEUE_URL: process.env.NEXT_PUBLIC_QUEUE_URL || 'http://localhost:8090',
     NEXT_PUBLIC_REALTIME_URL: process.env.NEXT_PUBLIC_REALTIME_URL || 'http://localhost:8092',
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
     NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: process.env.NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS || '',
     NEXT_PUBLIC_DISCORD_CLIENT_ID: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '',

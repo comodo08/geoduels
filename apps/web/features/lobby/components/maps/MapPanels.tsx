@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type React from "react";
-import { ArrowLeft, ChevronDown, Heart, Loader2, Map as MapIcon, MessageCircle, MoreVertical, Play, Search, Star, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, ChartNoAxesColumnIncreasing, ChevronDown, Heart, Loader2, Map as MapIcon, MessageCircle, MoreVertical, Play, Search, ShieldCheck, Star, Trophy, Trash2, Upload, X } from "lucide-react";
 import AppModalShell from "../../../../components/ui/AppModalShell";
 import AvatarBadge from "../../../../components/ui/AvatarBadge";
+import { cn } from "../../../../lib/cn";
 import type { MatchConfig } from "../../../matchmaking/lib/queue-client";
-import type { CustomMap, MapDetails, MapScope, MapSort } from "../../../maps/lib/maps-client";
+import type { CustomMap, GameplayMapRole, MapDetails, MapScope, MapSort } from "../../../maps/lib/maps-client";
 import {
   commentAvatarFallback,
   commentDeletedLabel,
@@ -107,6 +108,13 @@ function MapSortControl({
   );
 }
 
+function formatMapMetric(value: number) {
+  if (value < 1000) return value.toLocaleString();
+  return `${Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: value < 10000 ? 1 : 0 }).format(value)}+`;
+}
+
+const difficultyTone = { easy: "text-[#4ade80]", normal: "text-[#facc15]", hard: "text-[#fb6a4a]" } satisfies Record<CustomMap["difficulty"], string>;
+
 function MapCard({
   item,
   selected,
@@ -120,41 +128,60 @@ function MapCard({
   thumbnailURL: (item: Pick<CustomMap, "thumbnailVariant" | "thumbnailKey">) => string;
   onSelect?: (item: CustomMap) => void;
 }) {
-  const image = (
-    <div className="relative aspect-[16/9] overflow-hidden bg-[#10201a]">
-      <img src={thumbnailURL(item)} alt="" className="h-full w-full object-cover opacity-90 transition hover:scale-[1.03]" />
-      <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">
-        {item.difficulty}
+  const content = (
+    <div
+      className={cn(
+        "group relative aspect-[16/9] overflow-hidden rounded-2xl bg-[#062722] text-left",
+        "transition duration-200 hover:-translate-y-0.5",
+        selected && "ring-2 ring-accentPrimary",
+      )}
+    >
+      <img
+        src={thumbnailURL(item)}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover opacity-85 transition duration-500 group-hover:scale-[1.035]"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#053f3d]/10 via-[#062722]/25 to-[#031817]/88" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/25" />
+      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/70 via-black/28 to-transparent" />
+
+      <div className="absolute right-3 top-3 flex flex-wrap justify-end gap-2">
+        {item.system || item.official ? (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#10201a]">
+            Official
+          </span>
+        ) : null}
+        {item.rankedMoving || item.rankedNmpz ? (
+          <span className="rounded-full bg-[#ffd166] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#1b1400]">
+            Ranked
+          </span>
+        ) : null}
+        {selected ? (
+          <span className="rounded-full bg-accentPrimary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white shadow-[0_8px_18px_rgba(42,209,143,0.28)]">
+            Selected
+          </span>
+        ) : null}
       </div>
-      {item.system ? (
-        <div className="absolute right-3 top-3 rounded-full bg-accentPrimary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">
-          Official
+
+      <div className="absolute inset-x-0 bottom-0 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 p-4">
+        <div className="min-w-0">
+          <h3 className="truncate text-[18px] font-black leading-tight text-white sm:text-[20px]">{item.displayName}</h3>
+          <p className="mt-1.5 truncate text-xs font-bold text-[#c7dde1]">{item.authorName || "GeoDuels"}</p>
         </div>
-      ) : null}
-      {selected ? (
-        <div className="absolute right-3 top-3 rounded-full bg-accentPrimary px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">
-          Selected
+        <div className="grid gap-1.5 pb-0.5 text-[12px] font-extrabold text-[#c7dde1]">
+          <span className="inline-flex items-center justify-end gap-1.5" title="Locations">
+            <MapIcon className="text-[#c7dde1]" size={15} />
+            {formatMapMetric(item.locationCount)}
+          </span>
+          <span className="inline-flex items-center justify-end gap-1.5" title="Plays">
+            <Play className="text-[#c7dde1]" size={15} />
+            {formatMapMetric(item.playCount)}
+          </span>
+          <span className="inline-flex items-center justify-end gap-1.5 uppercase" title="Difficulty">
+            <ChartNoAxesColumnIncreasing className={difficultyTone[item.difficulty]} size={15} />
+            {item.difficulty}
+          </span>
         </div>
-      ) : null}
-    </div>
-  );
-  const body = (
-    <div className="p-4">
-      <h3 className="truncate text-base font-black text-white">{item.displayName}</h3>
-      <p className="mt-1 truncate text-xs font-semibold text-[#8da6b5]">by {item.authorName || "GeoDuels"}</p>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-bold text-[#a9bfd4]">
-        <span className="inline-flex items-center gap-1" title="Locations">
-          <MapIcon size={13} />
-          {item.locationCount.toLocaleString()}
-        </span>
-        <span className="inline-flex items-center gap-1" title="Plays">
-          <Play size={13} />
-          {item.playCount.toLocaleString()}
-        </span>
-        <span className="inline-flex items-center gap-1" title="Favorites">
-          <Star size={13} />
-          {item.favoriteCount.toLocaleString()}
-        </span>
       </div>
     </div>
   );
@@ -162,15 +189,13 @@ function MapCard({
   if (mode === "select") {
     return (
       <button type="button" onClick={() => onSelect?.(item)} className="block w-full text-left">
-        {image}
-        {body}
+        {content}
       </button>
     );
   }
   return (
     <Link href={`/maps/${encodeURIComponent(item.id)}`} className="block w-full text-left">
-      {image}
-      {body}
+      {content}
     </Link>
   );
 }
@@ -241,14 +266,14 @@ export function MapsPanel({
           ) : (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {readyMaps.map((item) => (
-                <LobbyPanel key={item.id} variant="subtle" className="overflow-hidden rounded-2xl p-0">
+                <div key={item.id} className="overflow-hidden rounded-2xl">
                   <MapCard
                     item={item}
                     mode={privateLobbyActive ? "select" : "link"}
                     thumbnailURL={thumbnailURL}
                     onSelect={selectMapForParty}
                   />
-                </LobbyPanel>
+                </div>
               ))}
             </div>
           )}
@@ -309,6 +334,71 @@ function BackToMapsLink() {
   );
 }
 
+function AdminMapOperations({
+  map,
+  onSetOfficial,
+  onSetRole,
+}: {
+  map: CustomMap;
+  onSetOfficial: (mapId: string, official: boolean) => void;
+  onSetRole: (mapId: string, role: GameplayMapRole) => void;
+}) {
+  const ready = map.status === "ready" && !!map.activeRevisionId;
+  const roleButtons: Array<{ role: GameplayMapRole; label: string; active?: boolean; icon: React.ReactNode }> = [
+    { role: "ranked_moving", label: "Ranked Moving", active: map.rankedMoving, icon: <Trophy size={16} /> },
+    { role: "ranked_nmpz", label: "Ranked NMPZ", active: map.rankedNmpz, icon: <Trophy size={16} /> },
+    { role: "singleplayer_moving", label: "Default Moving", active: map.defaultMoving, icon: <Play size={16} fill="currentColor" /> },
+    { role: "singleplayer_nmpz", label: "Default NMPZ", active: map.defaultNmpz, icon: <Play size={16} fill="currentColor" /> },
+  ];
+  return (
+    <LobbyPanel variant="subtle" className="p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h3 className="flex items-center gap-2 text-[18px] font-extrabold tracking-tight text-white">
+            <ShieldCheck className="text-[#77f0be]" size={19} />
+            Admin Map Operations
+          </h3>
+          <p className="mt-1 text-sm font-medium text-[#a9bfd4]">
+            Promote this ready map or assign it to ranked and default queues.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() => onSetOfficial(map.id, !map.official)}
+            className={`inline-flex min-h-[40px] items-center rounded-[12px] border px-3 text-xs font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              map.official
+                ? "border-white/10 bg-white text-[#10201a] hover:bg-white/90"
+                : "border-[#77f0be]/20 bg-[#77f0be]/10 text-white hover:bg-[#77f0be]/15"
+            }`}
+          >
+            <ShieldCheck className="mr-1.5" size={15} />
+            {map.official ? "Remove Official" : "Mark Official"}
+          </button>
+          {roleButtons.map((item) => (
+            <button
+              key={item.role}
+              type="button"
+              disabled={!ready || !!item.active}
+              onClick={() => onSetRole(map.id, item.role)}
+              className={`inline-flex min-h-[40px] items-center rounded-[12px] border px-3 text-xs font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                item.active
+                  ? "border-[#ffd166]/40 bg-[#ffd166] text-[#1b1400]"
+                  : "border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]"
+              }`}
+            >
+              <span className="mr-1.5">{item.icon}</span>
+              {item.active ? `${item.label} Active` : item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {!ready ? <p className="mt-3 text-xs font-semibold text-amber-200">Map must be ready with an active revision before it can be promoted.</p> : null}
+    </LobbyPanel>
+  );
+}
+
 export function MapDetailsPanel({
   accessToken,
   canInteractWithMaps,
@@ -330,6 +420,8 @@ export function MapDetailsPanel({
   onPostReply,
   onPublishMap,
   onRevisionFile,
+  onSetMapOfficial,
+  onSetMapRole,
   onSetCommentBody,
   onSetCommentComposerFocused,
   onSetOpenCommentMenuId,
@@ -371,6 +463,8 @@ export function MapDetailsPanel({
   onPostReply: (commentId: string) => void;
   onPublishMap: (mapId: string) => void;
   onRevisionFile: (mapId: string, file: File) => void;
+  onSetMapOfficial: (mapId: string, official: boolean) => void;
+  onSetMapRole: (mapId: string, role: GameplayMapRole) => void;
   onSetCommentBody: (body: string) => void;
   onSetCommentComposerFocused: (focused: boolean) => void;
   onSetOpenCommentMenuId: (commentId: string) => void;
@@ -407,10 +501,28 @@ export function MapDetailsPanel({
   return (
     <LobbyPanel className="p-4 sm:p-6">
       <div className="space-y-5">
-        <BackToMapsLink />
+        <div className="flex items-center justify-between gap-3">
+          <BackToMapsLink />
+          {canInteractWithMaps ? (
+            <LobbyActionButton
+              type="button"
+              variant="secondary"
+              size="icon"
+              onClick={() => favoriteMap({ mapId: map.id, favorite: !map.favorited })}
+              aria-label={map.favorited ? "Remove saved map" : "Save map"}
+              title={map.favorited ? "Saved" : "Save"}
+              className={cn(
+                "h-11 min-h-11 w-11 rounded-full",
+                map.favorited && "border-accentPrimary/40 bg-accentPrimary/15 text-accentPrimary hover:bg-accentPrimary/20",
+              )}
+            >
+              <Star size={18} fill={map.favorited ? "currentColor" : "none"} />
+            </LobbyActionButton>
+          ) : null}
+        </div>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <section
-            className="relative min-h-[280px] overflow-hidden rounded-[18px] border border-white/10 bg-cover bg-center"
+            className="relative min-h-[280px] overflow-hidden rounded-[18px] bg-cover bg-center"
             style={{ backgroundImage: `url(${thumbnailURL(map)})` }}
           >
             <div className="absolute inset-0 bg-black/40" />
@@ -466,24 +578,38 @@ export function MapDetailsPanel({
                 Play
               </LobbyActionButton>
             )}
-            {canInteractWithMaps ? (
-              <LobbyActionButton type="button" variant="secondary" onClick={() => favoriteMap({ mapId: map.id, favorite: !map.favorited })} size="lg" className="min-h-[46px] rounded-xl px-4">
-                <Star className="mr-2" size={17} fill={map.favorited ? "currentColor" : "none"} />
-                {map.favorited ? "Saved" : "Save"}
-              </LobbyActionButton>
-            ) : null}
-            {map.ownerUserId === userId && canUploadCustomMaps ? (
-              <>
-                {!map.publishedAt ? <button type="button" onClick={() => onPublishMap(map.id)} className="rounded-[14px] border border-[#77f0be]/20 bg-[#77f0be]/10 px-4 text-xs font-black uppercase tracking-[0.08em] text-white">Publish</button> : null}
-                <label className="inline-flex min-h-[46px] cursor-pointer items-center rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
-                  <Upload className="mr-1.5" size={14} /> New Version
-                  <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onRevisionFile(map.id, file); event.currentTarget.value = ""; }} />
-                </label>
-                <button type="button" onClick={() => onDeleteMap(map)} className="rounded-[14px] border border-red-400/15 bg-red-400/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-red-200 hover:bg-red-400/10">Delete</button>
-              </>
-            ) : null}
           </div>
         </LobbyPanel>
+
+        {map.ownerUserId === userId && canUploadCustomMaps ? (
+          <LobbyPanel variant="subtle" className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-[16px] font-extrabold tracking-tight text-white">Map Options</h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!map.publishedAt ? (
+                <button type="button" onClick={() => onPublishMap(map.id)} className="min-h-[42px] rounded-[14px] border border-[#77f0be]/20 bg-[#77f0be]/10 px-4 text-xs font-black uppercase tracking-[0.08em] text-white">
+                  Publish
+                </button>
+              ) : null}
+              <label className="inline-flex min-h-[42px] cursor-pointer items-center rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
+                <Upload className="mr-1.5" size={14} /> New Version
+                <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onRevisionFile(map.id, file); event.currentTarget.value = ""; }} />
+              </label>
+              <button type="button" onClick={() => onDeleteMap(map)} className="min-h-[42px] rounded-[14px] border border-red-400/15 bg-red-400/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-red-200 hover:bg-red-400/10">
+                Delete
+              </button>
+            </div>
+          </LobbyPanel>
+        ) : null}
+
+        {isAdmin ? (
+          <AdminMapOperations
+            map={map}
+            onSetOfficial={onSetMapOfficial}
+            onSetRole={onSetMapRole}
+          />
+        ) : null}
 
         <MapComments
           accessToken={accessToken}
@@ -724,9 +850,9 @@ export function MapPickerModal({
           ) : (
             <div className="mt-5 grid max-h-[56vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
               {readyMaps.map((item) => (
-                <LobbyPanel key={item.id} variant="subtle" className="overflow-hidden rounded-2xl p-0">
+                <div key={item.id} className="overflow-hidden rounded-2xl">
                   <MapCard item={item} mode="select" selected={item.id === lobbyConfig.mapId} thumbnailURL={thumbnailURL} onSelect={selectMapForParty} />
-                </LobbyPanel>
+                </div>
               ))}
             </div>
           )}

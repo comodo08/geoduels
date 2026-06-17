@@ -47,7 +47,15 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 		found.Config.MapName = found.ResolvedMap.DisplayName
 		return tx.Commit(ctx)
 	}
-	mapID := contracts.NormalizeMatchConfig(found.Config).MapID
+	cfg := contracts.NormalizeMatchConfig(found.Config)
+	mapID := cfg.MapID
+	if found.Mode == contracts.ModeDuel && !found.Unranked && strings.TrimSpace(found.SourcePartyID) == "" {
+		resolved, err := s.ResolveGameplayMapID(found.Mode, cfg.Ruleset, "")
+		if err != nil {
+			return err
+		}
+		mapID = resolved
+	}
 	var owner, visibility, status, revisionID, displayName string
 	var count int
 	err = tx.QueryRow(ctx, `select coalesce(owner_user_id,''), visibility, status, coalesce(active_revision_id,''), display_name, location_count from maps where map_key=$1 and archived_at is null for share`, mapID).Scan(&owner, &visibility, &status, &revisionID, &displayName, &count)

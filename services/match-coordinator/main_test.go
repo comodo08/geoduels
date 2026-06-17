@@ -145,12 +145,35 @@ func (s *recoverTestStore) GetRankedSeasonSettings() (persistence.RankedSeasonSe
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) RolloverRankedSeason(nextSeasonID string) (persistence.RankedSeasonRolloverResult, error) {
+func (s *recoverTestStore) SetRankedSeasonResetRule(monthlyResetDay int) (persistence.RankedSeasonSettings, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) RunDueRankedSeasonReset(now time.Time) (persistence.RankedSeasonResetResult, bool, error) {
 	panic("unexpected call")
 }
 
 func (s *recoverTestStore) ActivateMapRevision(mapKey, displayName string, dataset []byte) (persistence.MapRevisionSummary, error) {
 	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetGameplayMapSettings() (contracts.GameplayMapSettings, error) {
+	return contracts.GameplayMapSettings{
+		RankedMovingMapID:       contracts.MapKeyMoving,
+		RankedNMPZMapID:         contracts.MapKeyNMPZ,
+		SingleplayerMovingMapID: contracts.MapKeyMoving,
+		SingleplayerNMPZMapID:   contracts.MapKeyNMPZ,
+	}, nil
+}
+
+func (s *recoverTestStore) ResolveGameplayMapID(mode contracts.MatchMode, ruleset contracts.GameRuleset, requestedMapID string) (string, error) {
+	if requestedMapID != "" {
+		return requestedMapID, nil
+	}
+	if contracts.NormalizeRuleset(ruleset) == contracts.RulesetNMPZ {
+		return contracts.MapKeyNMPZ, nil
+	}
+	return contracts.MapKeyMoving, nil
 }
 
 func (s *recoverTestStore) CreateAuthSession(userID, refreshTokenHash string, expiresAt time.Time, params persistence.AuthSessionParams) (persistence.RefreshTokenRecord, error) {

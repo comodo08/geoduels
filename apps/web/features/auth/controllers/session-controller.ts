@@ -205,6 +205,9 @@ export class SessionController extends ObservableStore<SessionState> {
     this.onResetSession = params.onResetSession;
     this.messageHandler = (event: MessageEvent) => {
       const expectedOrigin = (() => {
+        if (!this.config.apiURL.trim()) {
+          return typeof window !== "undefined" ? window.location.origin : "";
+        }
         try {
           return new URL(this.config.apiURL).origin;
         } catch {

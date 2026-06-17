@@ -11,6 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/observability"
 )
@@ -196,6 +197,9 @@ func (q *matchCoordinator) buildCoordinatorChatMessage(scope chatScope, userID, 
 		if message.Body == "" {
 			return contracts.ChatMessage{}, errors.New("message is empty")
 		}
+		if err := contentfilter.RejectAbusiveText(message.Body); err != nil {
+			return contracts.ChatMessage{}, err
+		}
 	case "chat.emote":
 		message.Kind = contracts.ChatMessageEmote
 		if cmd.Payload != nil {
@@ -213,13 +217,7 @@ func (q *matchCoordinator) buildCoordinatorChatMessage(scope chatScope, userID, 
 }
 
 func sanitizeCoordinatorChatBody(body string) string {
-	body = strings.TrimSpace(body)
-	body = strings.Join(strings.Fields(body), " ")
-	if len([]rune(body)) <= chatMaxBodyLen {
-		return body
-	}
-	runes := []rune(body)
-	return strings.TrimSpace(string(runes[:chatMaxBodyLen]))
+	return contentfilter.NormalizeText(body, chatMaxBodyLen)
 }
 
 func validCoordinatorChatEmote(emote contracts.ChatEmote) bool {

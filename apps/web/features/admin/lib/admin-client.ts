@@ -1,4 +1,4 @@
-import { readError } from "../../../lib/http";
+import { apiFetch, readError } from "../../../lib/http";
 import type { RuntimeConfig } from "../../../lib/runtime-config";
 import type { ChangelogPost, ChangelogPostInput } from "../../changelog/types";
 import type { MaintenanceStatus } from "../../matchmaking/lib/queue-client";
@@ -7,7 +7,7 @@ export async function requestAdminBootstrap(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/bootstrap`, {
+  const resp = await apiFetch(config, `/v1/admin/bootstrap`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -25,8 +25,9 @@ export async function requestAdminPlayers(
   accessToken: string,
   query: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players?query=${encodeURIComponent(query)}`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players?query=${encodeURIComponent(query)}`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
@@ -42,8 +43,9 @@ export async function requestAdminPlayerDetail(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
@@ -60,8 +62,9 @@ export async function requestAdminBanPlayer(
   userId: string,
   reason: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/ban`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/ban`,
     {
       method: "POST",
       headers: {
@@ -81,8 +84,9 @@ export async function requestAdminUnbanPlayer(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/unban`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/unban`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -98,8 +102,9 @@ export async function requestAdminClearReporterMute(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/report-mute`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/report-mute`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -115,8 +120,9 @@ export async function requestAdminPromoteModerator(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -132,8 +138,9 @@ export async function requestAdminDemoteModerator(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -150,7 +157,7 @@ export async function requestAdminModerationCases(
   status = "",
 ) {
   const qs = status ? `?view=${encodeURIComponent(status)}` : "";
-  const resp = await fetch(`${config.apiURL}/v1/admin/moderation/cases${qs}`, {
+  const resp = await apiFetch(config, `/v1/admin/moderation/cases${qs}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -164,8 +171,9 @@ export async function requestAdminClaimModerationCase(
   accessToken: string,
   caseId: number,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/claim`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/claim`,
     { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!resp.ok) {
@@ -179,8 +187,9 @@ export async function requestAdminReleaseModerationCase(
   accessToken: string,
   caseId: number,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/release`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/release`,
     { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!resp.ok) {
@@ -194,8 +203,9 @@ export async function requestAdminPlayerMatches(
   accessToken: string,
   userId: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/players/${encodeURIComponent(userId)}/matches`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/players/${encodeURIComponent(userId)}/matches`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!resp.ok) {
@@ -209,8 +219,9 @@ export async function requestAdminModerationCase(
   accessToken: string,
   caseId: number,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!resp.ok) {
@@ -232,8 +243,9 @@ export async function requestAdminModerationCaseAction(
     muteUntil?: string;
   },
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/actions`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/actions`,
     {
       method: "POST",
       headers: {
@@ -253,7 +265,7 @@ export async function requestAdminEnforcementActions(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/enforcement/actions`, {
+  const resp = await apiFetch(config, `/v1/admin/enforcement/actions`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -266,7 +278,7 @@ export async function requestAdminRoles(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/roles`, {
+  const resp = await apiFetch(config, `/v1/admin/roles`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -280,7 +292,7 @@ export async function requestAdminGrantRole(
   accessToken: string,
   payload: { userId: string; role: string; reason?: string },
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/roles`, {
+  const resp = await apiFetch(config, `/v1/admin/roles`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -300,8 +312,9 @@ export async function requestAdminRevokeRole(
   role: string,
   reason = "",
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/roles/${encodeURIComponent(userId)}/${encodeURIComponent(role)}`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/roles/${encodeURIComponent(userId)}/${encodeURIComponent(role)}`,
     {
       method: "DELETE",
       headers: {
@@ -326,7 +339,7 @@ export async function requestAdminDebugTestReports(
     reason?: string;
   },
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/debug/test-reports`, {
+  const resp = await apiFetch(config, `/v1/admin/debug/test-reports`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -348,7 +361,7 @@ export async function requestAdminIPSignupBans(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/ip-signup-bans`, {
+  const resp = await apiFetch(config, `/v1/admin/ip-signup-bans`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -363,7 +376,7 @@ export async function requestAdminAddIPSignupBan(
   ipAddress: string,
   reason: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/ip-signup-bans`, {
+  const resp = await apiFetch(config, `/v1/admin/ip-signup-bans`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -381,8 +394,9 @@ export async function requestAdminRemoveIPSignupBan(
   accessToken: string,
   ipAddress: string,
 ) {
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/ip-signup-bans/${encodeURIComponent(ipAddress)}`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/ip-signup-bans/${encodeURIComponent(ipAddress)}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -397,7 +411,7 @@ export async function requestAdminMaintenance(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -412,20 +426,16 @@ export type AdminModerationSettings = {
 
 export type AdminRankedSeasonSettings = {
   activeSeasonId: string;
-};
-
-export type AdminRankedSeasonRolloverResult = {
-  previousSeasonId: string;
-  activeSeasonId: string;
-  badgesAwarded: number;
-  playersSeeded: number;
+  monthlyResetDay: number;
+  nextResetAt?: string;
+  lastResetAt?: string;
 };
 
 export async function requestAdminModerationSettings(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/moderation/settings`, {
+  const resp = await apiFetch(config, `/v1/admin/moderation/settings`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -441,7 +451,7 @@ export async function requestAdminPutModerationSettings(
   accessToken: string,
   settings: AdminModerationSettings,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/moderation/settings`, {
+  const resp = await apiFetch(config, `/v1/admin/moderation/settings`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -461,7 +471,7 @@ export async function requestAdminRankedSeason(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/seasons`, {
+  const resp = await apiFetch(config, `/v1/admin/seasons`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -470,23 +480,23 @@ export async function requestAdminRankedSeason(
   return resp.json() as Promise<AdminRankedSeasonSettings>;
 }
 
-export async function requestAdminRolloverRankedSeason(
+export async function requestAdminSetRankedSeasonResetRule(
   config: RuntimeConfig,
   accessToken: string,
-  nextSeasonId: string,
+  monthlyResetDay: number,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/seasons/rollover`, {
-    method: "POST",
+  const resp = await apiFetch(config, `/v1/admin/seasons/reset-rule`, {
+    method: "PUT",
     headers: {
       "content-type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ nextSeasonId }),
+    body: JSON.stringify({ monthlyResetDay }),
   });
   if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to roll over season"));
+    throw new Error(await readError(resp, "Failed to save season reset rule"));
   }
-  return resp.json() as Promise<AdminRankedSeasonRolloverResult>;
+  return resp.json() as Promise<AdminRankedSeasonSettings>;
 }
 
 export async function requestAdminPutMaintenance(
@@ -494,7 +504,7 @@ export async function requestAdminPutMaintenance(
   accessToken: string,
   status: MaintenanceStatus,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -512,7 +522,7 @@ export async function requestAdminClearMaintenance(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -525,7 +535,7 @@ export async function requestAdminGetChangelog(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/changelog`, {
+  const resp = await apiFetch(config, `/v1/admin/changelog`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -539,7 +549,7 @@ export async function requestAdminCreateChangelogPost(
   accessToken: string,
   content: ChangelogPostInput,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/changelog`, {
+  const resp = await apiFetch(config, `/v1/admin/changelog`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -559,7 +569,7 @@ export async function requestAdminUpdateChangelogPost(
   id: number,
   content: ChangelogPostInput,
 ) {
-  const resp = await fetch(`${config.apiURL}/v1/admin/changelog/${encodeURIComponent(String(id))}`, {
+  const resp = await apiFetch(config, `/v1/admin/changelog/${encodeURIComponent(String(id))}`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -581,8 +591,9 @@ export async function requestAdminUploadCurrentMap(
 ) {
   const body = new FormData();
   body.append("file", file);
-  const resp = await fetch(
-    `${config.apiURL}/v1/admin/maps/${encodeURIComponent(mapKey)}/upload`,
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/maps/${encodeURIComponent(mapKey)}/upload`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },

@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"geoduels/pkg/auth"
+	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/persistence"
 )
@@ -258,14 +259,7 @@ func (a *api) logoutAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func validatedNickname(raw string) (string, error) {
-	nick, err := sanitizeNickname(raw)
-	if err != nil {
-		return "", err
-	}
-	if err := nicknameAbusive(nick); err != nil {
-		return "", err
-	}
-	return nick, nil
+	return contentfilter.ValidateNickname(raw)
 }
 
 func (a *api) authenticatedClaims(r *http.Request) (auth.AppClaims, error) {

@@ -7,9 +7,12 @@ import {
   getMap,
   listMaps,
   publishMap,
+  setGameplayMapRole,
   setMapFavorite,
+  setMapOfficial,
   uploadMapRevision,
   validateMapFile,
+  type GameplayMapRole,
   type MapComment,
   type MapDetails,
   type MapSort,
@@ -56,22 +59,24 @@ export function useMapList(
   scope: MapScope,
   sort: MapSort,
   search = "",
+  options: { enabled?: boolean } = {},
 ) {
   const trimmedSearch = search.trim();
+  const enabled = options.enabled ?? true;
   return useQuery({
-    queryKey: ["maps", scope, sort, trimmedSearch, userId, accessToken],
+    queryKey: ["maps", scope, sort, trimmedSearch, userId || "anonymous"],
     queryFn: () => listMaps(config, accessToken, { scope, sort: scope === "community" ? sort : undefined, search: trimmedSearch }),
-    enabled: scope === "official" || scope === "community" || !!accessToken,
-    staleTime: 15_000,
+    enabled: enabled && (scope === "official" || scope === "community" || !!accessToken),
+    staleTime: 60_000,
   });
 }
 
-export function useMapDetails(config: RuntimeConfig, accessToken: string | undefined, mapId: string) {
+export function useMapDetails(config: RuntimeConfig, accessToken: string | undefined, mapId: string, userId = "") {
   return useQuery({
-    queryKey: ["map-details", mapId, accessToken],
+    queryKey: ["map-details", mapId, userId || "anonymous"],
     queryFn: () => getMap(config, accessToken, mapId),
     enabled: !!mapId,
-    staleTime: 10_000,
+    staleTime: 60_000,
   });
 }
 
@@ -123,6 +128,22 @@ export function useMapManagement(config: RuntimeConfig, accessToken: string | un
     publishMap: useMutation({
       mutationFn: (mapId: string) => publishMap(config, accessToken || "", mapId),
       onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["maps"] }),
+    }),
+    setOfficial: useMutation({
+      mutationFn: ({ mapId, official }: { mapId: string; official: boolean }) =>
+        setMapOfficial(config, accessToken || "", mapId, official),
+      onSuccess: (_item, vars) => {
+        void queryClient.invalidateQueries({ queryKey: ["maps"] });
+        void queryClient.invalidateQueries({ queryKey: ["map-details", vars.mapId] });
+      },
+    }),
+    setRole: useMutation({
+      mutationFn: ({ mapId, role }: { mapId: string; role: GameplayMapRole }) =>
+        setGameplayMapRole(config, accessToken || "", mapId, role),
+      onSuccess: (_item, vars) => {
+        void queryClient.invalidateQueries({ queryKey: ["maps"] });
+        void queryClient.invalidateQueries({ queryKey: ["map-details", vars.mapId] });
+      },
     }),
     uploadRevision: useMutation({
       mutationFn: async ({ mapId, file }: { mapId: string; file: File }) => {

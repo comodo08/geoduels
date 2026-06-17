@@ -2,7 +2,6 @@ import { forwardRef } from "react";
 import { Copy, Crown, Loader2, LogOut, Map as MapIcon, Play, UserMinus, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MatchConfig, GameRuleset } from "../../matchmaking/lib/queue-client";
-import type { CustomMap } from "../../maps/lib/maps-client";
 import type { LobbyRuntimeStatus } from "../controllers/lobby-controller";
 import type { LobbySnapshot, LobbyTeamId, PartyMode } from "../lib/lobby-client";
 import {
@@ -38,9 +37,7 @@ type PartyPanelProps = {
   authError: string;
   authLoading: boolean;
   inviteCopied: boolean;
-  mapsLoading: boolean;
   privateLobby: PrivateLobbyView;
-  readyMaps: CustomMap[];
   setMapPickerOpen: (open: boolean) => void;
   state: PartyPanelState;
   userId: string;
@@ -66,9 +63,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
   joinInviteLobby,
   kickLobbyMember,
   leavePrivateLobby,
-  mapsLoading,
   privateLobby,
-  readyMaps,
   setMapPickerOpen,
   startPrivateLobby,
   state,
@@ -155,11 +150,9 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                 clockOn={clockOn}
                 config={config}
                 isOwner={privateLobby.isOwner}
-                mapsLoading={mapsLoading}
                 mode={mode}
                 pressureOn={pressureOn}
                 pressureSeconds={pressureSeconds}
-                readyMaps={readyMaps}
                 roundSeconds={roundSeconds}
                 saveConfig={saveConfig}
                 saveMode={saveMode}
@@ -286,11 +279,9 @@ function PartySettings({
   clockOn,
   config,
   isOwner,
-  mapsLoading,
   mode,
   pressureOn,
   pressureSeconds,
-  readyMaps,
   roundSeconds,
   saveConfig,
   saveMode,
@@ -301,11 +292,9 @@ function PartySettings({
   clockOn: boolean;
   config: MatchConfig;
   isOwner: boolean;
-  mapsLoading: boolean;
   mode: PartyMode;
   pressureOn: boolean;
   pressureSeconds: number;
-  readyMaps: CustomMap[];
   roundSeconds: number;
   saveConfig: (patch: MatchConfig) => void;
   saveMode: (mode: PartyMode) => void;
@@ -349,12 +338,12 @@ function PartySettings({
             variant="secondary"
             size="md"
             onClick={() => setMapPickerOpen(true)}
-            disabled={busy || mapsLoading}
+            disabled={busy}
             className="min-w-0 justify-center normal-case tracking-normal"
           >
             <MapIcon className="shrink-0 text-[#77f0be]" size={14} />
             <span className="truncate">
-              {config.mapName || readyMaps.find((item) => item.id === config.mapId)?.displayName || "Select map"}
+              {config.mapName || config.mapId || "Select map"}
             </span>
           </LobbyActionButton>
         </label>

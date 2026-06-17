@@ -29,6 +29,7 @@ func scanCustomMap(row customMapScanner) (contracts.CustomMap, error) {
 		&item.LocationCount,
 		&item.ActiveRevisionID,
 		&item.System,
+		&item.Official,
 		&publishedAt,
 		&item.PlayCount,
 		&item.FavoriteCount,
@@ -36,6 +37,10 @@ func scanCustomMap(row customMapScanner) (contracts.CustomMap, error) {
 		&item.TrendingScore,
 		&item.Favorited,
 		&item.OfficialRegion,
+		&item.RankedMoving,
+		&item.RankedNMPZ,
+		&item.DefaultMoving,
+		&item.DefaultNMPZ,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {

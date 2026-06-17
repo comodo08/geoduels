@@ -126,7 +126,6 @@ func badgeTemplates() []contracts.PlayerBadge {
 		}
 		out = append(out, badgeFromDefinition(def, false))
 	}
-	out = append(out, seasonRankBadgeTemplate("s2"), seasonRankBadgeTemplate("s2.5"))
 	return out
 }
 
@@ -230,6 +229,59 @@ func seasonBadgeDisplayName(seasonID string) string {
 		}
 		return "Season " + strings.ToUpper(value)
 	}
+}
+
+func (s *pgStore) earnedSeasonRankBadges(ctx context.Context, userIDs []string) (map[string][]contracts.PlayerBadge, error) {
+	if len(userIDs) == 0 {
+		return map[string][]contracts.PlayerBadge{}, nil
+	}
+	activeSeasonID, err := activeSeasonIDTx(ctx, s.pool)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		with ranked as (
+			select
+				r.user_id,
+				r.season_id,
+				row_number() over (
+					partition by r.season_id
+					order by r.mmr desc, r.updated_at asc, r.user_id asc
+				)::int as rank
+			from ranks r
+			join users u on u.id = r.user_id
+			where r.mode = $1
+				and r.season_id <> $2
+				and coalesce(u.account_type, 'registered') <> 'guest'
+				and u.banned_at is null
+		)
+		select user_id, season_id, rank
+		from ranked
+		where user_id = any($3)
+			and rank between 1 and 100
+		order by user_id asc, season_id desc
+	`, modeDuel, activeSeasonID, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]contracts.PlayerBadge{}
+	for rows.Next() {
+		var userID, seasonID string
+		var rank int
+		if err := rows.Scan(&userID, &seasonID, &rank); err != nil {
+			return nil, err
+		}
+		badge, ok := badgeFromParts(badgeCodeSeasonRank, seasonID, rank, true)
+		if !ok {
+			continue
+		}
+		out[userID] = append(out[userID], badge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func awardBadgeTx(ctx context.Context, tx pgx.Tx, userID, badgeID string) (bool, error) {

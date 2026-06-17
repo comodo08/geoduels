@@ -1,5 +1,6 @@
 import type { RuntimeConfig } from '../../../lib/runtime-config';
 import { normalizeHTTPBase, normalizeWSBase } from '../../../lib/runtime-config';
+import { apiFetch, authHeaders, mergeHeaders } from '../../../lib/http';
 import type { Snapshot } from '../../../components/ui/types';
 import type { AuthSessionSnapshot } from '../../auth/session';
 
@@ -199,8 +200,8 @@ export async function fetchResumableSession(
   accessToken: string,
   signal?: AbortSignal
 ): Promise<ResumableSessionResponse> {
-  const resp = await fetch(new URL('/v1/session/resumable', config.apiURL).toString(), {
-    headers: { Authorization: `Bearer ${accessToken}` },
+  const resp = await apiFetch(config, '/v1/session/resumable', {
+    headers: authHeaders(accessToken),
     signal
   });
   if (!resp.ok) {
@@ -316,8 +317,8 @@ export async function resolveMatchRoute(
   signal: AbortSignal,
   accessToken?: string
 ): Promise<MatchSessionResponse> {
-  const resp = await fetch(`${config.apiURL}/v1/matches/${encodeURIComponent(matchId)}/route`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/route`, {
+    headers: authHeaders(accessToken),
     signal
   });
   if (!resp.ok) {
@@ -332,8 +333,8 @@ export async function fetchMatchSession(
   matchId: string,
   signal: AbortSignal
 ): Promise<MatchSessionResponse> {
-  const resp = await fetch(`${config.apiURL}/v1/matches/${encodeURIComponent(matchId)}/session`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/session`, {
+    headers: authHeaders(accessToken),
     signal
   });
   if (!resp.ok) {
@@ -347,7 +348,7 @@ export async function bootstrapMatchSession(
   matchId: string,
   signal: AbortSignal
 ): Promise<MatchBootstrapResponse | null> {
-  const resp = await fetch(`${config.apiURL}/v1/matches/${encodeURIComponent(matchId)}/bootstrap`, {
+  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/bootstrap`, {
     credentials: 'include',
     signal
   });
@@ -378,12 +379,9 @@ export async function startSingleplayerSession(
   signal: AbortSignal,
   matchConfig?: MatchConfig,
 ): Promise<{ matchId: string; mode?: string; ticket: string; node: string; wsPath: string }> {
-  const resp = await fetch(`${config.apiURL}/v1/singleplayer/session`, {
+  const resp = await apiFetch(config, '/v1/singleplayer/session', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(matchConfig ? { 'Content-Type': 'application/json' } : {})
-    },
+    headers: mergeHeaders(authHeaders(accessToken), matchConfig ? { 'Content-Type': 'application/json' } : undefined),
     body: matchConfig ? JSON.stringify(matchConfig) : undefined,
     signal,
   });

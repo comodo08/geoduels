@@ -581,6 +581,18 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 	if profile.DisplayName == "" {
 		profile.DisplayName = userID
 	}
+	requestedMapID := strings.TrimSpace(requestedConfig.MapID)
+	if requestedMapID == "" {
+		requestedMapID = strings.TrimSpace(requestedConfig.MapKey)
+	}
+	if requestedMapID == "" {
+		resolvedMapID, err := a.store.ResolveGameplayMapID(contracts.ModeSingleplayer, requestedConfig.Ruleset, "")
+		if err != nil {
+			http.Error(w, "singleplayer unavailable", http.StatusInternalServerError)
+			return
+		}
+		requestedConfig.MapID = resolvedMapID
+	}
 	found := contracts.MatchFound{
 		MatchID: "solo-" + soloSessionID(),
 		Mode:    contracts.ModeSingleplayer,

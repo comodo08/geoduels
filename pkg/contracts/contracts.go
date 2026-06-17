@@ -875,6 +875,7 @@ type CustomMap struct {
 	LocationCount    int        `json:"locationCount"`
 	ActiveRevisionID string     `json:"activeRevisionId,omitempty"`
 	System           bool       `json:"system"`
+	Official         bool       `json:"official,omitempty"`
 	PublishedAt      *time.Time `json:"publishedAt,omitempty"`
 	PlayCount        int        `json:"playCount"`
 	FavoriteCount    int        `json:"favoriteCount"`
@@ -882,6 +883,10 @@ type CustomMap struct {
 	TrendingScore    float64    `json:"trendingScore"`
 	Favorited        bool       `json:"favorited,omitempty"`
 	OfficialRegion   string     `json:"officialRegion,omitempty"`
+	RankedMoving     bool       `json:"rankedMoving,omitempty"`
+	RankedNMPZ       bool       `json:"rankedNmpz,omitempty"`
+	DefaultMoving    bool       `json:"defaultMoving,omitempty"`
+	DefaultNMPZ      bool       `json:"defaultNmpz,omitempty"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	UpdatedAt        time.Time  `json:"updatedAt"`
 }
@@ -899,6 +904,13 @@ type MapListOptions struct {
 	Scope  string `json:"scope"`
 	Sort   string `json:"sort"`
 	Search string `json:"search"`
+}
+
+type GameplayMapSettings struct {
+	RankedMovingMapID       string `json:"rankedMovingMapId"`
+	RankedNMPZMapID         string `json:"rankedNmpzMapId"`
+	SingleplayerMovingMapID string `json:"singleplayerMovingMapId"`
+	SingleplayerNMPZMapID   string `json:"singleplayerNmpzMapId"`
 }
 
 type MapCountryStat struct {

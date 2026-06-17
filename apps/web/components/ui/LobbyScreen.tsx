@@ -1,34 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import Router from "next/router";
 import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { LeaderboardSummary } from "../../features/auth/controllers/session-controller";
 import type { LobbySnapshot as PartySnapshot, LobbyTeamId as PartyTeamId, PartyMode } from "../../features/lobby/lib/lobby-client";
 import type { LobbyRuntimeStatus as PartyRuntimeStatus } from "../../features/lobby/controllers/lobby-controller";
 import type { GameRuleset, MaintenanceStatus, MatchConfig } from "../../features/matchmaking/lib/queue-client";
-import { getRuntimeConfig } from "../../lib/runtime-config";
-import {
-  createMap,
-  validateMapFile,
-  type CustomMap,
-  type MapScope,
-  type MapSort,
-} from "../../features/maps/lib/maps-client";
-import { useFavoriteMap, useMapComments, useMapDetails, useMapList, useMapManagement } from "../../features/maps/lib/map-hooks";
-import { mapThumbnailURL } from "../../features/maps/lib/map-thumbnails";
 import {
   NAV_ITEMS,
   formatApproximateTime,
   formatQueueElapsed,
   formatRelativeDuration,
   isLobbyNavRoute,
-  isMapScope,
   lobbyRouteStorageKey,
   parseTime,
   type LobbyContentRoute,
 } from "../../features/lobby/lib/lobby-ui";
-import { MapUploadForm } from "../../features/lobby/components/MapUploadForm";
 import { PlayPanel } from "../../features/lobby/components/PlayPanel";
 import { LobbyTutorialSection } from "../../features/lobby/components/LobbyTutorialSection";
 import { LobbyHeader } from "../../features/lobby/components/LobbyHeader";
@@ -46,12 +32,7 @@ import {
   SocialLinksCard,
 } from "../../features/lobby/components/LobbyShellPieces";
 import { MaintenanceBanner, MaintenanceOverlay } from "../../features/lobby/components/MaintenanceNotice";
-import {
-  MapDetailsPanel,
-  MapPickerModal,
-  MapsPanel,
-  MapUploadPanel,
-} from "../../features/lobby/components/maps/MapPanels";
+import { MapPickerController, MapRouteSurface } from "../../features/lobby/components/maps/MapRouteSurfaces";
 import { HelpModal } from "../../features/lobby/components/modals/HelpModal";
 import { InviteModal } from "../../features/lobby/components/modals/InviteModal";
 import { SignInModal } from "../../features/lobby/components/modals/SignInModal";
@@ -170,6 +151,10 @@ const tabPanelMotion = {
   },
 };
 
+const lobbyBackgroundImage = "/bg2.v1.jpg";
+const lobbyBackgroundPlaceholder = "/bg2.placeholder.v1.jpg";
+const lobbyBackgroundOverlay = "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
+
 export default function LobbyScreen({
   contentRoute = "play",
   mapId = "",
@@ -241,116 +226,46 @@ export default function LobbyScreen({
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
-  const [mapName, setMapName] = useState("");
-  const [mapDescription, setMapDescription] = useState("");
-  const [mapDifficulty, setMapDifficulty] = useState<"easy" | "normal" | "hard">("normal");
-  const [mapThumbnailKey, setMapThumbnailKey] = useState("generic/variant-1");
-  const [mapThumbnailCategory, setMapThumbnailCategory] = useState<"generic" | "continents" | "countries">("generic");
-  const [mapThumbnailSearch, setMapThumbnailSearch] = useState("");
-  const [mapScope, setMapScope] = useState<MapScope>("community");
-  const [mapSort, setMapSort] = useState<MapSort>("trending");
-  const [mapSearchInput, setMapSearchInput] = useState("");
-  const [debouncedMapSearch, setDebouncedMapSearch] = useState("");
-  const [commentBody, setCommentBody] = useState("");
-  const [replyBody, setReplyBody] = useState("");
-  const [replyToCommentId, setReplyToCommentId] = useState("");
-  const [commentComposerFocused, setCommentComposerFocused] = useState(false);
-  const [expandedCommentIds, setExpandedCommentIds] = useState<Record<string, boolean>>({});
-  const [likedCommentIds, setLikedCommentIds] = useState<Record<string, boolean>>({});
-  const [openCommentMenuId, setOpenCommentMenuId] = useState("");
-  const [mapFile, setMapFile] = useState<File | null>(null);
-  const [mapUploadError, setMapUploadError] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [dismissedMaintenanceAlertKey, setDismissedMaintenanceAlertKey] = useState("");
+  const [highQualityBackgroundReady, setHighQualityBackgroundReady] = useState(false);
   const currentNavRoute: LobbyContentRoute = contentRoute === "map-details" || contentRoute === "map-upload" ? "maps" : contentRoute;
   const [visualNavRoute, setVisualNavRoute] = useState<LobbyContentRoute>(() => {
     if (typeof window === "undefined") return currentNavRoute;
     const stored = window.sessionStorage.getItem(lobbyRouteStorageKey) || "";
     return isLobbyNavRoute(stored) ? stored : currentNavRoute;
   });
-  const runtimeConfig = getRuntimeConfig();
-  const queryClient = useQueryClient();
   const canInteractWithMaps = !!accessToken && !isGuest;
   const canUploadCustomMaps = canInteractWithMaps;
-  const selectedMapId = contentRoute === "map-details" ? mapId : "";
-  const mapsQuery = useMapList(runtimeConfig, accessToken, userId, mapScope, mapSort, debouncedMapSearch);
-  const selectedMapQuery = useMapDetails(runtimeConfig, accessToken, selectedMapId);
-  const favoriteMapMutation = useFavoriteMap(runtimeConfig, accessToken);
-  const mapComments = useMapComments(runtimeConfig, accessToken, selectedMapId);
-  const mapManagement = useMapManagement(runtimeConfig, accessToken, setMapUploadError);
-  const createMapMutation = useMutation({
-    mutationFn: async () => {
-      if (!accessToken) throw new Error("Sign in to upload maps");
-      if (isGuest) throw new Error("Upgrade your guest profile to upload custom maps");
-      if (!mapFile) throw new Error("Choose a JSON map file");
-      await validateMapFile(mapFile);
-      return createMap(runtimeConfig, accessToken, { file: mapFile, displayName: mapName, description: mapDescription, difficulty: mapDifficulty, thumbnailKey: mapThumbnailKey });
-    },
-    onSuccess: () => {
-      setMapName(""); setMapDescription(""); setMapFile(null); setMapUploadError(""); setMapDifficulty("normal"); setMapThumbnailKey("generic/variant-1"); setMapThumbnailCategory("generic"); setMapThumbnailSearch("");
-      setMapScope("mine");
-      void queryClient.invalidateQueries({ queryKey: ["maps"] });
-      void Router.push({ pathname: "/maps", query: { scope: "mine" } });
-    },
-    onError: (error) => setMapUploadError(error instanceof Error ? error.message : "Map upload failed"),
-  });
-  const archiveMapMutation = mapManagement.archiveMap;
-  const revisionMutation = mapManagement.uploadRevision;
-  const publishMapMutation = mapManagement.publishMap;
-  const createCommentMutation = mapComments.createComment;
-  const deleteCommentMutation = mapComments.deleteComment;
-  const postMapComment = () => {
-    if (!canInteractWithMaps) return;
-    createCommentMutation.mutate(
-      { body: commentBody },
-      { onSuccess: () => {
-        setCommentBody("");
-        setCommentComposerFocused(false);
-      } },
-    );
-  };
-  const postMapReply = (parentId: string) => {
-    if (!canInteractWithMaps) return;
-    createCommentMutation.mutate(
-      { body: replyBody, parentId },
-      { onSuccess: () => {
-        setReplyBody("");
-        setReplyToCommentId("");
-        setExpandedCommentIds((current) => ({ ...current, [parentId]: true }));
-      } },
-    );
-  };
-  const deleteMap = (map: CustomMap) => {
-    if (!window.confirm(`Delete ${map.displayName}?`)) return;
-    archiveMapMutation.mutate(map.id, {
-      onSuccess: () => {
-        setMapScope("mine");
-        void Router.push({ pathname: "/maps", query: { scope: "mine" } });
-      },
-    });
-  };
-
-  useEffect(() => {
-    if (contentRoute !== "maps" || typeof window === "undefined") return;
-    const value = new URLSearchParams(window.location.search).get("scope");
-    if (isMapScope(value)) setMapScope(value);
-  }, [contentRoute]);
-  useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedMapSearch(mapSearchInput.trim()), 500);
-    return () => window.clearTimeout(handle);
-  }, [mapSearchInput]);
-  const toggleCommentLike = (commentId: string) => {
-    if (!canInteractWithMaps) return;
-    setLikedCommentIds((current) => ({ ...current, [commentId]: !current[commentId] }));
-  };
-  const toggleCommentReplies = (commentId: string) => {
-    setExpandedCommentIds((current) => ({ ...current, [commentId]: !current[commentId] }));
-  };
 
   useEffect(() => {
     if (contentRoute === "top") {
       onBrowseLeaderboard();
     }
   }, [contentRoute, onBrowseLeaderboard]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadBackground = () => {
+      const image = new Image();
+      image.onload = async () => {
+        try {
+          await image.decode();
+        } catch {
+          // Some browsers resolve onload before decode support is available.
+        }
+        if (!cancelled) {
+          setHighQualityBackgroundReady(true);
+        }
+      };
+      image.src = lobbyBackgroundImage;
+    };
+    const timer = window.setTimeout(loadBackground, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -360,17 +275,6 @@ export default function LobbyScreen({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentNavRoute]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      NAV_ITEMS.forEach((item) => {
-        if (item.href !== window.location.pathname && Router.router) {
-          void Router.router.prefetch(item.href);
-        }
-      });
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     if (!maintenance && status !== "queueing") {
@@ -408,6 +312,9 @@ export default function LobbyScreen({
   const queuePaused = !!maintenance?.queuePaused;
   const playPaused = !!maintenance?.playPaused;
   const maintenanceMessage = maintenance?.message?.trim() || "";
+  const maintenanceAlertKey = maintenance
+    ? [maintenance.phase, maintenance.startsAt, maintenance.endsAt, maintenance.message].join("|")
+    : "";
   const warningCountdown =
     maintenanceIsWarning && maintenanceStartMs && maintenanceStartMs > nowMs
       ? formatRelativeDuration(maintenanceStartMs - nowMs)
@@ -484,131 +391,29 @@ export default function LobbyScreen({
   const lobbyConfig = partyPanelState.config;
   const saveLobbyConfig = partyPanelState.saveConfig;
 
-  const availableMaps = mapsQuery.data || [];
-  const readyMaps = availableMaps.filter((item) => item.status === "ready");
-  const hasMapSearch = debouncedMapSearch.length > 0;
-  const selectedMapDetails = selectedMapQuery.data;
-  const mapScopeLabels: Array<{ scope: MapScope; label: string }> = [
-    { scope: "official", label: "Official" },
-    { scope: "community", label: "Community" },
-    { scope: "favorites", label: "Favorites" },
-    { scope: "mine", label: "My Maps" },
-  ];
-  const thumbnailURL = (item: Pick<CustomMap, "thumbnailVariant" | "thumbnailKey">) => mapThumbnailURL(item.thumbnailKey, item.thumbnailVariant);
   const mapPickerFlow = privateLobbyActive && privateLobby.isOwner && privateLobby.snapshot?.state === "open";
-  const selectMapForParty = (item: CustomMap) => {
-    if (privateLobbyActive && privateLobby.isOwner) {
-      saveLobbyConfig({ mapId: item.id, mapName: item.displayName });
-      setMapPickerOpen(false);
-      return;
-    }
-    void createInviteLobby("duel", { mapId: item.id, mapName: item.displayName, ruleset: "moving", roundTimerMode: "none", pressureTimeLimitMs: 15000 });
-  };
-  const playMapSingleplayer = (item: CustomMap) => {
-    void startSingleplayer({
-      mapId: item.id,
-      mapName: item.displayName,
-      ruleset: "moving",
-      roundTimerMode: "none",
-      pressureTimeLimitMs: 15000,
-    });
-  };
-  const mapUploadForm = (
-    <MapUploadForm
-      isGuest={isGuest}
-      mapName={mapName}
-      setMapName={setMapName}
-      mapDescription={mapDescription}
-      setMapDescription={setMapDescription}
-      mapDifficulty={mapDifficulty}
-      setMapDifficulty={setMapDifficulty}
-      mapThumbnailKey={mapThumbnailKey}
-      setMapThumbnailKey={setMapThumbnailKey}
-      mapThumbnailCategory={mapThumbnailCategory}
-      setMapThumbnailCategory={setMapThumbnailCategory}
-      mapThumbnailSearch={mapThumbnailSearch}
-      setMapThumbnailSearch={setMapThumbnailSearch}
-      mapFile={mapFile}
-      setMapFile={setMapFile}
-      mapUploadError={mapUploadError}
-      setMapUploadError={setMapUploadError}
-      uploadPending={createMapMutation.isPending}
-      onUpload={() => createMapMutation.mutate()}
-    />
-  );
-  const mapsPanel = (
-    <motion.div key="maps" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <MapsPanel
-        canUploadCustomMaps={canUploadCustomMaps}
-        hasMapSearch={hasMapSearch}
-        mapScope={mapScope}
-        mapScopeLabels={mapScopeLabels}
-        mapSearchInput={mapSearchInput}
-        mapSort={mapSort}
-        mapsLoading={mapsQuery.isLoading}
-        privateLobbyActive={privateLobbyActive}
-        readyMaps={readyMaps}
-        setMapScope={setMapScope}
-        setMapSearchInput={setMapSearchInput}
-        setMapSort={setMapSort}
-        selectMapForParty={selectMapForParty}
-        thumbnailURL={thumbnailURL}
-      />
-    </motion.div>
-  );
-
-  const mapUploadPanel = (
-    <motion.div key="map-upload" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <MapUploadPanel canUploadCustomMaps={canUploadCustomMaps} mapUploadForm={mapUploadForm} />
-    </motion.div>
-  );
-
-  const mapDetailsPanel = (
-    <motion.div key="map-details" {...tabPanelMotion} className="w-full max-w-[1120px] pointer-events-auto">
-      <MapDetailsPanel
+  const mapRouteSurface =
+    contentRoute === "maps" || contentRoute === "map-details" || contentRoute === "map-upload" ? (
+      <MapRouteSurface
         accessToken={accessToken}
-        canInteractWithMaps={canInteractWithMaps}
         canUploadCustomMaps={canUploadCustomMaps}
-        commentBody={commentBody}
-        commentComposerFocused={commentComposerFocused}
-        createCommentPending={createCommentMutation.isPending}
+        contentRoute={contentRoute}
+        createInviteLobby={createInviteLobby}
         displayName={displayName}
-        expandedCommentIds={expandedCommentIds}
-        favoriteMap={(input) => favoriteMapMutation.mutate(input)}
         isAdmin={isAdmin}
         isModerator={isModerator}
-        likedCommentIds={likedCommentIds}
-        mapPickerFlow={mapPickerFlow}
-        onCancelComment={() => { setCommentBody(""); setCommentComposerFocused(false); }}
-        onDeleteComment={(commentId) => deleteCommentMutation.mutate({ commentId })}
-        onDeleteMap={deleteMap}
-        onPostComment={postMapComment}
-        onPostReply={postMapReply}
-        onPublishMap={(mapId) => publishMapMutation.mutate(mapId)}
-        onRevisionFile={(mapId, file) => revisionMutation.mutate({ mapId, file })}
-        onSetCommentBody={setCommentBody}
-        onSetCommentComposerFocused={setCommentComposerFocused}
-        onSetOpenCommentMenuId={setOpenCommentMenuId}
-        onSetReplyBody={setReplyBody}
-        onSetReplyToCommentId={setReplyToCommentId}
-        onToggleCommentLike={toggleCommentLike}
-        onToggleCommentReplies={toggleCommentReplies}
-        openCommentMenuId={openCommentMenuId}
-        playMapSingleplayer={playMapSingleplayer}
-        replyBody={replyBody}
-        replyToCommentId={replyToCommentId}
-        selectMapForParty={selectMapForParty}
-        selectedMapDetails={selectedMapDetails}
-        selectedMapLoading={selectedMapQuery.isLoading}
+        mapId={mapId}
+        mapPickerFlow={!!mapPickerFlow}
+        privateLobbyActive={privateLobbyActive}
+        saveLobbyConfig={saveLobbyConfig}
         singleplayerDisabled={singleplayerDisabled}
-        thumbnailURL={thumbnailURL}
+        startSingleplayer={startSingleplayer}
         userAvatar={userAvatar}
         userAvatarFallback={userAvatarFallback}
         userEmail={userEmail}
         userId={userId}
       />
-    </motion.div>
-  );
+    ) : null;
 
   const privateLobbyPanel = privateLobbyActive ? (
     <PartyPanel
@@ -618,9 +423,7 @@ export default function LobbyScreen({
       joinInviteLobby={joinInviteLobby}
       kickLobbyMember={kickLobbyMember}
       leavePrivateLobby={leavePrivateLobby}
-      mapsLoading={mapsQuery.isLoading}
       privateLobby={privateLobby}
-      readyMaps={readyMaps}
       setMapPickerOpen={setMapPickerOpen}
       startPrivateLobby={startPrivateLobby}
       state={partyPanelState}
@@ -630,12 +433,25 @@ export default function LobbyScreen({
     />
   ) : null;
 
-  const maintenanceBanner = maintenanceIsWarning ? (
-    <MaintenanceBanner message={maintenanceMessage} countdown={warningCountdown} />
+  const maintenanceAlertDismissed = isAdmin && dismissedMaintenanceAlertKey === maintenanceAlertKey;
+  const dismissMaintenanceAlert = isAdmin
+    ? () => setDismissedMaintenanceAlertKey(maintenanceAlertKey)
+    : undefined;
+  const showMaintenanceBanner = maintenanceIsWarning && !maintenanceAlertDismissed;
+  const maintenanceBanner = showMaintenanceBanner ? (
+    <MaintenanceBanner
+      message={maintenanceMessage}
+      countdown={warningCountdown}
+      onDismiss={dismissMaintenanceAlert}
+    />
   ) : null;
 
-  const maintenanceOverlay = maintenanceIsActive ? (
-    <MaintenanceOverlay message={maintenanceMessage} eta={activeEta} />
+  const maintenanceOverlay = maintenanceIsActive && !maintenanceAlertDismissed ? (
+    <MaintenanceOverlay
+      message={maintenanceMessage}
+      eta={activeEta}
+      onDismiss={dismissMaintenanceAlert}
+    />
   ) : null;
 
   const legalCard = <LegalFooter appVersion={appVersion} />;
@@ -720,22 +536,13 @@ export default function LobbyScreen({
 
   const privateLobbyErrorNotice = <PrivateLobbyErrorNotice message={privateLobby.error} />;
   const mapPickerModal = mapPickerOpen ? (
-    <MapPickerModal
+    <MapPickerController
+      accessToken={accessToken}
       canUploadCustomMaps={canUploadCustomMaps}
-      hasMapSearch={hasMapSearch}
       lobbyConfig={lobbyConfig}
-      mapScope={mapScope}
-      mapScopeLabels={mapScopeLabels}
-      mapSearchInput={mapSearchInput}
-      mapSort={mapSort}
-      mapsLoading={mapsQuery.isLoading}
       onClose={() => setMapPickerOpen(false)}
-      readyMaps={readyMaps}
-      selectMapForParty={selectMapForParty}
-      setMapScope={setMapScope}
-      setMapSearchInput={setMapSearchInput}
-      setMapSort={setMapSort}
-      thumbnailURL={thumbnailURL}
+      saveLobbyConfig={saveLobbyConfig}
+      userId={userId}
     />
   ) : null;
   const showPartyPanel = privateLobbyActive && contentRoute !== "maps" && contentRoute !== "map-details" && contentRoute !== "map-upload";
@@ -748,8 +555,20 @@ export default function LobbyScreen({
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9)), url('/bg2.v1.jpg')",
+            backgroundImage: `${lobbyBackgroundOverlay}, url('${lobbyBackgroundPlaceholder}')`,
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover",
+            filter: "blur(14px)",
+            transform: "scale(1.06)",
+          }}
+        />
+        <div
+          className={`absolute inset-0 transition-opacity duration-700 ease-out ${
+            highQualityBackgroundReady ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            backgroundImage: `${lobbyBackgroundOverlay}, url('${lobbyBackgroundImage}')`,
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
             backgroundSize: "cover",
@@ -831,9 +650,7 @@ export default function LobbyScreen({
             </motion.div>
           )}
 
-          {!showPartyPanel && contentRoute === "maps" && mapsPanel}
-          {!showPartyPanel && contentRoute === "map-details" && mapDetailsPanel}
-          {!showPartyPanel && contentRoute === "map-upload" && mapUploadPanel}
+          {!showPartyPanel && mapRouteSurface}
 
           {!showPartyPanel && contentRoute === "friends" && (
             <motion.div

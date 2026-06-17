@@ -202,34 +202,47 @@ function BadgeTab(props: {
   setInspectedBadgeId: (badgeId: string) => void;
   onSelectBadge: (badgeId: string) => Promise<void>;
 }) {
+  const regularBadges = props.badges.filter((badge) => badge.kind !== "season_rank");
+  const finishBadges = props.badges.filter((badge) => badge.kind === "season_rank");
+  const renderBadge = (badge: PlayerBadgeInfo) => {
+    const owned = !!badge.owned;
+    const selected = props.selectedBadge?.id === badge.id;
+    const focused = props.focusedBadge?.id === badge.id;
+    return (
+      <button
+        key={badge.id}
+        type="button"
+        onMouseEnter={() => props.setHoveredBadgeId(badge.id)}
+        onMouseLeave={() => props.setHoveredBadgeId("")}
+        onFocus={() => props.setHoveredBadgeId(badge.id)}
+        onBlur={() => props.setHoveredBadgeId("")}
+        onClick={() => {
+          props.setInspectedBadgeId(badge.id);
+          if (owned) void props.onSelectBadge(selected ? "" : badge.id);
+        }}
+        className={`relative flex aspect-square items-center justify-center rounded-2xl border transition ${focused ? "border-[#2ad18f]/70 bg-[#123f2d]/45" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"} ${selected ? "shadow-[0_0_24px_rgba(42,209,143,0.24)]" : ""}`}
+        aria-label={badge.label}
+      >
+        <PlayerBadge badge={badge} size="lg" muted={!owned} />
+        {selected ? <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-accentPrimary shadow-[0_0_10px_rgba(42,209,143,0.8)]" /> : null}
+        {!owned ? <span className="absolute inset-x-2 bottom-1.5 rounded-full bg-black/40 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-white/45">Locked</span> : null}
+      </button>
+    );
+  };
   return (
     <div className="mt-4">
-      <div className="grid grid-cols-4 gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-6">
-        {props.badges.map((badge) => {
-          const owned = !!badge.owned;
-          const selected = props.selectedBadge?.id === badge.id;
-          const focused = props.focusedBadge?.id === badge.id;
-          return (
-            <button
-              key={badge.id}
-              type="button"
-              onMouseEnter={() => props.setHoveredBadgeId(badge.id)}
-              onMouseLeave={() => props.setHoveredBadgeId("")}
-              onFocus={() => props.setHoveredBadgeId(badge.id)}
-              onBlur={() => props.setHoveredBadgeId("")}
-              onClick={() => {
-                props.setInspectedBadgeId(badge.id);
-                if (owned) void props.onSelectBadge(selected ? "" : badge.id);
-              }}
-              className={`relative flex aspect-square items-center justify-center rounded-2xl border transition ${focused ? "border-[#2ad18f]/70 bg-[#123f2d]/45" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"} ${selected ? "shadow-[0_0_24px_rgba(42,209,143,0.24)]" : ""}`}
-              aria-label={badge.label}
-            >
-              <PlayerBadge badge={badge} size="lg" muted={!owned} />
-              {selected ? <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-accentPrimary shadow-[0_0_10px_rgba(42,209,143,0.8)]" /> : null}
-              {!owned ? <span className="absolute inset-x-2 bottom-1.5 rounded-full bg-black/40 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-white/45">Locked</span> : null}
-            </button>
-          );
-        })}
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+          {regularBadges.map(renderBadge)}
+        </div>
+        {finishBadges.length ? (
+          <div className="mt-5 border-t border-white/10 pt-4">
+            <p className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#8ff0c2]">Season Finishes</p>
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+              {finishBadges.map(renderBadge)}
+            </div>
+          </div>
+        ) : null}
       </div>
       {props.focusedBadge ? (
         <div className="mt-3 h-[112px] rounded-2xl border border-white/10 bg-black/25 p-4">

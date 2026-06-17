@@ -102,8 +102,14 @@ type ContentRepository interface {
 
 type SeasonRepository interface {
 	GetRankedSeasonSettings() (RankedSeasonSettings, error)
-	RolloverRankedSeason(nextSeasonID string) (RankedSeasonRolloverResult, error)
+	SetRankedSeasonResetRule(monthlyResetDay int) (RankedSeasonSettings, error)
+	RunDueRankedSeasonReset(now time.Time) (RankedSeasonResetResult, bool, error)
 	ActivateMapRevision(mapKey, displayName string, dataset []byte) (MapRevisionSummary, error)
+}
+
+type GameplayMapRepository interface {
+	GetGameplayMapSettings() (contracts.GameplayMapSettings, error)
+	ResolveGameplayMapID(mode contracts.MatchMode, ruleset contracts.GameRuleset, requestedMapID string) (string, error)
 }
 
 type NotificationRepository interface {
@@ -161,6 +167,7 @@ type Store interface {
 	AdminRepository
 	ContentRepository
 	SeasonRepository
+	GameplayMapRepository
 	NotificationRepository
 	RuntimeRepository
 	ChatRepository

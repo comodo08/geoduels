@@ -72,6 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   resetStoredQueueRulesets();
+  vi.unstubAllGlobals();
 });
 
 describe('LobbyScreen', () => {
@@ -85,6 +86,17 @@ describe('LobbyScreen', () => {
     renderLobbyScreen({ contentRoute: 'top', onBrowseLeaderboard });
 
     expect(onBrowseLeaderboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request maps while rendering the play route', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderLobbyScreen({ contentRoute: 'play' });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    const requestedURLs = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(requestedURLs.some((url) => url.includes('/v1/maps'))).toBe(false);
   });
 
   it('shows the maintenance warning banner and pauses duel queueing', () => {

@@ -700,30 +700,30 @@ func (a *api) adminGetRankedSeason(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(settings)
 }
 
-func (a *api) adminRolloverRankedSeason(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPutRankedSeasonResetRule(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.adminIdentity(r); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	var req struct {
-		NextSeasonID string `json:"nextSeasonId"`
+		MonthlyResetDay int `json:"monthlyResetDay"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	result, err := a.store.RolloverRankedSeason(req.NextSeasonID)
+	settings, err := a.store.SetRankedSeasonResetRule(req.MonthlyResetDay)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
-		if strings.Contains(msg, "season") {
+		if strings.Contains(msg, "reset day") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		http.Error(w, "season rollover failed", http.StatusInternalServerError)
+		http.Error(w, "season settings update failed", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	_ = json.NewEncoder(w).Encode(settings)
 }
 
 func normalizeDiscordWebhookURL(raw string) (string, error) {

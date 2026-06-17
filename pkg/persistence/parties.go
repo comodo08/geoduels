@@ -692,6 +692,9 @@ func (s *pgStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 		if err := rows.Scan(&userID, &code, &seasonID, &rank); err != nil {
 			return nil, err
 		}
+		if code == badgeCodeSeasonRank {
+			continue
+		}
 		badge, ok := badgeFromParts(code, seasonID, rank, true)
 		if !ok {
 			continue
@@ -707,6 +710,22 @@ func (s *pgStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	seasonBadges, err := s.earnedSeasonRankBadges(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	for userID, badges := range seasonBadges {
+		for _, badge := range badges {
+			if fallback[userID] == nil {
+				b := badge
+				fallback[userID] = &b
+			}
+			if out[userID] == nil && badge.ID == selected[userID] {
+				b := badge
+				out[userID] = &b
+			}
+		}
 	}
 	for userID, badge := range fallback {
 		if out[userID] == nil {

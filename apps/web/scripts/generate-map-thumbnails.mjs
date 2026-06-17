@@ -6,8 +6,10 @@ import sharp from "sharp";
 
 const root = process.cwd();
 const configPath = path.join(root, "config/map-thumbnails.json");
+const genericSourceDir = path.join(root, "assets/source-map-thumbnails/generic");
 const sourceDir = path.join(root, "assets/source-map-thumbnails/countries");
 const publicRoot = path.join(root, "public/map-thumbnails");
+const genericOutDir = path.join(publicRoot, "generic");
 const countriesOutDir = path.join(publicRoot, "countries");
 const catalogPath = path.join(root, "features/maps/lib/map-thumbnails.ts");
 const sourceExtensions = [".jpg", ".jpeg", ".png", ".webp", ".avif", ".tif", ".tiff"];
@@ -39,10 +41,10 @@ async function exists(file) {
   }
 }
 
-async function findSource(code) {
+async function findSource(dir, names) {
   for (const ext of sourceExtensions) {
-    for (const name of [code, code.toLowerCase()]) {
-      const file = path.join(sourceDir, `${name}${ext}`);
+    for (const name of names) {
+      const file = path.join(dir, `${name}${ext}`);
       if (await exists(file)) return file;
     }
   }
@@ -59,17 +61,37 @@ function optionLine(option) {
 
 async function main() {
   const config = JSON.parse(await fs.readFile(configPath, "utf8"));
+  await fs.mkdir(genericOutDir, { recursive: true });
   await fs.mkdir(countriesOutDir, { recursive: true });
 
-  const generic = Array.from({ length: config.genericCount || 5 }, (_, index) => {
+  const generic = [];
+  const missingGeneric = [];
+
+  for (let index = 0; index < (config.genericCount || 5); index += 1) {
     const variant = index + 1;
-    return {
+    const source = await findSource(genericSourceDir, [`variant-${variant}`]);
+    const output = path.join(genericOutDir, `variant-${variant}.webp`);
+    const hasExistingOutput = await exists(output);
+
+    if (source && !checkOnly) {
+      await sharp(source)
+        .resize(1280, 720, { fit: "cover", position: "center" })
+        .webp({ quality: 82 })
+        .toFile(output);
+    }
+
+    const hasOutput = source || hasExistingOutput || (await exists(output));
+    if (!hasOutput) {
+      missingGeneric.push(`variant-${variant}`);
+    }
+
+    generic.push({
       key: `generic/variant-${variant}`,
       label: `Generic ${variant}`,
       category: "generic",
       search: `generic default stock variant ${variant}`,
-    };
-  });
+    });
+  }
 
   const continents = (config.continents || []).map((item) => ({
     key: `continents/${item.slug}`,
@@ -87,7 +109,7 @@ async function main() {
     if (!code) continue;
     const label = countryName(code);
     const slug = slugify(label);
-    const source = await findSource(code);
+    const source = await findSource(sourceDir, [code, code.toLowerCase()]);
     const output = path.join(countriesOutDir, `${slug}.webp`);
     const hasExistingOutput = await exists(output);
 
@@ -145,9 +167,15 @@ export function validMapThumbnailKey(key: string) {
     console.warn(`Optional country thumbnails missing (${missingOptional.length}):`);
     for (const item of missingOptional) console.warn(`- ${item}`);
   }
+  if (missingGeneric.length > 0) {
+    console.error(`Generic thumbnails missing (${missingGeneric.length}):`);
+    for (const item of missingGeneric) console.error(`- ${item}`);
+  }
   if (missingRequired.length > 0) {
     console.error(`Required country thumbnails missing (${missingRequired.length}):`);
     for (const item of missingRequired) console.error(`- ${item}`);
+  }
+  if (missingGeneric.length > 0 || missingRequired.length > 0) {
     process.exitCode = 1;
     return;
   }

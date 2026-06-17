@@ -53,7 +53,7 @@ describe('runtime-config', () => {
       NEXT_PUBLIC_APP_VERSION: 'REPLACE_WITH_SHA'
     });
 
-    expect(config.apiURL).toBe('http://localhost:8080');
+    expect(config.apiURL).toBe('');
     expect(config.appVersion).toBe('dev');
   });
 
