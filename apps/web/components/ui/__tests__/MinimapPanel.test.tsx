@@ -54,7 +54,7 @@ describe('MinimapPanel', () => {
     fireEvent.mouseEnter(panel);
 
     expect(screen.getByRole('button', { name: 'Resize minimap' })).toBeInTheDocument();
-    expect(panel.firstElementChild).toHaveClass('-inset-3');
+    expect(panel.firstElementChild).toHaveClass('-inset-24');
   });
 
   it('does not show the resize handle on mobile', () => {
