@@ -28,8 +28,12 @@ Run the Next.js app separately:
 ```bash
 cd apps/web
 npm ci
+cp .env.local.example .env.local
 npm run dev
 ```
+
+The browser connects directly to the local backend services. Next.js does not
+proxy API, coordinator, or realtime traffic in development.
 
 ## Endpoints
 

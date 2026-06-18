@@ -250,7 +250,7 @@ export default function MinimapPanel({ children, onFinalize, canFinalizeGuess, g
           ...desktopExpandedStyle
         }}
       >
-        {isDesktop && expanded ? <div aria-hidden="true" className="absolute -inset-3 z-0" /> : null}
+        {isDesktop && expanded ? <div aria-hidden="true" className="absolute -inset-24 z-0" /> : null}
         <div
           onClick={handlePanelClick}
           onPointerDown={beginPointerGesture}

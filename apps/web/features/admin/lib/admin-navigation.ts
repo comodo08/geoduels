@@ -1,6 +1,7 @@
 import type { NextRouter } from "next/router";
 import {
   Archive,
+  Ban,
   Bell,
   Bug,
   ClipboardList,
@@ -52,6 +53,7 @@ export const adminNav = [
       { href: "/admin/operations/maintenance", label: "Maintenance", icon: Wrench },
       { href: "/admin/operations/seasons", label: "Seasons", icon: History },
       { href: "/admin/operations/notifications", label: "Notifications", icon: Bell },
+      { href: "/admin/operations/ip-signup-blocks", label: "IP Signup Blocks", icon: Ban },
       { href: "/admin/content/changelog", label: "Changelog", icon: FileText },
     ],
   },

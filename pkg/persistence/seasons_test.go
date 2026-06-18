@@ -48,3 +48,49 @@ func TestNextMonthlySeasonResetAt(t *testing.T) {
 		t.Fatalf("next reset after completed due = %s, want %s", got, wantNext)
 	}
 }
+
+func TestInitializeRankedSeasonResetScheduleBeforeMonthlyReset(t *testing.T) {
+	now := time.Date(2026, time.June, 1, 20, 59, 0, 0, time.FixedZone("test", 3*60*60))
+	settings := RankedSeasonSettings{MonthlyResetDay: 1}
+
+	if initialized := initializeRankedSeasonResetSchedule(&settings, now); !initialized {
+		t.Fatal("schedule was not initialized")
+	}
+	if settings.LastResetAt == nil || !settings.LastResetAt.Equal(now.UTC()) {
+		t.Fatalf("last reset = %v, want %s", settings.LastResetAt, now.UTC())
+	}
+
+	want := time.Date(2026, time.June, 1, 21, 0, 0, 0, time.UTC)
+	if got := nextMonthlySeasonResetAt(now.UTC(), settings.MonthlyResetDay, settings.LastResetAt); !got.Equal(want) {
+		t.Fatalf("next reset = %s, want %s", got, want)
+	}
+}
+
+func TestInitializeRankedSeasonResetScheduleAfterMonthlyReset(t *testing.T) {
+	now := time.Date(2026, time.June, 18, 14, 0, 0, 0, time.UTC)
+	settings := RankedSeasonSettings{MonthlyResetDay: 1}
+
+	if initialized := initializeRankedSeasonResetSchedule(&settings, now); !initialized {
+		t.Fatal("schedule was not initialized")
+	}
+	if settings.LastResetAt == nil || !settings.LastResetAt.Equal(now) {
+		t.Fatalf("last reset = %v, want %s", settings.LastResetAt, now)
+	}
+
+	want := time.Date(2026, time.July, 1, 21, 0, 0, 0, time.UTC)
+	if got := nextMonthlySeasonResetAt(now, settings.MonthlyResetDay, settings.LastResetAt); !got.Equal(want) {
+		t.Fatalf("next reset = %s, want %s", got, want)
+	}
+}
+
+func TestInitializeRankedSeasonResetSchedulePreservesExistingValue(t *testing.T) {
+	existing := time.Date(2026, time.June, 1, 21, 0, 0, 0, time.UTC)
+	settings := RankedSeasonSettings{MonthlyResetDay: 1, LastResetAt: &existing}
+
+	if initialized := initializeRankedSeasonResetSchedule(&settings, existing.AddDate(0, 0, 1)); initialized {
+		t.Fatal("existing schedule was unexpectedly initialized")
+	}
+	if settings.LastResetAt == nil || !settings.LastResetAt.Equal(existing) {
+		t.Fatalf("last reset = %v, want %s", settings.LastResetAt, existing)
+	}
+}

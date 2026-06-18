@@ -1,4 +1,5 @@
 import type { LeaderboardSummary } from "../../auth/controllers/session-controller";
+import { useSeasonResetCountdown } from "../lib/season-countdown";
 import { LobbyPanel, LobbySectionHeader } from "./lobby-primitives";
 
 export function LeaderboardPanel({
@@ -12,17 +13,19 @@ export function LeaderboardPanel({
   mmr: number;
   userId: string;
 }) {
+  const resetCountdown = useSeasonResetCountdown(leaderboard?.nextResetAt);
+
   return (
     <LobbyPanel radius="3xl" className="flex w-full max-w-[980px] flex-col gap-5 p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <LobbySectionHeader
-          eyebrow="Season Ladder"
+          eyebrow={resetCountdown}
           title="Leaderboard"
           description={
             leaderboardLoading
               ? "Loading ranked players..."
-              : leaderboard?.totalPlayers
-                ? `${leaderboard.totalPlayers} ranked players`
+              : leaderboard
+                ? `${formatSeasonName(leaderboard.season)}, ${leaderboard.totalPlayers} players`
                 : "No ranked players yet."
           }
         />
@@ -93,4 +96,9 @@ function LeaderboardMetric({ label, value }: { label: string; value: string }) {
 
 function LeaderboardEmpty({ children }: { children: string }) {
   return <div className="px-4 py-10 text-center text-[14px] text-[#a9bfd4]">{children}</div>;
+}
+
+export function formatSeasonName(season: string) {
+  const number = season.trim().replace(/^s/i, "");
+  return number ? `Season ${number}` : "Season";
 }

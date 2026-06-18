@@ -112,9 +112,6 @@ func NormalizeMatchConfig(cfg MatchConfig) MatchConfig {
 	if cfg.MapID == "" {
 		cfg.MapID = cfg.MapKey
 	}
-	if cfg.MapID == "" {
-		cfg.MapID = MapKeyMoving
-	}
 	cfg.MapKey = ""
 	switch cfg.RoundTimerMode {
 	case "":

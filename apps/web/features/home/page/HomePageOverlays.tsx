@@ -119,25 +119,8 @@ export default function HomePageOverlays({
           onLeaveGame={actions.leaveGame}
           mode={overlays.endMatch.mode}
           outcome={overlays.endMatch.outcome}
-          selfName={overlays.endMatch.selfName}
-          opponentName={overlays.endMatch.opponentName}
-          opponentUserId={overlays.endMatch.opponentUserId}
-          selfElo={overlays.endMatch.selfElo}
-          opponentElo={overlays.endMatch.opponentElo}
-          selfEloDelta={overlays.endMatch.selfEloDelta}
-          opponentEloDelta={overlays.endMatch.opponentEloDelta}
-          selfHP={overlays.endMatch.selfHP}
-          oppHP={overlays.endMatch.oppHP}
-          selfAvatarUrl={overlays.endMatch.selfAvatarUrl}
-          oppAvatarUrl={overlays.endMatch.oppAvatarUrl}
-          selfFallback={overlays.endMatch.selfFallback}
-          oppFallback={overlays.endMatch.oppFallback}
-          selfAvatarColor={overlays.endMatch.selfAvatarColor}
-          oppAvatarColor={overlays.endMatch.oppAvatarColor}
-          selfIsAdmin={overlays.endMatch.selfIsAdmin}
-          opponentIsAdmin={overlays.endMatch.opponentIsAdmin}
-          selfSelectedBadge={overlays.endMatch.selfSelectedBadge}
-          opponentSelectedBadge={overlays.endMatch.opponentSelectedBadge}
+          sides={overlays.endMatch.sides}
+          selfUserId={overlays.endMatch.selfUserId}
           totalScore={overlays.endMatch.totalScore}
           roundResults={overlays.endMatch.roundResults}
           resultPlayerNames={overlays.endMatch.resultPlayerNames}
@@ -145,8 +128,6 @@ export default function HomePageOverlays({
           resultPlayerFallbacks={overlays.endMatch.resultPlayerFallbacks}
           resultPlayerBorderColors={overlays.endMatch.resultPlayerBorderColors}
           participantsById={overlays.endMatch.participantsById}
-          selfParticipant={overlays.endMatch.selfParticipant}
-          opponentParticipant={overlays.endMatch.opponentParticipant}
           onReportPlayer={actions.reportPlayer}
           onPlayAgain={
             overlays.endMatch.mode === "singleplayer"

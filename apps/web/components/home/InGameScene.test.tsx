@@ -12,13 +12,32 @@ function createProps(overrides: Partial<InGameSceneProps> = {}): InGameSceneProp
     isSingleplayer: false,
     isPointsMode: false,
     resultOverlay: undefined,
-    selfName: 'Self',
-    selfFallback: 'S',
-    selfIsAdmin: false,
-    opponentName: 'Opponent',
-    opponentIsAdmin: false,
-    opponentDisconnected: false,
-    oppFallback: 'O',
+    sides: {
+      self: {
+        id: 'self',
+        participant: {
+          kind: 'player',
+          id: 'self',
+          name: 'Self',
+          avatarFallback: 'S',
+          rating: 1200,
+        },
+        hp: 5000,
+        connection: 'connected',
+      },
+      opponent: {
+        id: 'opp',
+        participant: {
+          kind: 'player',
+          id: 'opp',
+          name: 'Opponent',
+          avatarFallback: 'O',
+          rating: 1200,
+        },
+        hp: 5000,
+        connection: 'connected',
+      },
+    },
     hpPct: (hp) => `${hp}%`,
     mm: '01',
     ss: '00',
@@ -40,8 +59,6 @@ function createProps(overrides: Partial<InGameSceneProps> = {}): InGameSceneProp
     onFinalizeGuess: vi.fn(),
     guessMapNode: null,
     selfUserId: 'self',
-    selfElo: 1200,
-    opponentElo: 1200,
     damageMultiplier: 1,
     guessSubmitted: false,
     opponentGuessAlert: false,
@@ -107,5 +124,67 @@ describe('InGameScene', () => {
 
     expect(document.activeElement).not.toBe(streetViewFrame);
     expect(document.activeElement?.tagName).toBe('SECTION');
+  });
+
+  it('renders team identity without promoting member avatars, badges, or ratings', () => {
+    const memberBadge = {
+      id: 'badge-1',
+      kind: 'rank',
+      label: 'Member Badge',
+      description: 'Player-only badge',
+      imageUrl: '/badge.png',
+    };
+    render(
+      <InGameScene
+        {...createProps({
+          partyMode: 'team_duel',
+          sides: {
+            self: {
+              id: 'a',
+              participant: {
+                kind: 'team',
+                id: 'a',
+                name: 'Team Red',
+                avatarFallback: 'R',
+                avatarColor: '#dc2626',
+                members: [
+                  {
+                    kind: 'player',
+                    id: 'self',
+                    name: 'Red Member',
+                    avatarFallback: 'M',
+                    rating: 2100,
+                    selectedBadge: memberBadge,
+                  },
+                ],
+              },
+              hp: 6000,
+              connection: 'connected',
+            },
+            opponent: {
+              id: 'b',
+              participant: {
+                kind: 'team',
+                id: 'b',
+                name: 'Team Blue',
+                avatarFallback: 'B',
+                avatarColor: '#2563eb',
+                members: [],
+              },
+              hp: 3200,
+              connection: 'connected',
+            },
+          },
+          selfHP: 6000,
+          oppHP: 3200,
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Team Red')).toBeInTheDocument();
+    expect(screen.getByText('Team Blue')).toBeInTheDocument();
+    expect(screen.queryByText('Red Member')).not.toBeInTheDocument();
+    expect(screen.queryByText('(2100)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Member Badge/)).not.toBeInTheDocument();
   });
 });

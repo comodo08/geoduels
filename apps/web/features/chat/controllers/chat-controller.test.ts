@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRuntimeConfigFixture } from "../../../test/runtime-config.fixture";
+import { CHAT_MUTED_STORAGE_KEY } from "../lib/chat-preferences";
 import { ChatController } from "./chat-controller";
 
 class MockWebSocket {
@@ -34,6 +35,17 @@ describe("ChatController", () => {
 
   beforeEach(() => {
     MockWebSocket.instances = [];
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    window.localStorage.clear();
     global.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     window.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
@@ -41,6 +53,7 @@ describe("ChatController", () => {
   afterEach(() => {
     global.WebSocket = originalWebSocket;
     window.WebSocket = originalWebSocket;
+    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -90,5 +103,30 @@ describe("ChatController", () => {
     expect(controller.getState().messages.map((message) => message.id)).toEqual([
       "chat-1",
     ]);
+  });
+
+  it("does not play incoming chat sounds while chat is muted", () => {
+    window.localStorage.setItem(CHAT_MUTED_STORAGE_KEY, "true");
+    const play = vi.fn();
+    const controller = new ChatController({
+      config: runtimeConfig,
+      sfxController: { play } as never,
+    });
+    controller.setConversation("party:lobby-1", "token-1");
+
+    MockWebSocket.instances[0]?.emitMessage({
+      type: "chat.message",
+      payload: {
+        id: "chat-muted",
+        conversationId: "party:lobby-1",
+        senderUserId: "u2",
+        senderDisplayName: "Two",
+        kind: "text",
+        body: "quiet",
+        createdAt: "2026-06-18T00:00:00Z",
+      },
+    });
+
+    expect(play).not.toHaveBeenCalled();
   });
 });

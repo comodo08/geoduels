@@ -10,13 +10,15 @@ import type {
 import type {
   ChatEmote,
   ChatMessage,
-  RatingDeltaPreview,
   RoundResult,
   RoundResultOverlayProps,
   UIPhase,
 } from "../../../components/ui/types";
 import type { PlayerBadgeInfo } from "../../../components/ui/PlayerBadge";
-import type { ParticipantIdentityView } from "../../../components/ui/PlayerIdentity";
+import type {
+  MatchSidesView,
+  PlayerIdentityView,
+} from "../../../components/ui/ParticipantIdentity";
 
 export type HomeAuthView = {
   userId: string;
@@ -91,22 +93,8 @@ export type HomeGameView = {
   resultPlayerFallbacks: Record<string, string | undefined>;
   resultPlayerBorderColors: Record<string, string | undefined>;
   resultPlayerNames: Record<string, string | undefined>;
-  participantsById: Record<string, ParticipantIdentityView>;
-  selfParticipant: ParticipantIdentityView;
-  opponentParticipant: ParticipantIdentityView;
-  selfName: string;
-  selfAvatarUrl?: string;
-  selfFallback: string;
-  selfAvatarColor?: string;
-  selfIsAdmin: boolean;
-  selfSelectedBadge?: PlayerBadgeInfo | null;
-  opponentName: string;
-  opponentIsAdmin: boolean;
-  opponentSelectedBadge?: PlayerBadgeInfo | null;
-  opponentDisconnected: boolean;
-  oppAvatarUrl?: string;
-  oppFallback: string;
-  oppAvatarColor?: string;
+  participantsById: Record<string, PlayerIdentityView>;
+  sides: MatchSidesView;
   mm: string;
   ss: string;
   isRoundTimerRunning: boolean;
@@ -126,10 +114,6 @@ export type HomeGameView = {
   currentRoundNumber: number;
   totalRounds?: number;
   userAvatar: string;
-  selfElo: number;
-  opponentElo: number;
-  selfRatingPreview?: RatingDeltaPreview;
-  opponentRatingPreview?: RatingDeltaPreview;
   damageMultiplier: number;
   guessSubmitted: boolean;
   opponentGuessAlert: boolean;
@@ -155,34 +139,15 @@ export type HomeOverlaysView = {
         open: true;
         mode: "duel" | "singleplayer" | "team_duel" | "free_for_all";
         outcome?: "win" | "lose" | "draw";
-        selfName: string;
-        opponentName?: string;
-        opponentUserId?: string;
-        selfElo?: number;
-        opponentElo?: number;
-        selfEloDelta?: number;
-        opponentEloDelta?: number;
-        selfHP: number;
-        oppHP?: number;
-        selfAvatarUrl?: string;
-        oppAvatarUrl?: string;
-        selfFallback: string;
-        oppFallback?: string;
-        selfAvatarColor?: string;
-        oppAvatarColor?: string;
-        selfIsAdmin: boolean;
-        opponentIsAdmin?: boolean;
-        selfSelectedBadge?: PlayerBadgeInfo | null;
-        opponentSelectedBadge?: PlayerBadgeInfo | null;
+        sides: MatchSidesView;
+        selfUserId: string;
         totalScore: number;
         roundResults: RoundResult[];
         resultPlayerNames: Record<string, string | undefined>;
         resultPlayerAvatars: Record<string, string | undefined>;
         resultPlayerFallbacks: Record<string, string | undefined>;
         resultPlayerBorderColors: Record<string, string | undefined>;
-        participantsById: Record<string, ParticipantIdentityView>;
-        selfParticipant: ParticipantIdentityView;
-        opponentParticipant?: ParticipantIdentityView;
+        participantsById: Record<string, PlayerIdentityView>;
       }
     | { open: false };
 };

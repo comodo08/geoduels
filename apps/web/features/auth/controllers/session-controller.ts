@@ -134,6 +134,7 @@ export type LeaderboardEntrySummary = {
 export type LeaderboardSummary = {
   mode: string;
   season: string;
+  nextResetAt?: string;
   selfRank: number;
   totalPlayers: number;
   entries: LeaderboardEntrySummary[];
@@ -667,6 +668,8 @@ function normalizeLeaderboardSummary(
   return {
     mode: typeof raw.mode === "string" ? raw.mode : "duel",
     season: typeof raw.season === "string" ? raw.season : "s2",
+    nextResetAt:
+      typeof raw.nextResetAt === "string" ? raw.nextResetAt : undefined,
     selfRank: typeof raw.selfRank === "number" ? raw.selfRank : 0,
     totalPlayers:
       typeof raw.totalPlayers === "number" ? raw.totalPlayers : entries.length,

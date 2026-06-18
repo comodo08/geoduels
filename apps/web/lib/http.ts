@@ -15,7 +15,6 @@ export function apiPath(config: Pick<RuntimeConfig, "apiURL">, path: string): st
 function serverAPIBase() {
   return (
     process.env.API_PROXY_URL ||
-    process.env.BETA_PROXY_API_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     "http://localhost:3000"
   );
@@ -26,7 +25,7 @@ export function apiFetchPath(config: Pick<RuntimeConfig, "apiURL">, path: string
   if (config.apiURL.trim()) {
     return browserPath;
   }
-  const serverBase = process.env.API_PROXY_URL || process.env.BETA_PROXY_API_URL;
+  const serverBase = process.env.API_PROXY_URL;
   if (serverBase) {
     return new URL(browserPath, serverBase).toString();
   }

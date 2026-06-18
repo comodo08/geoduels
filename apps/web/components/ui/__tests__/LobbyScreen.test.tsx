@@ -229,7 +229,7 @@ describe('LobbyScreen', () => {
     });
 
     expect(screen.getByRole('heading', { level: 2, name: 'Private Party' })).toBeInTheDocument();
-    expect(screen.getByText('Connecting to lobby')).toBeInTheDocument();
+    expect(screen.getByText('Connecting to party')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'FRIENDS' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'PLAY' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'TOP' })).not.toBeInTheDocument();
@@ -342,7 +342,7 @@ describe('LobbyScreen', () => {
     renderLobbyScreen({ contentRoute: 'friends', joinInviteLobby });
 
     expect(screen.getByText('CUSTOM')).toBeInTheDocument();
-    expect(screen.getByText('Create a lobby or join your friend')).toBeInTheDocument();
+    expect(screen.getByText('Create a party or join your friend')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Private Party/i }));
 
@@ -365,11 +365,11 @@ describe('LobbyScreen', () => {
         isMember: false,
         isOwner: false,
         busy: false,
-        error: 'Lobby not found'
+        error: 'Party not found'
       }
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Lobby not found');
+    expect(screen.getByRole('alert')).toHaveTextContent('Party not found');
     expect(screen.queryByRole('heading', { level: 2, name: 'Private Party' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create Party' })).not.toBeInTheDocument();
   });

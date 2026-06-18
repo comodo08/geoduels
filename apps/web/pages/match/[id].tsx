@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import EndMatchOverlay from "../../components/ui/EndMatchOverlay";
 import type { Snapshot } from "../../components/ui/types";
 import { requestMatchReport } from "../../features/auth/lib/auth-client";
+import { deriveMatchSides } from "../../features/game/model/match-sides";
 import HomePageChatDock from "../../features/home/page/HomePageChatDock";
 import HomePageGame from "../../features/home/page/HomePageGame";
 import HomePageOverlays from "../../features/home/page/HomePageOverlays";
@@ -12,6 +13,7 @@ import { useHomeModel } from "../../features/home/model/useHomeModel";
 import { useMatchRouteSession } from "../../features/matchmaking/hooks/use-match-route-session";
 import { getRuntimeConfig } from "../../lib/runtime-config";
 import { getSiteURL } from "../../lib/site";
+import { getTeamPresentation } from "../../lib/team-presentation";
 import type { MatchSessionResponse } from "../../features/matchmaking/lib/queue-client";
 
 export function normalizeRouteMatchId(
@@ -44,9 +46,25 @@ function buildHistoryOverlay(
   const playerIds = Object.keys(snapshot.players || {});
   const selfPlayer =
     snapshot.players[userId] || snapshot.players[playerIds[0] || ""];
-  const opponentId = playerIds.find((id) => id !== selfPlayer?.userId) || "";
-  const opponentPlayer = opponentId ? snapshot.players[opponentId] : undefined;
   const mode = snapshot.mode || "duel";
+  const derivedSides = deriveMatchSides({
+    snapshot,
+    selfUserId: selfPlayer?.userId || userId,
+    fallbackSelf: {
+      id: userId || "self",
+      name: selfPlayer?.displayName || displayName || "You",
+      avatarUrl: selfPlayer?.avatarUrl || userAvatar,
+      avatarFallback: (
+        selfPlayer?.displayName ||
+        displayName ||
+        "Y"
+      ).slice(0, 1).toUpperCase(),
+      isAdmin: selfPlayer?.isAdmin,
+      isGuest: selfPlayer?.isGuest,
+      selectedBadge: selfPlayer?.selectedBadge,
+      rating: selfPlayer?.mmr,
+    },
+  });
   const roundResults =
     snapshot.roundResults && snapshot.roundResults.length > 0
       ? snapshot.roundResults
@@ -61,19 +79,17 @@ function buildHistoryOverlay(
     resultPlayerNames[id] = player.displayName || player.userId;
     resultPlayerAvatars[id] = player.avatarUrl;
     resultPlayerBorderColors[id] =
-      mode === "team_duel" ? (player.teamId === "b" ? "#2563eb" : "#dc2626") : undefined;
+      mode === "team_duel"
+        ? getTeamPresentation(player.teamId).color
+        : undefined;
     resultPlayerFallbacks[id] = (player.displayName || player.userId || "P")
       .slice(0, 1)
       .toUpperCase();
   });
-  const selfName = selfPlayer?.displayName || displayName || "You";
-  const opponentName = opponentPlayer?.displayName || "Opponent";
-  const selfIsAdmin = !!selfPlayer?.isAdmin;
-  const opponentIsAdmin = !!opponentPlayer?.isAdmin;
-  const selfHP = selfPlayer?.hp || 0;
-  const oppHP = opponentPlayer?.hp || 0;
+  const selfHP = derivedSides.sides.self.hp ?? 0;
+  const oppHP = derivedSides.sides.opponent.hp ?? 0;
   const outcome: "win" | "lose" | "draw" | undefined =
-    mode === "singleplayer"
+    mode === "singleplayer" || mode === "free_for_all"
       ? undefined
       : selfHP === oppHP
         ? "draw"
@@ -84,29 +100,15 @@ function buildHistoryOverlay(
   return {
     mode,
     outcome,
-    selfName,
-    opponentName: mode === "singleplayer" || mode === "free_for_all" ? undefined : opponentName,
-    opponentUserId: mode === "singleplayer" || mode === "free_for_all" ? undefined : opponentId,
-    selfElo: mode === "singleplayer" || mode === "free_for_all" ? undefined : selfPlayer?.mmr,
-    opponentElo: mode === "singleplayer" || mode === "free_for_all" ? undefined : opponentPlayer?.mmr,
-    selfHP,
-    oppHP: mode === "singleplayer" || mode === "free_for_all" ? undefined : oppHP,
-    selfAvatarUrl: selfPlayer?.avatarUrl || userAvatar,
-    oppAvatarUrl:
-      mode === "singleplayer" || mode === "free_for_all" ? undefined : opponentPlayer?.avatarUrl,
-    selfFallback: (selfName || "Y").slice(0, 1).toUpperCase(),
-    oppFallback:
-      mode === "singleplayer" || mode === "free_for_all"
-        ? undefined
-        : (opponentName || "O").slice(0, 1).toUpperCase(),
-    selfIsAdmin,
-    opponentIsAdmin: mode === "singleplayer" || mode === "free_for_all" ? undefined : opponentIsAdmin,
+    sides: derivedSides.sides,
+    selfUserId: derivedSides.selfPlayerId,
     totalScore: selfPlayer?.totalScore || 0,
     roundResults,
     resultPlayerNames,
     resultPlayerAvatars,
     resultPlayerFallbacks,
     resultPlayerBorderColors,
+    participantsById: derivedSides.playersById,
   };
 }
 
@@ -247,25 +249,15 @@ export default function MatchPage() {
               onLeaveGame={handleLeaveToParty}
               mode={historyOverlay.mode}
               outcome={historyOverlay.outcome}
-              selfName={historyOverlay.selfName}
-              opponentName={historyOverlay.opponentName}
-              opponentUserId={historyOverlay.opponentUserId}
-              selfElo={historyOverlay.selfElo}
-              opponentElo={historyOverlay.opponentElo}
-              selfHP={historyOverlay.selfHP}
-              oppHP={historyOverlay.oppHP}
-              selfAvatarUrl={historyOverlay.selfAvatarUrl}
-              oppAvatarUrl={historyOverlay.oppAvatarUrl}
-              selfFallback={historyOverlay.selfFallback}
-              oppFallback={historyOverlay.oppFallback}
-              selfIsAdmin={historyOverlay.selfIsAdmin}
-              opponentIsAdmin={historyOverlay.opponentIsAdmin}
+              sides={historyOverlay.sides}
+              selfUserId={historyOverlay.selfUserId}
               totalScore={historyOverlay.totalScore}
               roundResults={historyOverlay.roundResults}
               resultPlayerNames={historyOverlay.resultPlayerNames}
               resultPlayerAvatars={historyOverlay.resultPlayerAvatars}
               resultPlayerFallbacks={historyOverlay.resultPlayerFallbacks}
               resultPlayerBorderColors={historyOverlay.resultPlayerBorderColors}
+              participantsById={historyOverlay.participantsById}
               onReportPlayer={handleHistoryReport}
               onPlayAgain={
                 historyOverlay.mode === "singleplayer"

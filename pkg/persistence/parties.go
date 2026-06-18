@@ -32,6 +32,10 @@ func (s *pgStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapS
 	if ttl <= 0 {
 		ttl = 2 * time.Hour
 	}
+	mapID, err := s.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetMoving, "")
+	if err != nil {
+		return contracts.PartySnapshot{}, fmt.Errorf("resolve party map: %w", err)
+	}
 	expiresAt := time.Now().Add(ttl)
 	for attempt := 0; attempt < 5; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
@@ -44,8 +48,8 @@ func (s *pgStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapS
 		partyID := newPartyID("pty")
 		_, err = tx.Exec(ctx, `
 			insert into parties(id, invite_code, owner_user_id, state, mode, map_scope, expires_at, map_id)
-			values($1, $2, $3, 'open', $4, $5, $6, (select map_key from maps where map_key=$7))
-		`, partyID, inviteCode, ownerUserID, string(mode), mapScope, expiresAt, contracts.MapKeyMoving)
+			values($1, $2, $3, 'open', $4, $5, $6, $7)
+		`, partyID, inviteCode, ownerUserID, string(mode), mapScope, expiresAt, mapID)
 		if err != nil {
 			_ = tx.Rollback(ctx)
 			cancel()
@@ -601,6 +605,7 @@ func (s *pgStore) getParty(whereClause, value string) (contracts.PartySnapshot, 
 	snap.Config = contracts.NormalizeMatchConfig(snap.Config)
 	if mapID != "" {
 		snap.Config.MapID = mapID
+		snap.Config.MapName = snap.MapName
 	}
 	if snap.StartedMatchID == "" {
 		snap.StartedMatchID = snap.ActiveMatchID

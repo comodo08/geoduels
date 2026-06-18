@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, Send, X } from 'lucide-react';
+import { MessageCircle, Send, VolumeX, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { isChatMuted, setChatMuted } from '../../features/chat/lib/chat-preferences';
 import type { ChatEmote, ChatMessage } from './types';
 
 const chatEmotes: Array<{ emote: ChatEmote; label: string; glyph: string }> = [
@@ -28,6 +29,7 @@ export default function ChatPanel({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [body, setBody] = useState('');
   const [previewMessage, setPreviewMessage] = useState<ChatMessage | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -36,6 +38,10 @@ export default function ChatPanel({
   const initialMessagesSeenRef = useRef(false);
   const latestMessageIdRef = useRef<string | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setMuted(isChatMuted());
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -67,7 +73,7 @@ export default function ChatPanel({
     if (latestMessageIdRef.current === latestMessage.id) return;
     latestMessageIdRef.current = latestMessage.id;
 
-    if (latestMessage.senderUserId === selfUserId) return;
+    if (latestMessage.senderUserId === selfUserId || muted) return;
 
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     setPreviewMessage(latestMessage);
@@ -76,7 +82,7 @@ export default function ChatPanel({
       setPreviewVisible(false);
       previewTimerRef.current = null;
     }, 4200);
-  }, [messages, selfUserId]);
+  }, [messages, muted, selfUserId]);
 
   useEffect(() => {
     return () => {
@@ -88,6 +94,25 @@ export default function ChatPanel({
     event.preventDefault();
     const sent = onSendMessage(body);
     if (sent) setBody('');
+  };
+
+  const muteChat = () => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    setPreviewVisible(false);
+    setMuted(true);
+    setOpen(false);
+    setChatMuted(true);
+  };
+
+  const openChat = () => {
+    if (muted) {
+      setMuted(false);
+      setChatMuted(false);
+    }
+    setOpen(true);
   };
 
   return (
@@ -102,9 +127,18 @@ export default function ChatPanel({
           >
             <X size={15} strokeWidth={2.5} />
           </button>
+          <button
+            type="button"
+            onClick={muteChat}
+            aria-label="Mute chat"
+            title="Mute chat"
+            className="absolute right-11 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white"
+          >
+            <VolumeX size={15} strokeWidth={2.5} />
+          </button>
           <div
             ref={scrollRef}
-            className="scrollbar-hidden flex max-h-48 flex-col gap-1 overflow-y-auto pr-10 text-[13px] font-semibold leading-snug [text-shadow:0_1px_5px_rgba(0,0,0,0.7)]"
+            className="scrollbar-hidden flex max-h-48 flex-col gap-1 overflow-y-auto pr-20 text-[13px] font-semibold leading-snug [text-shadow:0_1px_5px_rgba(0,0,0,0.7)]"
           >
             {messages.length === 0 ? (
               <p className="py-8 text-center text-sm font-semibold text-white/45 [text-shadow:none]">No messages yet</p>
@@ -160,11 +194,15 @@ export default function ChatPanel({
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Open chat"
+          onClick={openChat}
+          aria-label={muted ? 'Open chat and unmute' : 'Open chat'}
           className="flex h-11 max-w-[min(calc(100vw-1.5rem),19rem)] items-center gap-2 rounded-pill border border-white/10 bg-[rgba(7,12,18,0.25)] px-3 text-left text-white/85 transition hover:bg-[rgba(7,12,18,0.35)] hover:text-white"
         >
-          <MessageCircle size={17} strokeWidth={2.4} className="flex-shrink-0 text-white/65" />
+          {muted ? (
+            <VolumeX size={17} strokeWidth={2.4} className="flex-shrink-0 text-white/65" />
+          ) : (
+            <MessageCircle size={17} strokeWidth={2.4} className="flex-shrink-0 text-white/65" />
+          )}
           <span className="relative block min-w-0 flex-1 overflow-hidden pr-1 text-sm font-semibold leading-none">
             <AnimatePresence mode="wait" initial={false}>
               {previewVisible && previewMessage ? (
@@ -187,7 +225,7 @@ export default function ChatPanel({
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="block truncate text-white/65"
                 >
-                  Message...
+                  {muted ? 'Chat muted' : 'Message...'}
                 </motion.span>
               )}
             </AnimatePresence>

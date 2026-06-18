@@ -160,6 +160,7 @@ describe('SessionController', () => {
     controller.applyLeaderboardSummary({
       mode: 'duel',
       season: 's2',
+      nextResetAt: '2026-07-01T21:00:00Z',
       selfRank: 3,
       totalPlayers: 99,
       entries: [{ rank: 1, userId: 'top', displayName: 'Top', avatarUrl: '', mmr: 1500, gamesPlayed: 20, wins: 15 }]
@@ -168,6 +169,7 @@ describe('SessionController', () => {
     expect(controller.getState().displayName).toBe('Player');
     expect(controller.getState().mmr).toBe(1234);
     expect(controller.getState().leaderboard?.selfRank).toBe(3);
+    expect(controller.getState().leaderboard?.nextResetAt).toBe('2026-07-01T21:00:00Z');
     expect(controller.getState().leaderboard?.entries).toHaveLength(1);
   });
 });

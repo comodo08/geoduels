@@ -133,7 +133,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     try {
       const snap = await fetchLobby(this.config, code);
       if (!snap) {
-        this.patchState({ status: "error", error: "Lobby not found" });
+        this.patchState({ status: "error", error: "Party not found" });
         return;
       }
       this.patchState({
@@ -150,7 +150,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     } catch (error) {
       this.patchState({
         status: "error",
-        error: getErrorMessage(error, "Lobby unavailable"),
+        error: getErrorMessage(error, "Party unavailable"),
       });
     }
   };
@@ -179,7 +179,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     } catch (error) {
       this.patchState({
         status: "error",
-        error: getErrorMessage(error, "Lobby unavailable"),
+        error: getErrorMessage(error, "Party unavailable"),
       });
       return false;
     }
@@ -195,7 +195,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       .trim()
       .toUpperCase();
     if (!code) {
-      this.patchState({ error: "Lobby invite is missing." });
+      this.patchState({ error: "Party invite is missing." });
       return false;
     }
     this.patchState({ status: "joining", inviteCode: code, error: "" });
@@ -216,7 +216,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     } catch (error) {
       this.patchState({
         status: "error",
-        error: getErrorMessage(error, "Could not join lobby"),
+        error: getErrorMessage(error, "Could not join party"),
       });
       return false;
     }
@@ -235,7 +235,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     } catch (error) {
       this.patchState({
         status: "error",
-        error: getErrorMessage(error, "Could not leave lobby"),
+        error: getErrorMessage(error, "Could not leave party"),
       });
     }
   };
@@ -294,7 +294,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       });
     } catch (error) {
       this.patchState({
-        error: getErrorMessage(error, "Could not start lobby"),
+        error: getErrorMessage(error, "Could not start party"),
       });
     }
   };
@@ -314,7 +314,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       this.patchSnapshot(next);
     } catch (error) {
       this.patchState({
-        error: getErrorMessage(error, "Could not update lobby settings"),
+        error: getErrorMessage(error, "Could not update party settings"),
       });
     }
   };
@@ -388,7 +388,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
           readyResolve = resolve;
           readyReject = reject;
           readyTimeout = window.setTimeout(() => {
-            readyReject?.(new Error("Lobby connection timed out"));
+            readyReject?.(new Error("Party connection timed out"));
             controller.abort();
           }, 10000);
         })
@@ -442,7 +442,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         if (requestId !== this.connectRequestId) return;
         if (readyReject) {
           if (readyTimeout) window.clearTimeout(readyTimeout);
-          readyReject(new Error("Lobby connection closed"));
+          readyReject(new Error("Party connection closed"));
           return;
         }
         if (this.state.snapshot && this.state.lobbyId) {
@@ -457,12 +457,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
         if (readyTimeout) window.clearTimeout(readyTimeout);
         this.patchState({
           status: this.state.snapshot ? "reconnecting" : "error",
-          error: getErrorMessage(error, "Lobby connection failed"),
+          error: getErrorMessage(error, "Party connection failed"),
         });
         readyReject?.(
           error instanceof Error
             ? error
-            : new Error("Lobby connection failed"),
+            : new Error("Party connection failed"),
         );
         if (!readyReject && this.state.snapshot && this.state.lobbyId) {
           this.startPollLoop();

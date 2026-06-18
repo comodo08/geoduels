@@ -5,7 +5,7 @@ import { HelpCircle, Shield } from "lucide-react";
 import AvatarBadge from "../../../components/ui/AvatarBadge";
 import PlayerBadge, { type PlayerBadgeInfo } from "../../../components/ui/PlayerBadge";
 import PlayerNameWithBadge from "../../../components/ui/PlayerNameWithBadge";
-import { RatingTrophyIcon } from "../../../components/ui/PlayerIdentity";
+import { RatingTrophyIcon } from "../../../components/ui/ParticipantIdentity";
 import type { LobbyContentRoute } from "../lib/lobby-ui";
 import { NAV_ITEMS, lobbyRouteStorageKey } from "../lib/lobby-ui";
 

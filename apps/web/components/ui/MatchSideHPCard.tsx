@@ -1,67 +1,37 @@
 import { useMemo } from "react";
 import { WifiOff } from "lucide-react";
-import PlayerNameWithBadge from "./PlayerNameWithBadge";
-import type { PlayerBadgeInfo } from "./PlayerBadge";
-import { PlayerAvatar, type ParticipantIdentityView } from "./PlayerIdentity";
+import {
+  ParticipantAvatar,
+  ParticipantName,
+  type MatchSideView,
+} from "./ParticipantIdentity";
 
 type Props = {
-  side: "left" | "right";
-  name: string;
-  elo: number;
-  hp: number;
+  position: "left" | "right";
+  side: MatchSideView;
   hpPct: string;
-  avatarUrl?: string;
-  fallback: string;
-  avatarColor?: string;
-  isAdmin?: boolean;
-  selectedBadge?: PlayerBadgeInfo | null;
   opponent?: boolean;
-  disconnected?: boolean;
-  hideElo?: boolean;
 };
 
-export default function PlayerHPCard({
+export default function MatchSideHPCard({
+  position,
   side,
-  name,
-  elo,
-  hp,
   hpPct,
-  avatarUrl,
-  fallback,
-  avatarColor,
-  isAdmin = false,
-  selectedBadge,
   opponent,
-  disconnected,
-  hideElo = false,
 }: Props) {
   const numericPct = parseFloat(hpPct) || 0;
 
-  const isLeft = side === "left";
+  const isLeft = position === "left";
   const skewClass = isLeft ? "-skew-x-[25deg]" : "skew-x-[25deg]";
   const reverseSkewClass = isLeft ? "skew-x-[25deg]" : "-skew-x-[25deg]";
   const fillGradientAngle = isLeft ? "90deg" : "270deg";
-  const showDisconnectBadge = opponent && disconnected;
-  const participant: ParticipantIdentityView = avatarColor
-    ? {
-        kind: "team",
-        id: name,
-        name,
-        avatarFallback: fallback || name?.[0] || "?",
-        avatarColor,
-        hp,
-      }
-    : {
-        kind: "player",
-        id: name,
-        name,
-        avatarUrl,
-        avatarFallback: fallback || name?.[0] || "?",
-        isAdmin,
-        selectedBadge,
-        rating: elo,
-        disconnected,
-      };
+  const showDisconnectBadge =
+    opponent && side.connection !== "connected";
+  const connectionLabel =
+    side.connection === "degraded"
+      ? "Opponent team connection degraded"
+      : "Opponent disconnected";
+  const hp = side.hp ?? 0;
 
   const hpFill = useMemo(
     () =>
@@ -88,8 +58,8 @@ export default function PlayerHPCard({
       >
         {/* Avatar Profile Picture */}
         <div className="relative z-10 w-[54px] h-[54px] shrink-0 drop-shadow-[0_4px_6px_rgba(0,0,0,0.6)]">
-          <PlayerAvatar
-            participant={participant}
+          <ParticipantAvatar
+            participant={side.participant}
             size="lg"
             opponent={opponent}
             className="h-full w-full border-0 shadow-lg"
@@ -106,9 +76,9 @@ export default function PlayerHPCard({
         >
           {showDisconnectBadge ? (
             <div
-              aria-label="Opponent disconnected"
+              aria-label={connectionLabel}
               data-testid="disconnect-badge"
-              title="Opponent disconnected"
+              title={connectionLabel}
               className={`absolute -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-red-200/45 bg-red-500 text-white shadow-[0_4px_12px_rgba(0,0,0,0.45)] ${reverseSkewClass} ${isLeft ? "-right-2" : "-left-2"}`}
             >
               <WifiOff aria-hidden="true" size={15} strokeWidth={2.6} />
@@ -139,10 +109,14 @@ export default function PlayerHPCard({
         data-testid="player-name-row"
       >
         <span className="block max-w-full truncate px-2 text-[15px] font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]">
-          <PlayerNameWithBadge name={name} isAdmin={isAdmin} selectedBadge={selectedBadge} />{" "}
-          {!hideElo && (
+          <ParticipantName
+            participant={side.participant}
+            nameClassName="font-bold text-white"
+          />{" "}
+          {side.participant.kind === "player" &&
+            side.participant.rating !== undefined && (
             <span className="inline-flex items-center gap-1 text-[#9fd6bf]">
-              ({elo})
+              ({side.participant.rating})
             </span>
           )}
         </span>

@@ -1203,7 +1203,7 @@ function OperationsRoute(props: {
           </Panel>
         ) : null}
 
-        {props.leaf === "notifications" || props.leaf === "maintenance" ? (
+        {props.leaf === "ip-signup-blocks" ? (
           <Panel className="p-4">
             <h3 className="font-black text-white">IP Signup Blocks</h3>
             <div className="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto]">

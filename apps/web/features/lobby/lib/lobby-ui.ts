@@ -1,4 +1,5 @@
 import type { MapScope } from "../../maps/lib/maps-client";
+import { getTeamPresentation } from "../../../lib/team-presentation";
 
 export type LobbyContentRoute =
   | "play"
@@ -33,22 +34,16 @@ export const NAV_ITEMS: Array<{ label: string; route: LobbyContentRoute; href: s
 export const lobbyRouteStorageKey = "geoduels.lobbyRoute";
 
 export function lobbyTeamLabel(teamId?: string) {
-  return teamId === "b" ? "Team Blue" : "Team Red";
+  return getTeamPresentation(teamId).name;
 }
 
 export function lobbyTeamTextClass(teamId?: string) {
-  return teamId === "b" ? "text-[#93c5fd]" : "text-[#fca5a5]";
+  return getTeamPresentation(teamId).textClassName;
 }
 
 export function lobbyTeamPillClass(teamId?: string, active = false) {
-  if (teamId === "b") {
-    return active
-      ? "bg-[#2563eb] text-white"
-      : "border border-[#60a5fa]/25 bg-[#2563eb]/15 text-[#bfdbfe] hover:bg-[#2563eb]/25";
-  }
-  return active
-    ? "bg-[#dc2626] text-white"
-    : "border border-[#f87171]/25 bg-[#dc2626]/15 text-[#fecaca] hover:bg-[#dc2626]/25";
+  const team = getTeamPresentation(teamId);
+  return active ? team.activeClassName : team.inactiveClassName;
 }
 
 export function isMapScope(value: unknown): value is MapScope {

@@ -33,7 +33,7 @@ const sections = [
   {
     title: "5. User Content",
     body: [
-      "User content includes display names, avatars, lobby information, reports, report reasons, and any other information you submit or make available through GeoDuels.",
+      "User content includes display names, avatars, party information, reports, report reasons, and any other information you submit or make available through GeoDuels.",
       "You are responsible for your user content. You may not submit content that is illegal, hateful, harassing, threatening, sexually explicit, infringing, impersonating, spammy, or otherwise abusive.",
       "GeoDuels may remove, restrict, or moderate user content. Nickname checks and other automated or manual moderation tools may be used to block bad names or abusive content.",
       "By submitting user content, you give GeoDuels permission to host, display, process, reproduce, and use it as needed to operate, moderate, secure, and improve the service.",
@@ -42,7 +42,7 @@ const sections = [
   {
     title: "6. Fair Play and Ranked Integrity",
     body: [
-      "Ranked integrity is central to GeoDuels. You may not cheat, automate, manipulate, or gain an unfair advantage in any match, lobby, queue, leaderboard, or ranking system.",
+      "Ranked integrity is central to GeoDuels. You may not cheat, automate, manipulate, or gain an unfair advantage in any match, party, queue, leaderboard, or ranking system.",
       "Prohibited conduct includes bots, scripts, macros, overlays, location hint tools, external databases used during a match, unauthorized browser extensions, automated guessing, account sharing, boosting, smurf abuse, coordinated win-trading, intentionally throwing matches, MMR manipulation, and exploiting bugs or system behavior.",
       "You may not tamper with clients, network traffic, tokens, matchmaking, game state APIs, maps, location data, or any infrastructure used by GeoDuels.",
     ],

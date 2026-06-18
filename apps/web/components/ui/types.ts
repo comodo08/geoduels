@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PlayerBadgeInfo } from "./PlayerBadge";
+import type { MatchSidesView } from "./participant-types";
 
 export type RoundPlayerResult = {
   userId: string;
@@ -33,20 +34,6 @@ export type ResultPhase =
   | "damage_travel"
   | "damage_multiplier"
   | "hp_apply";
-
-export type RoundResultPlayerViewModel = {
-  name: string;
-  avatarUrl?: string;
-  fallback: string;
-  hp: number;
-  score?: number;
-  distanceKm?: number;
-};
-
-export type RoundResultPlayersViewModel = {
-  self: RoundResultPlayerViewModel;
-  opp: RoundResultPlayerViewModel;
-};
 
 export type RoundResultWinner = "self" | "opp" | "tie";
 
@@ -114,7 +101,7 @@ export type RoundResultOverlayProps = {
   winner: RoundResultWinner;
   damage: number;
   damageMultiplier: number;
-  players: RoundResultPlayersViewModel;
+  sides: MatchSidesView;
   hpPct: (hp: number) => string;
 };
 

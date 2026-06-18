@@ -1,35 +1,21 @@
 import type { ReactNode } from "react";
 import AvatarBadge from "./AvatarBadge";
 import PlayerNameWithBadge from "./PlayerNameWithBadge";
-import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { RatingDeltaPreview } from "./types";
+import type {
+  ParticipantIdentityView,
+  PlayerIdentityView,
+  TeamIdentityView,
+} from "./participant-types";
 
-export type PlayerIdentityView = {
-  kind: "player";
-  id: string;
-  name: string;
-  avatarUrl?: string;
-  avatarFallback: string;
-  selectedBadge?: PlayerBadgeInfo | null;
-  isAdmin?: boolean;
-  isGuest?: boolean;
-  rating?: number;
-  ratingDelta?: number;
-  ratingPreview?: RatingDeltaPreview;
-  disconnected?: boolean;
-};
-
-export type TeamIdentityView = {
-  kind: "team";
-  id: string;
-  name: string;
-  avatarFallback: string;
-  avatarColor: string;
-  members?: PlayerIdentityView[];
-  hp?: number;
-};
-
-export type ParticipantIdentityView = PlayerIdentityView | TeamIdentityView;
+export type {
+  MatchSideConnection,
+  MatchSidesView,
+  MatchSideView,
+  ParticipantIdentityView,
+  PlayerIdentityView,
+  TeamIdentityView,
+} from "./participant-types";
 
 type AvatarSize = "sm" | "md" | "lg" | "xl";
 
@@ -51,7 +37,7 @@ export function RatingTrophyIcon({ className = "" }: { className?: string }) {
   );
 }
 
-export function PlayerAvatar({
+export function ParticipantAvatar({
   participant,
   size = "md",
   opponent = false,
@@ -75,7 +61,7 @@ export function PlayerAvatar({
   );
 }
 
-export function PlayerName({
+export function ParticipantName({
   participant,
   nameClassName = "",
   wrapperClassName = "",
@@ -84,11 +70,22 @@ export function PlayerName({
   nameClassName?: string;
   wrapperClassName?: string;
 }) {
+  if (participant.kind === "team") {
+    return (
+      <span
+        className={`inline-flex max-w-full items-center ${wrapperClassName}`.trim()}
+      >
+        <span className={`truncate ${nameClassName}`.trim()}>
+          {participant.name}
+        </span>
+      </span>
+    );
+  }
   return (
     <PlayerNameWithBadge
       name={participant.name}
-      isAdmin={participant.kind === "player" ? participant.isAdmin : false}
-      selectedBadge={participant.kind === "player" ? participant.selectedBadge : null}
+      isAdmin={participant.isAdmin}
+      selectedBadge={participant.selectedBadge}
       nameClassName={nameClassName}
       wrapperClassName={wrapperClassName}
     />
@@ -142,7 +139,7 @@ export function PlayerRating({
   );
 }
 
-export function PlayerIdentityRow({
+export function ParticipantIdentityRow({
   participant,
   avatarSize = "sm",
   nameClassName = "font-bold text-white",
@@ -157,8 +154,8 @@ export function PlayerIdentityRow({
 }) {
   return (
     <div className={`flex min-w-0 items-center gap-3 ${className}`.trim()}>
-      <PlayerAvatar participant={participant} size={avatarSize} opponent={opponent} />
-      <PlayerName
+      <ParticipantAvatar participant={participant} size={avatarSize} opponent={opponent} />
+      <ParticipantName
         participant={participant}
         nameClassName={nameClassName}
         wrapperClassName="min-w-0"
@@ -167,12 +164,9 @@ export function PlayerIdentityRow({
   );
 }
 
-export function PlayerIdentityCard({
+export function ParticipantIdentityCard({
   participant,
   opponent = false,
-  rating,
-  ratingDelta,
-  ratingPreview,
   ratingAction,
   size = "xl",
   avatarClassName = "",
@@ -181,23 +175,23 @@ export function PlayerIdentityCard({
 }: {
   participant: ParticipantIdentityView;
   opponent?: boolean;
-  rating?: number;
-  ratingDelta?: number;
-  ratingPreview?: RatingDeltaPreview;
   ratingAction?: ReactNode;
   size?: AvatarSize;
   avatarClassName?: string;
   nameClassName?: string;
   className?: string;
 }) {
-  const resolvedRating = rating ?? (participant.kind === "player" ? participant.rating : undefined);
-  const resolvedDelta = ratingDelta ?? (participant.kind === "player" ? participant.ratingDelta : undefined);
-  const resolvedPreview = ratingPreview ?? (participant.kind === "player" ? participant.ratingPreview : undefined);
+  const resolvedRating =
+    participant.kind === "player" ? participant.rating : undefined;
+  const resolvedDelta =
+    participant.kind === "player" ? participant.ratingDelta : undefined;
+  const resolvedPreview =
+    participant.kind === "player" ? participant.ratingPreview : undefined;
   return (
     <div className={`flex flex-col items-center gap-3 text-center ${className}`.trim()}>
-      <PlayerAvatar participant={participant} size={size} opponent={opponent} className={avatarClassName} />
+      <ParticipantAvatar participant={participant} size={size} opponent={opponent} className={avatarClassName} />
       <div className="flex flex-col items-center">
-        <PlayerName
+        <ParticipantName
           participant={participant}
           nameClassName={nameClassName}
         />

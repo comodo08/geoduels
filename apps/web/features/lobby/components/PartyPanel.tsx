@@ -126,7 +126,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[#d8f7e9]">
                   {!privateLobby.isMember
-                    ? "Join the lobby now and you will be ready for the next game."
+                    ? "Join the party now and you will be ready for the next game."
                     : currentMember?.inActiveMatch
                       ? "You are part of this game and can reconnect whenever you are ready."
                       : "You joined after this game started and will be able to play in the next one."}
@@ -165,7 +165,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
               <LobbyInset>
                 <LobbyLoadingState className="min-h-[64px] justify-center">
                   <Loader2 className="animate-spin text-[#77f0be]" size={18} />
-                  Connecting to lobby
+                  Connecting to party
                 </LobbyLoadingState>
               </LobbyInset>
             ) : !privateLobby.isMember ? (
@@ -247,7 +247,7 @@ function PartyHeader({
         </h2>
         <p className="mt-2 max-w-[48ch] text-[14px] leading-6 text-[#a9bfd4]">
           {matchInProgress
-            ? "A game is in progress. Friends can still join the lobby and wait for the next one."
+            ? "A game is in progress. Friends can still join the party and wait for the next one."
             : "Share the invite, wait for one opponent, then the leader starts the match."}
         </p>
       </div>
@@ -308,7 +308,7 @@ function PartySettings({
           Game Settings
         </p>
         <p className="mt-1 text-sm font-semibold text-white">
-          {snapshot.mapName || config.mapId || "Official Map"} · {config.ruleset === "nmpz" ? "NMPZ" : "Moving"} ·{" "}
+          {config.mapName} · {config.ruleset === "nmpz" ? "NMPZ" : "Moving"} ·{" "}
           {clockOn ? `${roundSeconds}s clock` : "Infinite clock"} ·{" "}
           {pressureOn ? `${pressureSeconds}s pressure` : "No pressure"}
         </p>
@@ -342,9 +342,7 @@ function PartySettings({
             className="min-w-0 justify-center normal-case tracking-normal"
           >
             <MapIcon className="shrink-0 text-[#77f0be]" size={14} />
-            <span className="truncate">
-              {config.mapName || config.mapId || "Select map"}
-            </span>
+            <span className="truncate">{config.mapName}</span>
           </LobbyActionButton>
         </label>
         <label className="grid gap-1.5">

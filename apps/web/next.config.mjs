@@ -8,8 +8,6 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true'
 });
 
-const localAPIURL = process.env.API_PROXY_URL || process.env.BETA_PROXY_API_URL || 'http://localhost:8080';
-
 /** @type {(phase: string) => import('next').NextConfig} */
 const createNextConfig = (phase) => ({
   // Keep the long-running dev server isolated from `next build`. Both commands
@@ -51,17 +49,6 @@ const createNextConfig = (phase) => ({
             value: "no-store"
           }
         ]
-      }
-    ];
-  },
-  async rewrites() {
-    if (process.env.NODE_ENV === 'production' && !process.env.API_PROXY_URL && !process.env.BETA_PROXY_API_URL) {
-      return [];
-    }
-    return [
-      {
-        source: "/v1/:path*",
-        destination: `${localAPIURL.replace(/\/$/, "")}/v1/:path*`
       }
     ];
   },

@@ -74,6 +74,15 @@ func (s *pgStore) RunDueRankedSeasonReset(now time.Time) (RankedSeasonResetResul
 	if err != nil {
 		return RankedSeasonResetResult{}, false, err
 	}
+	if initializeRankedSeasonResetSchedule(&settings, now) {
+		if err := writeRankedSeasonSettingsTx(ctx, tx, settings); err != nil {
+			return RankedSeasonResetResult{}, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return RankedSeasonResetResult{}, false, err
+		}
+		return RankedSeasonResetResult{}, false, nil
+	}
 	resetAt := monthlySeasonResetAt(now.Year(), now.Month(), settings.MonthlyResetDay)
 	if now.Before(resetAt) || (settings.LastResetAt != nil && !settings.LastResetAt.Before(resetAt)) {
 		return RankedSeasonResetResult{}, false, nil
@@ -245,6 +254,15 @@ func validateMonthlyResetDay(day int) error {
 
 func monthlySeasonResetAt(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, seasonResetHourUTC, 0, 0, 0, time.UTC)
+}
+
+func initializeRankedSeasonResetSchedule(settings *RankedSeasonSettings, now time.Time) bool {
+	if settings.LastResetAt != nil {
+		return false
+	}
+	initializedAt := now.UTC()
+	settings.LastResetAt = &initializedAt
+	return true
 }
 
 func nextMonthlySeasonResetAt(now time.Time, day int, lastResetAt *time.Time) time.Time {

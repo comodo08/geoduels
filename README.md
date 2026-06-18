@@ -108,7 +108,10 @@ POSTGRES_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disab
   -dataset datasets/a-source-world.sample.json \
   -map-key a-source-world
 docker compose up -d gameplay-node match-coordinator realtime-gateway api
-cd apps/web && npm ci && npm run dev
+cd apps/web
+npm ci
+cp .env.local.example .env.local
+npm run dev
 ```
 
 The tracked sample map at `datasets/a-source-world.sample.json` contains 10 public landmark locations so contributors can launch a playable local stack without private location data. To use a larger local dataset, keep it in ignored `datasets/*.json` and pass that path to `workers/location-ingest`.

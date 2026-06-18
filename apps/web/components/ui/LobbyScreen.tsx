@@ -151,8 +151,8 @@ const tabPanelMotion = {
   },
 };
 
-const lobbyBackgroundImage = "/bg2.v1.jpg";
-const lobbyBackgroundPlaceholder = "/bg2.placeholder.v1.jpg";
+const lobbyBackgroundImage = "/bg3.v2.webp";
+const lobbyBackgroundPlaceholder = "/bg3.placeholder.v2.webp";
 const lobbyBackgroundOverlay = "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
 let lobbyBackgroundLoaded = false;
 let lobbyBackgroundLoadPromise: Promise<void> | null = null;

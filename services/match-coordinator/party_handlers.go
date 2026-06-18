@@ -58,6 +58,9 @@ func (q *matchCoordinator) createParty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Config.Ruleset != "" || req.Config.MapID != "" || req.Config.MapKey != "" || req.Config.RoundTimerMode != "" || req.Config.RoundTimeLimitMS > 0 || req.Config.PressureTimeLimitMS > 0 {
+		if req.Config.MapID == "" && req.Config.MapKey == "" {
+			req.Config.MapID = snap.Config.MapID
+		}
 		configStore, ok := q.persist.(interface {
 			SetPartyConfig(string, contracts.MatchConfig) (contracts.PartySnapshot, error)
 		})

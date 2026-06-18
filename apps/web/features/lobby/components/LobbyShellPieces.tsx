@@ -192,7 +192,7 @@ export function InviteLobbyCard({
       <div className="min-w-0 flex-1">
         <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">CUSTOM</span>
         <h3 className="text-[18px] font-extrabold tracking-tight text-white">Private Party</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-[#a9bfd4]">Create a lobby or join your friend</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-[#a9bfd4]">Create a party or join your friend</p>
       </div>
       <ArrowUpRight size={18} className="shrink-0 text-white/50 transition-colors group-hover:text-white" />
     </button>

@@ -130,12 +130,12 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = "duel"
 	}
+	settings, err := a.store.GetRankedSeasonSettings()
+	if err != nil {
+		http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
+		return
+	}
 	if season == "" {
-		settings, err := a.store.GetRankedSeasonSettings()
-		if err != nil {
-			http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
-			return
-		}
 		season = settings.ActiveSeasonID
 	}
 
@@ -190,8 +190,7 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 		totalPlayers = overview.TotalPlayers
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	response := map[string]any{
 		"season":       season,
 		"mode":         mode,
 		"limit":        limit,
@@ -199,7 +198,13 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 		"entries":      entries,
 		"selfRank":     selfRank,
 		"totalPlayers": totalPlayers,
-	})
+	}
+	if season == settings.ActiveSeasonID && settings.NextResetAt != nil {
+		response["nextResetAt"] = settings.NextResetAt
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (a *api) optionalAuthenticatedClaims(r *http.Request) (auth.AppClaims, bool) {
