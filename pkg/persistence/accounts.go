@@ -471,17 +471,26 @@ func enqueueDiscordSyncForUserTx(ctx context.Context, tx pgx.Tx, userID string) 
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	var discordUserIDs []string
 	for rows.Next() {
 		var discordUserID string
 		if err := rows.Scan(&discordUserID); err != nil {
+			rows.Close()
 			return err
 		}
+		discordUserIDs = append(discordUserIDs, discordUserID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, discordUserID := range discordUserIDs {
 		if err := enqueueDiscordSyncTx(ctx, tx, DiscordSyncActionSync, discordUserID); err != nil {
 			return err
 		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func (s *pgStore) UnlinkProviderIdentity(userID, provider string) (Identity, error) {

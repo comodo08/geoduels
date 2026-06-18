@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -62,6 +64,7 @@ func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) session(w http.ResponseWriter, r *http.Request) {
 	if err := a.writeSessionFromCookie(w, r); err != nil {
+		log.Printf("auth session bootstrap failed: %v", err)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -254,15 +257,15 @@ func (a *api) writeRotatedSessionResponse(w http.ResponseWriter, r *http.Request
 func (a *api) writeSessionFromCookie(w http.ResponseWriter, r *http.Request) error {
 	rec, err := a.authSessionFromCookies(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("read refresh session: %w", err)
 	}
 	identity, err := a.store.GetIdentity(rec.UserID)
 	if err != nil {
-		return err
+		return fmt.Errorf("load identity for user %s: %w", rec.UserID, err)
 	}
 	payload, err := a.issueAuthSessionPayload(identity, rec.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("issue payload for user %s session %s: %w", rec.UserID, rec.ID, err)
 	}
 	return json.NewEncoder(w).Encode(payload)
 }
@@ -335,7 +338,7 @@ func (a *api) issueAuthSessionPayload(identity persistence.Identity, sessionID s
 	}
 	identity = bootstrapped
 	if err := a.store.SyncLoginBadges(identity.Sub); err != nil {
-		return contracts.AuthSessionPayload{}, err
+		return contracts.AuthSessionPayload{}, fmt.Errorf("sync login badges: %w", err)
 	}
 	accessToken, err := auth.IssueAppAccessToken(a.appAuthSecret, identity.Sub, sessionID, a.accessTokenTTL)
 	if err != nil {
@@ -343,7 +346,7 @@ func (a *api) issueAuthSessionPayload(identity persistence.Identity, sessionID s
 	}
 	suggestedNickname, err := a.suggestedNickname(identity, "")
 	if err != nil {
-		return contracts.AuthSessionPayload{}, err
+		return contracts.AuthSessionPayload{}, fmt.Errorf("suggest nickname: %w", err)
 	}
 	payload := contracts.AuthSessionPayload{
 		AccessToken:           accessToken,
