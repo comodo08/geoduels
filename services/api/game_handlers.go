@@ -533,8 +533,8 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "account is banned", http.StatusForbidden)
 		return
 	}
-	if !identity.Onboarded {
-		http.Error(w, "onboarding incomplete", http.StatusForbidden)
+	if identity.NicknameRequired {
+		http.Error(w, "nickname required", http.StatusForbidden)
 		return
 	}
 	if identity.AuthMigrationRequired {

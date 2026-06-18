@@ -134,7 +134,6 @@ export function LobbyHeader({
                   ) : (
                     <Link
                       href={item.href}
-                      prefetch={false}
                       onClick={() => {
                         try {
                           window.sessionStorage.setItem(lobbyRouteStorageKey, currentNavRoute);

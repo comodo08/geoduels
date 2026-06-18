@@ -65,7 +65,7 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 	if status != "ready" || revisionID == "" {
 		return errors.New("selected map is not ready")
 	}
-	if owner != "" && owner != found.MapAccessUserID && visibility != "unlisted" {
+	if !selectedMapAccessible(owner, found.MapAccessUserID, visibility) {
 		return errors.New("selected map is not accessible")
 	}
 	requiredRounds := plannedRoundCount
@@ -97,6 +97,18 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func selectedMapAccessible(ownerUserID, accessUserID, visibility string) bool {
+	if ownerUserID == "" || ownerUserID == accessUserID {
+		return true
+	}
+	switch strings.TrimSpace(strings.ToLower(visibility)) {
+	case "public", "unlisted":
+		return true
+	default:
+		return false
+	}
 }
 
 type plannedLocation struct {

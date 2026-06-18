@@ -236,7 +236,7 @@ export type MatchSessionResponse =
 export type MatchBootstrapResponse = {
   auth: {
     accessToken?: string;
-    onboardingRequired?: boolean;
+    nicknameRequired?: boolean;
     suggestedNickname?: string;
     user?: {
       id?: string;
@@ -359,7 +359,7 @@ export async function bootstrapMatchSession(
   return {
     auth: {
       accessToken: typeof data?.auth?.accessToken === 'string' ? data.auth.accessToken : '',
-      onboardingRequired: !!data?.auth?.onboardingRequired,
+      nicknameRequired: !!data?.auth?.nicknameRequired,
       suggestedNickname: typeof data?.auth?.suggestedNickname === 'string' ? data.auth.suggestedNickname : '',
       user:
         data?.auth?.user && typeof data.auth.user === 'object'

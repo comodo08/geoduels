@@ -1,12 +1,17 @@
 import LobbyRoutePage from "../../features/home/page/LobbyRoutePage";
+import { getLobbyLayout } from "../../features/home/page/LobbyApplicationLayout";
+import type { NextPageWithLayout } from "../_app";
 
-export default function MapUploadRoute() {
+const MapUploadRoute: NextPageWithLayout = function MapUploadRoute() {
   return (
     <LobbyRoutePage
-      route="map-upload"
       title="GeoDuels | Upload Map"
       description="Upload a custom GeoDuels map."
       canonicalPath="/maps/upload"
     />
   );
-}
+};
+
+MapUploadRoute.getLayout = getLobbyLayout;
+
+export default MapUploadRoute;

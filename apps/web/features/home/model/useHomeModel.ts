@@ -5,7 +5,6 @@ import { getRuntimeConfig } from "../../../lib/runtime-config";
 import type { AuthSessionSnapshot } from "../../auth/session";
 import { selectActiveChatConversationId } from "../../chat/lib/chat-scope";
 import {
-  requestCompleteOnboarding,
   requestDeleteAccount,
   requestDiscordStart,
   requestGoogleStart,
@@ -36,6 +35,7 @@ import {
   fetchResumableSession,
   type MatchConfig,
 } from "../../matchmaking/lib/queue-client";
+
 import {
   buildSessionFromAuthResponse,
   clearGoogleAuthParams,
@@ -44,6 +44,20 @@ import {
   type AuthResponse,
   type GuestVerificationView,
 } from "./auth-session-model";
+
+function nicknameValidationError(nickname: string) {
+  if (!nickname) return "Please choose a nickname.";
+  if (nickname.length < 2 || nickname.length > 14) {
+    return "Nickname must be 2–14 characters.";
+  }
+  if (!/^[A-Za-z0-9._]+$/.test(nickname)) {
+    return "Use only letters, numbers, dots, and underscores.";
+  }
+  if (nickname.includes("..") || nickname.includes("__")) {
+    return "Repeated dots or underscores are not allowed.";
+  }
+  return "";
+}
 
 export function useHomeModel(options?: {
   routeMatchId?: string | null;
@@ -115,10 +129,10 @@ export function useHomeModel(options?: {
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications", auth.userId || "anonymous"],
-    enabled: !isMatchRoute && !!auth.userId && !!auth.accessToken && !auth.onboardingRequired,
+    enabled: !isMatchRoute && !!auth.userId && !!auth.accessToken && !auth.nicknameRequired,
     queryFn: async () => {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: false,
+        allowNicknameRequired: false,
       });
       if (!session?.accessToken) {
         return { notifications: [] };
@@ -132,10 +146,10 @@ export function useHomeModel(options?: {
 
   const resumableSessionQuery = useQuery({
     queryKey: ["session-resumable", auth.userId || "anonymous"],
-    enabled: !isMatchRoute && !lobbyInviteCode && !!auth.userId && !auth.onboardingRequired,
+    enabled: !isMatchRoute && !lobbyInviteCode && !!auth.userId && !auth.nicknameRequired,
     queryFn: async ({ signal }) => {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: false,
+        allowNicknameRequired: false,
       });
       if (!session?.accessToken) {
         return { status: "none" as const };
@@ -155,15 +169,6 @@ export function useHomeModel(options?: {
   const guestSessionMutation = useMutation({
     mutationFn: ({ turnstileToken }: { turnstileToken?: string }) =>
       requestGuestSession(config, turnstileToken),
-  });
-  const completeOnboardingMutation = useMutation({
-    mutationFn: ({
-      accessToken,
-      nickname,
-    }: {
-      accessToken: string;
-      nickname: string;
-    }) => requestCompleteOnboarding(config, accessToken, nickname),
   });
   const updateNicknameMutation = useMutation({
     mutationFn: ({
@@ -366,7 +371,7 @@ export function useHomeModel(options?: {
       return currentSession;
     }
     const current = sessionController.getState();
-    if (current.onboardingRequired) {
+    if (current.nicknameRequired) {
       return null;
     }
     sessionController.setAuthPending({
@@ -386,7 +391,7 @@ export function useHomeModel(options?: {
       const nextSession: AuthSessionSnapshot = {
         userId: data.user?.id || "",
         accessToken: data.accessToken || "",
-        onboardingRequired: !!data.onboardingRequired,
+        nicknameRequired: !!data.nicknameRequired,
         nicknameInput: data.suggestedNickname || name,
       };
       sessionController.applySessionSnapshot(nextSession, {
@@ -461,7 +466,7 @@ export function useHomeModel(options?: {
         sessionController.setAuthPending({ authLoading: true, authError: "" });
         void (async () => {
           try {
-            await sessionController.bootstrapSession();
+            await sessionController.bootstrapSession({ force: true });
           } catch {
             if (cancelled) return;
             sessionController.setAuthPending({
@@ -603,13 +608,13 @@ export function useHomeModel(options?: {
 
   useEffect(() => {
     chatController.setConversation(
-      auth.onboardingRequired ? "" : activeChatConversationId,
+      auth.nicknameRequired ? "" : activeChatConversationId,
       auth.accessToken,
     );
   }, [
     activeChatConversationId,
     auth.accessToken,
-    auth.onboardingRequired,
+    auth.nicknameRequired,
     chatController,
   ]);
 
@@ -729,11 +734,12 @@ export function useHomeModel(options?: {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [view.game.canFinalizeGuess, view.game.canAdvanceRound, gameController]);
 
-  const submitOnboardingNickname = async () => {
+  const submitRequiredNickname = async () => {
     const nick = sessionController.getState().nicknameInput.trim();
-    if (!nick) {
+    const validationError = nicknameValidationError(nick);
+    if (validationError) {
       sessionController.setAuthPending({
-        nicknameError: "Please choose a nickname.",
+        nicknameError: validationError,
       });
       return;
     }
@@ -745,7 +751,7 @@ export function useHomeModel(options?: {
     });
     try {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: true,
+        allowNicknameRequired: true,
       });
       if (!session) {
         sessionController.clearAuthSession(
@@ -753,14 +759,14 @@ export function useHomeModel(options?: {
         );
         throw new Error("Session expired. Please sign in again.");
       }
-      const data = await completeOnboardingMutation.mutateAsync({
+      const data = await updateNicknameMutation.mutateAsync({
         accessToken: session.accessToken,
         nickname: nick,
       });
       const nextSession: AuthSessionSnapshot = {
         userId: typeof data.user?.id === "string" && data.user.id ? data.user.id : current.userId,
         accessToken: data.accessToken || current.accessToken,
-        onboardingRequired: false,
+        nicknameRequired: !!data.nicknameRequired,
         authMigrationRequired: !!data.authMigrationRequired,
         recoveryAvailable: !!data.recoveryAvailable,
         linkedProviders: Array.isArray(data.linkedProviders)
@@ -791,9 +797,10 @@ export function useHomeModel(options?: {
   const submitProfileNickname = async (): Promise<boolean> => {
     const current = sessionController.getState();
     const nick = current.nicknameInput.trim();
-    if (!nick) {
+    const validationError = nicknameValidationError(nick);
+    if (validationError) {
       sessionController.setAuthPending({
-        nicknameError: "Please choose a nickname.",
+        nicknameError: validationError,
       });
       return false;
     }
@@ -822,41 +829,29 @@ export function useHomeModel(options?: {
         );
         throw new Error("Session expired. Please sign in again.");
       }
-      let resp = await updateNicknameMutation.mutateAsync({
+      const data = await updateNicknameMutation.mutateAsync({
         accessToken: session.accessToken,
         nickname: nick,
       });
-      if (resp.status === 401 || resp.status === 403) {
-        const refreshed = await sessionController.ensureFreshSession(60_000, {
-          forceRefresh: true,
-        });
-        if (!refreshed) {
-          sessionController.clearAuthSession(
-            "Session expired. Please sign in again.",
-          );
-          throw new Error("Session expired. Please sign in again.");
-        }
-        resp = await updateNicknameMutation.mutateAsync({
-          accessToken: refreshed.accessToken,
-          nickname: nick,
-        });
-      }
-      if (!resp.ok) {
-        throw new Error((await resp.text()) || "Failed to save nickname");
-      }
-      const data = (await resp.json()) as { user?: { display_name?: string } };
-      sessionController.setAuthPending({
+      const nextSession: AuthSessionSnapshot = {
+        ...session,
+        accessToken:
+          typeof data.accessToken === "string" && data.accessToken
+            ? data.accessToken
+            : session.accessToken,
+        nicknameRequired: !!data.nicknameRequired,
+        canPlay: typeof data.canPlay === "boolean" ? data.canPlay : true,
+        nicknameInput: nick,
+      };
+      sessionController.applySessionSnapshot(nextSession, {
+        displayName:
+          typeof data.user?.display_name === "string" &&
+          data.user.display_name
+            ? data.user.display_name
+            : nick,
         nicknameSaving: false,
         nicknameError: "",
       });
-      if (
-        typeof data.user?.display_name === "string" &&
-        data.user.display_name
-      ) {
-        sessionController.applyProfileSnapshot({
-          display_name: data.user.display_name,
-        });
-      }
       return true;
     } catch (error) {
       sessionController.setAuthPending({
@@ -885,7 +880,7 @@ export function useHomeModel(options?: {
     sessionController.setAuthPending({ authLoading: true, authError: "" });
     try {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: true,
+        allowNicknameRequired: true,
       });
       if (!session?.accessToken) {
         throw new Error("Please sign in again.");
@@ -960,7 +955,7 @@ export function useHomeModel(options?: {
     sessionController.setAuthPending({ authLoading: true, authError: "" });
     try {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: true,
+        allowNicknameRequired: true,
       });
       if (!session?.accessToken) {
         throw new Error(
@@ -1010,7 +1005,7 @@ export function useHomeModel(options?: {
     sessionController.setAuthPending({ authLoading: true, authError: "" });
     try {
       const session = await sessionController.ensureFreshSession(60_000, {
-        allowOnboarding: true,
+        allowNicknameRequired: true,
       });
       if (!session?.accessToken) {
         throw new Error("Please sign in again.");
@@ -1207,7 +1202,7 @@ export function useHomeModel(options?: {
       loadLeaderboard: lobbyData.loadLeaderboard,
       clearAuthSession: logout,
       deleteAccount,
-      submitOnboardingNickname,
+      submitRequiredNickname,
       submitProfileNickname,
       selectBadge,
       startSupportDonation,

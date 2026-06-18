@@ -17,7 +17,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         userEmail: "self@example.com",
         displayName: "Self",
         userAvatar: "",
-        onboardingRequired: true,
+        nicknameRequired: true,
         isAdmin: false,
         isGuest: false,
         nicknameInput: "Self",
@@ -124,7 +124,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         error: "",
       },
       overlays: {
-        onboardingOpen: true,
+        nicknameRequiredOpen: true,
         notifications: [],
         guestVerification: {
           open: false,
@@ -225,7 +225,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
       loadLeaderboard: vi.fn(),
       clearAuthSession: vi.fn(),
       deleteAccount: vi.fn(async () => {}),
-      submitOnboardingNickname: vi.fn(async () => {}),
+      submitRequiredNickname: vi.fn(async () => {}),
       submitProfileNickname: vi.fn(async () => true),
       selectBadge: vi.fn(async () => {}),
       setNicknameInput: vi.fn(),
@@ -238,7 +238,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
 }
 
 describe("HomePageView", () => {
-  it("renders onboarding and end match overlays while hiding the game scene", () => {
+  it("renders required nickname and end match overlays while hiding the game scene", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={client}><HomePageView model={createModel()} /></QueryClientProvider>);
 

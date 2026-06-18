@@ -1,4 +1,5 @@
 import bundleAnalyzer from '@next/bundle-analyzer';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 import { fileURLToPath } from 'node:url';
 
 const appRoot = fileURLToPath(new URL('./', import.meta.url));
@@ -9,8 +10,11 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const localAPIURL = process.env.API_PROXY_URL || process.env.BETA_PROXY_API_URL || 'http://localhost:8080';
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+/** @type {(phase: string) => import('next').NextConfig} */
+const createNextConfig = (phase) => ({
+  // Keep the long-running dev server isolated from `next build`. Both commands
+  // otherwise mutate `.next`, which can leave dev serving deleted manifests.
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
   reactStrictMode: true,
   experimental: {
     webpackBuildWorker: false
@@ -70,6 +74,6 @@ const nextConfig = {
       }
     ]
   }
-};
+});
 
-export default withBundleAnalyzer(nextConfig);
+export default (phase) => withBundleAnalyzer(createNextConfig(phase));

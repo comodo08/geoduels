@@ -503,7 +503,7 @@ type LeaderboardSummary struct {
 
 type AuthSessionPayload struct {
 	AccessToken           string   `json:"accessToken"`
-	OnboardingRequired    bool     `json:"onboardingRequired"`
+	NicknameRequired      bool     `json:"nicknameRequired"`
 	SuggestedNickname     string   `json:"suggestedNickname,omitempty"`
 	LinkedProviders       []string `json:"linkedProviders,omitempty"`
 	AuthMigrationRequired bool     `json:"authMigrationRequired,omitempty"`

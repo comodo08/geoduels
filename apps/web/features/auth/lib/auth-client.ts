@@ -142,13 +142,13 @@ export async function requestLogout(config: RuntimeConfig) {
   });
 }
 
-export async function requestCompleteOnboarding(
+export async function requestUpdateNickname(
   config: RuntimeConfig,
   accessToken: string,
   nickname: string,
 ) {
-  const resp = await apiFetch(config, "/v1/auth/onboarding", {
-    method: "POST",
+  const resp = await apiFetch(config, "/v1/me/nickname", {
+    method: "PUT",
     credentials: "include",
     headers: mergeHeaders({
       "content-type": "application/json",
@@ -159,22 +159,6 @@ export async function requestCompleteOnboarding(
     throw new Error(await readError(resp, "Failed to save nickname"));
   }
   return resp.json();
-}
-
-export async function requestUpdateNickname(
-  config: RuntimeConfig,
-  accessToken: string,
-  nickname: string,
-) {
-  const resp = await apiFetch(config, "/v1/me/nickname", {
-    method: "PATCH",
-    credentials: "include",
-    headers: mergeHeaders({
-      "content-type": "application/json",
-    }, authHeaders(accessToken)),
-    body: JSON.stringify({ nickname }),
-  });
-  return resp;
 }
 
 export async function requestUpdateSelectedBadge(

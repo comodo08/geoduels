@@ -23,7 +23,7 @@ type AuthPopupPayload = {
   ok?: boolean;
   error?: string;
   accessToken?: string;
-  onboardingRequired?: boolean;
+  nicknameRequired?: boolean;
   authMigrationRequired?: boolean;
   recoveryAvailable?: boolean;
   linkedProviders?: string[];
@@ -33,7 +33,7 @@ type AuthPopupPayload = {
 };
 
 type SessionNetworkHandlers = {
-  bootstrapSession: () => Promise<AuthSessionSnapshot | null>;
+  bootstrapSession: (options?: { force?: boolean }) => Promise<AuthSessionSnapshot | null>;
   refreshSession: () => Promise<AuthSessionSnapshot | null>;
   getPlayableSession: () => Promise<AuthSessionSnapshot | null>;
 };
@@ -103,7 +103,7 @@ export type SessionState = {
   rankedWins: number;
   leaderboard: LeaderboardSummary | null;
   accessToken: string;
-  onboardingRequired: boolean;
+  nicknameRequired: boolean;
   authMigrationRequired?: boolean;
   recoveryAvailable?: boolean;
   linkedProviders?: string[];
@@ -155,7 +155,7 @@ const initialState: SessionState = {
   rankedWins: 0,
   leaderboard: null,
   accessToken: "",
-  onboardingRequired: false,
+  nicknameRequired: false,
   authMigrationRequired: false,
   recoveryAvailable: false,
   linkedProviders: [],
@@ -182,6 +182,8 @@ export class SessionController extends ObservableStore<SessionState> {
   private session: AuthSessionSnapshot = emptyAuthSession();
   private refreshPromise: Promise<AuthSessionSnapshot | null> | null = null;
   private bootstrapPromise: Promise<AuthSessionSnapshot | null> | null = null;
+  private bootstrapCompleted = false;
+  private bootstrapResult: AuthSessionSnapshot | null = null;
   private mounted = true;
   private started = false;
   private networkHandlers: SessionNetworkHandlers = {
@@ -291,7 +293,7 @@ export class SessionController extends ObservableStore<SessionState> {
       canPlay:
         typeof session.canPlay === "boolean"
           ? session.canPlay
-          : !session.onboardingRequired && !session.authMigrationRequired,
+          : !session.nicknameRequired && !session.authMigrationRequired,
     };
   }
 
@@ -338,23 +340,29 @@ export class SessionController extends ObservableStore<SessionState> {
     });
   };
 
-  bootstrapSession = async (): Promise<AuthSessionSnapshot | null> => {
+  bootstrapSession = async (options?: { force?: boolean }): Promise<AuthSessionSnapshot | null> => {
     if (this.bootstrapPromise) {
       return this.bootstrapPromise;
+    }
+    if (this.bootstrapCompleted && !options?.force) {
+      return this.bootstrapResult;
     }
     this.bootstrapPromise = (async () => {
       try {
         const session = await this.networkHandlers.bootstrapSession();
+        this.bootstrapResult = session;
         if (!session && this.state.isGuest) {
           this.clearAuthSession(guestSessionExpiredMessage);
         }
         return session;
       } catch {
+        this.bootstrapResult = null;
         if (this.state.isGuest) {
           this.clearAuthSession(guestSessionExpiredMessage);
         }
         return null;
       } finally {
+        this.bootstrapCompleted = true;
         this.bootstrapPromise = null;
       }
     })();
@@ -390,7 +398,7 @@ export class SessionController extends ObservableStore<SessionState> {
     const sessionSnapshot: AuthSessionSnapshot = {
       userId: data.user?.id || "",
       accessToken: data.accessToken || "",
-      onboardingRequired: !!data?.onboardingRequired,
+      nicknameRequired: !!data?.nicknameRequired,
       authMigrationRequired: !!data?.authMigrationRequired,
       recoveryAvailable: !!data?.recoveryAvailable,
       linkedProviders: Array.isArray(data.linkedProviders)
@@ -399,7 +407,7 @@ export class SessionController extends ObservableStore<SessionState> {
       canPlay:
         typeof data.canPlay === "boolean"
           ? data.canPlay
-          : !data?.onboardingRequired && !data?.authMigrationRequired,
+          : !data?.nicknameRequired && !data?.authMigrationRequired,
       nicknameInput: data.suggestedNickname || displayName,
     };
     this.applySessionSnapshot(sessionSnapshot, {
@@ -479,14 +487,14 @@ export class SessionController extends ObservableStore<SessionState> {
 
   async ensureFreshSession(
     minValidityMs = 60_000,
-    options?: { allowOnboarding?: boolean; forceRefresh?: boolean },
+    options?: { allowNicknameRequired?: boolean; forceRefresh?: boolean },
   ): Promise<AuthSessionSnapshot | null> {
-    const allowOnboarding = !!options?.allowOnboarding;
+    const allowNicknameRequired = !!options?.allowNicknameRequired;
     const forceRefresh = !!options?.forceRefresh;
     if (!this.session.userId || !this.session.accessToken) {
       return null;
     }
-    if (!allowOnboarding && this.session.onboardingRequired) {
+    if (!allowNicknameRequired && this.session.nicknameRequired) {
       return null;
     }
 
@@ -520,7 +528,7 @@ export class SessionController extends ObservableStore<SessionState> {
         return fresh;
       }
     }
-    if (this.session.onboardingRequired) {
+    if (this.session.nicknameRequired) {
       return null;
     }
     return this.networkHandlers.getPlayableSession();
@@ -540,7 +548,7 @@ export class SessionController extends ObservableStore<SessionState> {
     this.patchState({
       userId: this.session.userId,
       accessToken: this.session.accessToken,
-      onboardingRequired: this.session.onboardingRequired,
+      nicknameRequired: this.session.nicknameRequired,
       authMigrationRequired: this.session.authMigrationRequired,
       recoveryAvailable: this.session.recoveryAvailable,
       linkedProviders: this.session.linkedProviders,

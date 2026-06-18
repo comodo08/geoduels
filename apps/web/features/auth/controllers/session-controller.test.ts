@@ -23,7 +23,7 @@ describe('SessionController', () => {
       bootstrapSession: vi.fn(async () => ({
         userId: 'user-1',
         accessToken: tokenWithExp(Date.now() + 60 * 60_000),
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: 'Player'
       }))
     });
@@ -44,13 +44,29 @@ describe('SessionController', () => {
     controller.destroy();
   });
 
+  it('does not repeat a completed signed-out bootstrap unless forced', async () => {
+    const bootstrapSession = vi.fn(async () => null);
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.setNetworkHandlers({ bootstrapSession });
+
+    await controller.bootstrapSession();
+    await controller.bootstrapSession();
+
+    expect(bootstrapSession).toHaveBeenCalledTimes(1);
+
+    await controller.bootstrapSession({ force: true });
+
+    expect(bootstrapSession).toHaveBeenCalledTimes(2);
+    controller.destroy();
+  });
+
   it('refreshes an expired playable session before returning it', async () => {
     const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
     controller.applySessionSnapshot(
       {
         userId: 'user-1',
         accessToken: tokenWithExp(Date.now() - 60_000),
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: 'Player'
       },
       {
@@ -61,7 +77,7 @@ describe('SessionController', () => {
       refreshSession: vi.fn(async () => ({
         userId: 'user-1',
         accessToken: tokenWithExp(Date.now() + 60 * 60_000),
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: 'Player'
       })),
       getPlayableSession: vi.fn(async () => null)
@@ -83,7 +99,7 @@ describe('SessionController', () => {
       {
         userId: 'guest-1',
         accessToken: tokenWithExp(Date.now() - 60_000),
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: 'Guest'
       },
       {
@@ -111,7 +127,7 @@ describe('SessionController', () => {
       {
         userId: 'user-1',
         accessToken: tokenWithExp(Date.now() - 60_000),
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: 'Player'
       },
       {

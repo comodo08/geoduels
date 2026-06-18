@@ -53,8 +53,8 @@ func (s *pgStore) RecordMatchResult(snap contracts.MatchSnapshot) error {
 			name = p.UserID
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into users (id, email, display_name, avatar_url, onboarded_at, account_type)
-			values ($1, $2, $3, null, now(), 'guest')
+			insert into users (id, email, display_name, avatar_url, account_type)
+			values ($1, $2, $3, null, 'guest')
 			on conflict (id) do nothing
 		`, p.UserID, nil, name); err != nil {
 			return err

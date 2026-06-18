@@ -16,8 +16,8 @@ type AccountRepository interface {
 	UnlinkProviderIdentity(userID, provider string) (Identity, error)
 	CreateGuestIdentity() (Identity, error)
 	GetIdentity(sub string) (Identity, error)
-	CompleteOnboarding(sub, email, displayName string) error
-	UpdateDisplayName(sub, displayName string) error
+	SetNickname(sub, displayName string) error
+	SuggestNickname(sub, displayName string) (string, error)
 	DeleteAccount(userID string) error
 	DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error)
 }

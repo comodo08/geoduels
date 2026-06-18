@@ -198,8 +198,8 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "account is banned", http.StatusForbidden)
 		return
 	}
-	if !identity.Onboarded {
-		http.Error(w, "onboarding incomplete", http.StatusForbidden)
+	if identity.NicknameRequired {
+		http.Error(w, "nickname required", http.StatusForbidden)
 		return
 	}
 	if identity.AccountType == "guest" {
@@ -389,8 +389,8 @@ func (q *matchCoordinator) heartbeat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identity not found", http.StatusUnauthorized)
 		return
 	}
-	if !identity.Onboarded {
-		http.Error(w, "onboarding incomplete", http.StatusForbidden)
+	if identity.NicknameRequired {
+		http.Error(w, "nickname required", http.StatusForbidden)
 		return
 	}
 	if identity.AccountType == "guest" {

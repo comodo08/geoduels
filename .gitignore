@@ -11,6 +11,7 @@ node_modules/
 **/node_modules/
 .next/
 apps/web/.next/
+apps/web/.next-dev/
 apps/web/out/
 apps/web/.turbo/
 *.tsbuildinfo

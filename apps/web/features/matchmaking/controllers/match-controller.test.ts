@@ -55,7 +55,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_guest',
       accessToken: 'guest-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Guest'
     };
 
@@ -116,7 +116,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_recover',
       accessToken: 'recover-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Recover'
     };
 
@@ -152,7 +152,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_expired',
       accessToken: 'expired-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Expired'
     };
 
@@ -198,7 +198,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_match',
       accessToken: 'match-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Match'
     };
 
@@ -231,7 +231,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_lobby',
       accessToken: 'lobby-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Lobby'
     };
 
@@ -273,7 +273,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_single',
       accessToken: 'single-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Single'
     };
 
@@ -319,7 +319,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_ping',
       accessToken: 'ping-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Ping'
     };
     const sessionController = {
@@ -366,7 +366,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_replace',
       accessToken: 'replace-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Replace'
     };
 
@@ -426,7 +426,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_guest',
       accessToken: 'fresh-bootstrap-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Guest'
     };
 
@@ -460,7 +460,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_guest',
       accessToken: 'guest-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Guest'
     };
     let resolveSession: (value: AuthSessionSnapshot) => void = () => {};
@@ -511,7 +511,7 @@ describe('MatchController', () => {
     const session: AuthSessionSnapshot = {
       userId: 'u_match_route',
       accessToken: 'route-access-token',
-      onboardingRequired: false,
+      nicknameRequired: false,
       nicknameInput: 'Route'
     };
 

@@ -71,17 +71,17 @@ func (s *recoverTestStore) GetIdentity(sub string) (persistence.Identity, error)
 		accountType = s.accountTypes[sub]
 	}
 	return persistence.Identity{
-		Sub:         sub,
-		Onboarded:   true,
-		AccountType: accountType,
+		Sub:              sub,
+		NicknameRequired: false,
+		AccountType:      accountType,
 	}, nil
 }
 
-func (s *recoverTestStore) CompleteOnboarding(sub, email, displayName string) error {
+func (s *recoverTestStore) SetNickname(sub, displayName string) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UpdateDisplayName(sub, displayName string) error {
+func (s *recoverTestStore) SuggestNickname(sub, displayName string) (string, error) {
 	panic("unexpected call")
 }
 

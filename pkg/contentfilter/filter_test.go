@@ -15,6 +15,29 @@ func TestSanitizeNicknameMaxLength(t *testing.T) {
 	if _, err := SanitizeNickname("FifteenCharssss"); err == nil {
 		t.Fatal("expected nickname over 14 chars to fail")
 	}
+	for _, nickname := range []string{"Player Name", "Player-Name", "éclair", "Player..Name", "Player__Name"} {
+		if _, err := SanitizeNickname(nickname); err == nil {
+			t.Fatalf("expected %q to fail nickname character validation", nickname)
+		}
+	}
+	if nick, err := SanitizeNickname("Player1.Name_"); err != nil || nick != "Player1.Name_" {
+		t.Fatalf("SanitizeNickname valid punctuation = %q, %v", nick, err)
+	}
+}
+
+func TestNicknameSuggestionBase(t *testing.T) {
+	tests := map[string]string{
+		"Player Name":           "Player.Name",
+		"Player  Name":          "Player.Name",
+		"Player__Name":          "Player_Name",
+		"Very Long Player Name": "Very.Long.Play",
+		"1":                     "Player",
+	}
+	for raw, want := range tests {
+		if got := NicknameSuggestionBase(raw); got != want {
+			t.Fatalf("NicknameSuggestionBase(%q) = %q, want %q", raw, got, want)
+		}
+	}
 }
 
 func TestRejectAbusiveTextUsesSwappableFilter(t *testing.T) {

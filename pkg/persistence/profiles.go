@@ -35,12 +35,11 @@ func (s *pgStore) UpsertUser(userID, email, displayName string) error {
 	}
 
 	if _, err := tx.Exec(ctx, `
-		insert into users (id, email, display_name, avatar_url, onboarded_at, account_type)
-		values ($1, $2, $3, null, now(), 'guest')
+		insert into users (id, email, display_name, avatar_url, account_type)
+		values ($1, $2, $3, null, 'guest')
 		on conflict (id) do update set
 			email = excluded.email,
-			display_name = excluded.display_name,
-			onboarded_at = coalesce(users.onboarded_at, excluded.onboarded_at)
+			display_name = excluded.display_name
 	`, userID, nullableEmail, displayName); err != nil {
 		return err
 	}

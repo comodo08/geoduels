@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"geoduels/pkg/auth"
+	"geoduels/pkg/contracts"
 	"geoduels/pkg/persistence"
 )
 
@@ -24,13 +26,45 @@ type guestAuthTestStore struct {
 	sessions      map[string]persistence.RefreshTokenRecord
 }
 
+type nicknameAuthTestStore struct {
+	persistence.Store
+	identity       persistence.Identity
+	setErr         error
+	setName        string
+	suggestedName  string
+	suggestionFrom string
+}
+
+func (s *nicknameAuthTestStore) GetIdentity(sub string) (persistence.Identity, error) {
+	return s.identity, nil
+}
+
+func (s *nicknameAuthTestStore) SetNickname(sub, displayName string) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
+	s.setName = displayName
+	s.identity.DisplayName = displayName
+	s.identity.NicknameRequired = false
+	return nil
+}
+
+func (s *nicknameAuthTestStore) SyncLoginBadges(userID string) error {
+	return nil
+}
+
+func (s *nicknameAuthTestStore) SuggestNickname(sub, displayName string) (string, error) {
+	s.suggestionFrom = displayName
+	return s.suggestedName, nil
+}
+
 func (s *guestAuthTestStore) CreateGuestIdentity() (persistence.Identity, error) {
 	s.createdGuests++
 	s.identity = persistence.Identity{
-		Sub:         "guest-1",
-		DisplayName: "Guest",
-		Onboarded:   true,
-		AccountType: "guest",
+		Sub:              "guest-1",
+		DisplayName:      "Guest",
+		NicknameRequired: false,
+		AccountType:      "guest",
 	}
 	return s.identity, nil
 }
@@ -274,6 +308,103 @@ func TestSessionUserIncludesProfileFields(t *testing.T) {
 	}
 	if !user.IsAdmin {
 		t.Fatal("expected admin flag to be preserved")
+	}
+}
+
+func TestUpdateNicknameClaimsRequiredNickname(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:              "user-1",
+			DisplayName:      "Old Name",
+			NicknameRequired: true,
+			AccountType:      "registered",
+		},
+	}
+	a := &api{
+		store:          store,
+		appAuthSecret:  secret,
+		accessTokenTTL: 15 * time.Minute,
+	}
+	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/me/nickname", strings.NewReader(`{"nickname":"Player.One"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	a.updateNickname(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update nickname status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if store.setName != "Player.One" {
+		t.Fatalf("stored nickname = %q", store.setName)
+	}
+	var payload contracts.AuthSessionPayload
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.NicknameRequired {
+		t.Fatal("nickname should be claimed after successful update")
+	}
+	if !payload.CanPlay {
+		t.Fatal("claimed registered user should be playable")
+	}
+}
+
+func TestUpdateNicknameReturnsConflictWhenTaken(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:              "user-1",
+			NicknameRequired: true,
+			AccountType:      "registered",
+		},
+		setErr: persistence.ErrNicknameTaken,
+	}
+	a := &api{store: store, appAuthSecret: secret}
+	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/me/nickname", strings.NewReader(`{"nickname":"Taken"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	a.updateNickname(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("update nickname status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !errors.Is(store.setErr, persistence.ErrNicknameTaken) {
+		t.Fatal("expected nickname conflict")
+	}
+}
+
+func TestSuggestedNicknameUsesAvailableStoreSuggestion(t *testing.T) {
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:              "user-1",
+			ProviderName:     "Player Name",
+			NicknameRequired: true,
+			AccountType:      "registered",
+		},
+		suggestedName: "Player.Name4821",
+	}
+	a := &api{store: store}
+
+	got, err := a.suggestedNickname(store.identity, "")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "Player.Name4821" {
+		t.Fatalf("suggested nickname = %q", got)
+	}
+	if store.suggestionFrom != "Player Name" {
+		t.Fatalf("suggestion source = %q", store.suggestionFrom)
 	}
 }
 

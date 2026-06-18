@@ -102,7 +102,7 @@ describe("lobby-client", () => {
       {
         userId: "u1",
         accessToken: "access-token",
-        onboardingRequired: false,
+        nicknameRequired: false,
         nicknameInput: "",
       },
       "lob-1",

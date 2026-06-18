@@ -51,7 +51,7 @@ type Identity struct {
 	GoogleName            string
 	ProviderName          string
 	AvatarURL             string
-	Onboarded             bool
+	NicknameRequired      bool
 	DisplayName           string
 	AccountType           string
 	LinkedProviders       []string

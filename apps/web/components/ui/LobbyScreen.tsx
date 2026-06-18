@@ -154,6 +154,35 @@ const tabPanelMotion = {
 const lobbyBackgroundImage = "/bg2.v1.jpg";
 const lobbyBackgroundPlaceholder = "/bg2.placeholder.v1.jpg";
 const lobbyBackgroundOverlay = "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
+let lobbyBackgroundLoaded = false;
+let lobbyBackgroundLoadPromise: Promise<void> | null = null;
+
+function loadLobbyBackground() {
+  if (lobbyBackgroundLoaded) {
+    return Promise.resolve();
+  }
+  if (lobbyBackgroundLoadPromise) {
+    return lobbyBackgroundLoadPromise;
+  }
+  lobbyBackgroundLoadPromise = new Promise<void>((resolve) => {
+    const image = new Image();
+    image.onload = async () => {
+      try {
+        await image.decode();
+      } catch {
+        // Some browsers resolve onload before decode support is available.
+      }
+      lobbyBackgroundLoaded = true;
+      resolve();
+    };
+    image.onerror = () => {
+      lobbyBackgroundLoadPromise = null;
+      resolve();
+    };
+    image.src = lobbyBackgroundImage;
+  });
+  return lobbyBackgroundLoadPromise;
+}
 
 export default function LobbyScreen({
   contentRoute = "play",
@@ -228,7 +257,7 @@ export default function LobbyScreen({
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [dismissedMaintenanceAlertKey, setDismissedMaintenanceAlertKey] = useState("");
-  const [highQualityBackgroundReady, setHighQualityBackgroundReady] = useState(false);
+  const [highQualityBackgroundReady, setHighQualityBackgroundReady] = useState(lobbyBackgroundLoaded);
   const currentNavRoute: LobbyContentRoute = contentRoute === "map-details" || contentRoute === "map-upload" ? "maps" : contentRoute;
   const [visualNavRoute, setVisualNavRoute] = useState<LobbyContentRoute>(() => {
     if (typeof window === "undefined") return currentNavRoute;
@@ -246,21 +275,17 @@ export default function LobbyScreen({
 
   useEffect(() => {
     let cancelled = false;
-    const loadBackground = () => {
-      const image = new Image();
-      image.onload = async () => {
-        try {
-          await image.decode();
-        } catch {
-          // Some browsers resolve onload before decode support is available.
-        }
-        if (!cancelled) {
+    if (lobbyBackgroundLoaded) {
+      setHighQualityBackgroundReady(true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadLobbyBackground().then(() => {
+        if (!cancelled && lobbyBackgroundLoaded) {
           setHighQualityBackgroundReady(true);
         }
-      };
-      image.src = lobbyBackgroundImage;
-    };
-    const timer = window.setTimeout(loadBackground, 350);
+      });
+    }, 350);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);

@@ -101,6 +101,9 @@ export function ProfileModal(props: ProfileModalProps) {
                 className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#101a20] px-3 py-2 text-base font-bold text-white outline-none transition focus:border-[#2ad18f]/60"
                 placeholder="Enter nickname"
                 maxLength={14}
+                minLength={2}
+                pattern="(?!.*\.\.)(?!.*__)[A-Za-z0-9._]{2,14}"
+                autoComplete="nickname"
                 autoFocus
               />
             ) : (

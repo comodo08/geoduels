@@ -1,12 +1,17 @@
 import LobbyRoutePage from "../features/home/page/LobbyRoutePage";
+import { getLobbyLayout } from "../features/home/page/LobbyApplicationLayout";
+import type { NextPageWithLayout } from "./_app";
 
-export default function TopPage() {
+const TopPage: NextPageWithLayout = function TopPage() {
   return (
     <LobbyRoutePage
-      route="top"
       title="GeoDuels | Leaderboard"
       description="Browse the GeoDuels ranked leaderboard."
       canonicalPath="/top"
     />
   );
-}
+};
+
+TopPage.getLayout = getLobbyLayout;
+
+export default TopPage;

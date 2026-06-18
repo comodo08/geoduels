@@ -2,23 +2,20 @@ package persistence
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"geoduels/pkg/contentfilter"
 )
 
-func providerOnboardedAt(linkedGuest bool) any {
-	if linkedGuest {
-		return time.Now()
-	}
-	return nil
-}
-
-func googleOnboardedAt(linkedGuest bool) any {
-	return providerOnboardedAt(linkedGuest)
-}
+var ErrNicknameTaken = errors.New("nickname already taken")
 
 func chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType string) (string, bool) {
 	if existingProviderUserID != "" {
@@ -133,24 +130,22 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 			return Identity{}, err
 		}
 	}
-	userID, linkedGuest := chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType)
-	onboardedAt := providerOnboardedAt(linkedGuest)
+	userID, _ := chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType)
 	userEmail := providerAccountEmail(provider, email)
 
 	if _, err := tx.Exec(ctx, `
-		insert into users (id, email, display_name, avatar_url, onboarded_at, account_type)
-		values ($1, $2, $3, $4, $5, 'registered')
+		insert into users (id, email, display_name, avatar_url, account_type)
+		values ($1, $2, $3, $4, 'registered')
 		on conflict (id) do update set
 			email = coalesce(excluded.email, users.email),
 			display_name = case
 				when users.account_type = 'guest' then excluded.display_name
-				when users.onboarded_at is not null and nullif(users.display_name, '') is not null then users.display_name
+				when users.nickname_claimed_at is not null and nullif(users.display_name, '') is not null then users.display_name
 				else excluded.display_name
 			end,
 			avatar_url = excluded.avatar_url,
-			onboarded_at = coalesce(users.onboarded_at, excluded.onboarded_at),
 			account_type = 'registered'
-	`, userID, userEmail, providerName, nullable(avatarURL), onboardedAt); err != nil {
+	`, userID, userEmail, providerName, nullable(avatarURL)); err != nil {
 		return Identity{}, err
 	}
 	if existingProviderUserID != "" {
@@ -314,22 +309,20 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 		}
 	}
 
-	onboardedAt := providerOnboardedAt(linkAccountType == "guest")
 	userEmail := providerAccountEmail(provider, email)
 	if _, err := tx.Exec(ctx, `
-		insert into users (id, email, display_name, avatar_url, onboarded_at, account_type)
-		values ($1, $2, $3, $4, $5, 'registered')
+		insert into users (id, email, display_name, avatar_url, account_type)
+		values ($1, $2, $3, $4, 'registered')
 		on conflict (id) do update set
 			email = coalesce(excluded.email, users.email),
 			display_name = case
 				when users.account_type = 'guest' then excluded.display_name
-				when users.onboarded_at is not null and nullif(users.display_name, '') is not null then users.display_name
+				when users.nickname_claimed_at is not null and nullif(users.display_name, '') is not null then users.display_name
 				else excluded.display_name
 			end,
 			avatar_url = excluded.avatar_url,
-			onboarded_at = coalesce(users.onboarded_at, excluded.onboarded_at),
 			account_type = 'registered'
-	`, linkUserID, userEmail, providerName, nullable(avatarURL), onboardedAt); err != nil {
+	`, linkUserID, userEmail, providerName, nullable(avatarURL)); err != nil {
 		return Identity{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -589,7 +582,7 @@ func (s *pgStore) GetIdentity(sub string) (Identity, error) {
 			coalesce(u.email, ui.email, ''),
 			coalesce(ui.provider_name, ''),
 			coalesce(u.avatar_url, ui.avatar_url, ''),
-			coalesce(u.onboarded_at is not null, false) as onboarded,
+			coalesce(u.account_type = 'registered' and u.nickname_claimed_at is null, false) as nickname_required,
 				coalesce(nullif(u.display_name, ''), ui.provider_name, u.id),
 				u.account_type,
 				coalesce(u.is_admin, false),
@@ -613,7 +606,7 @@ func (s *pgStore) GetIdentity(sub string) (Identity, error) {
 		&out.Email,
 		&out.GoogleName,
 		&out.AvatarURL,
-		&out.Onboarded,
+		&out.NicknameRequired,
 		&out.DisplayName,
 		&out.AccountType,
 		&out.IsAdmin,
@@ -664,37 +657,27 @@ func containsString(values []string, needle string) bool {
 	return false
 }
 
-func (s *pgStore) CompleteOnboarding(sub, email, displayName string) error {
+func (s *pgStore) SetNickname(sub, displayName string) error {
 	if sub == "" {
 		return errors.New("subject required")
 	}
 	if displayName == "" {
 		return errors.New("display name required")
 	}
-	var nullableEmail any
-	if email != "" {
-		nullableEmail = email
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	tag, err := s.pool.Exec(ctx, `
 		update users
-		set email = case
-				when email is not null then email
-				when $2::text is null then email
-				when exists (
-					select 1
-					from users existing
-					where lower(existing.email) = lower($2)
-					  and existing.id <> users.id
-				) then email
-				else $2
-			end,
-			display_name = $3,
-			onboarded_at = coalesce(onboarded_at, now())
+		set display_name = $2,
+			nickname_claimed_at = coalesce(nickname_claimed_at, now())
 		where id = $1
-	`, sub, nullableEmail, displayName)
+		  and coalesce(account_type, 'registered') <> 'guest'
+	`, sub, displayName)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_claimed_nickname_unique" {
+			return ErrNicknameTaken
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
@@ -703,28 +686,49 @@ func (s *pgStore) CompleteOnboarding(sub, email, displayName string) error {
 	return nil
 }
 
-func (s *pgStore) UpdateDisplayName(sub, displayName string) error {
-	if sub == "" {
-		return errors.New("subject required")
-	}
-	if displayName == "" {
-		return errors.New("display name required")
+func (s *pgStore) SuggestNickname(sub, displayName string) (string, error) {
+	base := contentfilter.NicknameSuggestionBase(displayName)
+	if _, err := contentfilter.ValidateNickname(base); err != nil {
+		base = "Player"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	tag, err := s.pool.Exec(ctx, `
-		update users
-		set display_name = $2
-		where id = $1
-		  and coalesce(account_type, 'registered') <> 'guest'
-	`, sub, displayName)
-	if err != nil {
-		return err
+	available := func(candidate string) (bool, error) {
+		var taken bool
+		err := s.pool.QueryRow(ctx, `
+			select exists(
+				select 1
+				from users
+				where id <> $1
+				  and account_type = 'registered'
+				  and nickname_claimed_at is not null
+				  and lower(display_name) = lower($2)
+			)
+		`, sub, candidate).Scan(&taken)
+		return !taken, err
 	}
-	if tag.RowsAffected() == 0 {
-		return errors.New("user not found")
+	if ok, err := available(base); err != nil {
+		return "", err
+	} else if ok {
+		return base, nil
 	}
-	return nil
+	prefix := base
+	if len(prefix) > contentfilter.MaxNicknameLength-4 {
+		prefix = prefix[:contentfilter.MaxNicknameLength-4]
+	}
+	for range 32 {
+		value, err := rand.Int(rand.Reader, big.NewInt(9000))
+		if err != nil {
+			return "", err
+		}
+		candidate := fmt.Sprintf("%s%04d", prefix, value.Int64()+1000)
+		if ok, err := available(candidate); err != nil {
+			return "", err
+		} else if ok {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("nickname suggestion unavailable")
 }
 
 func (s *pgStore) SetUserAdmin(userID string, isAdmin bool) error {

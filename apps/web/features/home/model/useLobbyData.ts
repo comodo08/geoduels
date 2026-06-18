@@ -57,7 +57,7 @@ export function useLobbyData({
       enabled &&
       !!auth.userId &&
       !!auth.accessToken &&
-      !auth.onboardingRequired,
+      !auth.nicknameRequired,
     queryFn: async () => {
       const session = await sessionController.ensureFreshSession();
       if (!session) {
@@ -93,7 +93,7 @@ export function useLobbyData({
     enabled: enabled && leaderboardEnabled,
     queryFn: async () => {
       let accessToken: string | undefined;
-      if (auth.userId && auth.accessToken && !auth.onboardingRequired) {
+      if (auth.userId && auth.accessToken && !auth.nicknameRequired) {
         const session = await sessionController.ensureFreshSession();
         if (session) {
           accessToken = session.accessToken;

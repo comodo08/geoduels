@@ -240,7 +240,7 @@ export class MatchController extends ObservableStore<MatchState> {
   };
 
   private async startRecover(session: AuthSessionSnapshot) {
-    if (!session.userId || !session.accessToken || session.onboardingRequired) return;
+    if (!session.userId || !session.accessToken || session.nicknameRequired) return;
     if (this.recoverInFlight || this.state.matchmaking.activeRecoverRequestID !== null) return;
 
     const requestID = ++this.recoverRequestId;

@@ -40,7 +40,7 @@ const visualRecipeAllowed = [
   "components/ui/ChatPanel.tsx",
   "components/ui/StatsPanel.tsx",
   "components/home/InGameScene.tsx",
-  "components/home/NicknameOnboardingModal.tsx",
+  "components/home/RequiredNicknameModal.tsx",
   "features/home/page/HomePageGame.tsx",
   "features/home/page/HomePageOverlays.tsx",
   "pages/match/[id].tsx",

@@ -482,7 +482,7 @@ export function deriveHomeModel({
       userEmail: auth.userEmail,
       displayName: auth.displayName,
       userAvatar: auth.userAvatar,
-      onboardingRequired: auth.onboardingRequired,
+      nicknameRequired: auth.nicknameRequired,
       authMigrationRequired: auth.authMigrationRequired,
       recoveryAvailable: auth.recoveryAvailable,
       linkedProviders: auth.linkedProviders,
@@ -610,7 +610,7 @@ export function deriveHomeModel({
       error: "",
     },
     overlays: {
-      onboardingOpen: auth.onboardingRequired && !!auth.userId,
+      nicknameRequiredOpen: auth.nicknameRequired && !!auth.userId,
       notifications: [],
       guestVerification: {
         open: false,

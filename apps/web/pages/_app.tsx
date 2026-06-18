@@ -1,7 +1,9 @@
 import type { AppProps } from 'next/app';
+import type { NextPage } from 'next';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Head from 'next/head';
 import { Montserrat } from 'next/font/google';
+import type { ReactElement, ReactNode } from 'react';
 import { useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import 'easymde/dist/easymde.min.css';
@@ -12,7 +14,15 @@ const montserrat = Montserrat({
   variable: '--font-montserrat'
 });
 
-export default function App({ Component, pageProps }: AppProps) {
+export type NextPageWithLayout = NextPage & {
+  getLayout?: (page: ReactElement) => ReactNode;
+};
+
+type AppPropsWithLayout = AppProps & {
+  Component: NextPageWithLayout;
+};
+
+export default function App({ Component, pageProps }: AppPropsWithLayout) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -24,6 +34,7 @@ export default function App({ Component, pageProps }: AppProps) {
         }
       })
   );
+  const getLayout = Component.getLayout ?? ((page) => page);
 
   return (
     <>
@@ -34,7 +45,7 @@ export default function App({ Component, pageProps }: AppProps) {
       </Head>
       <div className={montserrat.variable}>
         <QueryClientProvider client={queryClient}>
-          <Component {...pageProps} />
+          {getLayout(<Component {...pageProps} />)}
         </QueryClientProvider>
       </div>
     </>

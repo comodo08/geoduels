@@ -74,57 +74,6 @@ func (a *api) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *api) completeOnboarding(w http.ResponseWriter, r *http.Request) {
-	claims, err := a.authenticatedClaims(r)
-	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-	identity, err := a.store.GetIdentity(claims.Sub)
-	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
-	}
-	if identity.Onboarded {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"alreadyOnboarded": true,
-			"user":             sessionUser(identity),
-		})
-		return
-	}
-	if identity.AccountType == "guest" {
-		http.Error(w, "guest nicknames cannot be changed", http.StatusForbidden)
-		return
-	}
-	var req struct {
-		Nickname string `json:"nickname"`
-	}
-	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	nick, err := validatedNickname(req.Nickname)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := a.store.CompleteOnboarding(identity.Sub, identity.Email, nick); err != nil {
-		http.Error(w, "failed to create profile", http.StatusInternalServerError)
-		return
-	}
-	updated, err := a.store.GetIdentity(identity.Sub)
-	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
-	}
-	payload, err := a.issueAuthSessionPayload(updated, claims.SessionID)
-	if err != nil {
-		http.Error(w, "issue session failed", http.StatusInternalServerError)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
 func (a *api) updateNickname(w http.ResponseWriter, r *http.Request) {
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
@@ -136,10 +85,6 @@ func (a *api) updateNickname(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identity not found", http.StatusUnauthorized)
 		return
 	}
-	if !identity.Onboarded {
-		http.Error(w, "onboarding incomplete", http.StatusForbidden)
-		return
-	}
 	if identity.AccountType == "guest" {
 		http.Error(w, "guest nicknames cannot be changed", http.StatusForbidden)
 		return
@@ -156,7 +101,11 @@ func (a *api) updateNickname(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := a.store.UpdateDisplayName(claims.Sub, nick); err != nil {
+	if err := a.store.SetNickname(claims.Sub, nick); err != nil {
+		if errors.Is(err, persistence.ErrNicknameTaken) {
+			http.Error(w, "nickname already taken", http.StatusConflict)
+			return
+		}
 		http.Error(w, "failed to update nickname", http.StatusInternalServerError)
 		return
 	}
@@ -165,15 +114,12 @@ func (a *api) updateNickname(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identity not found", http.StatusUnauthorized)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"user": map[string]any{
-			"id":           updated.Sub,
-			"display_name": defaultStr(updated.DisplayName, updated.GoogleName),
-			"avatar_url":   updated.AvatarURL,
-			"email":        updated.Email,
-			"isGuest":      updated.AccountType == "guest",
-		},
-	})
+	payload, err := a.issueAuthSessionPayload(updated, claims.SessionID)
+	if err != nil {
+		http.Error(w, "issue session failed", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func (a *api) unlinkAuthProvider(w http.ResponseWriter, r *http.Request) {
@@ -371,17 +317,29 @@ func (a *api) issueAuthSessionPayload(identity persistence.Identity, sessionID s
 	if err != nil {
 		return contracts.AuthSessionPayload{}, err
 	}
+	suggestedNickname, err := a.suggestedNickname(identity, "")
+	if err != nil {
+		return contracts.AuthSessionPayload{}, err
+	}
 	payload := contracts.AuthSessionPayload{
 		AccessToken:           accessToken,
-		OnboardingRequired:    !identity.Onboarded,
-		SuggestedNickname:     defaultStr(identity.ProviderName, defaultStr(identity.GoogleName, identity.DisplayName)),
+		NicknameRequired:      identity.NicknameRequired,
+		SuggestedNickname:     suggestedNickname,
 		LinkedProviders:       identity.LinkedProviders,
 		AuthMigrationRequired: false,
 		RecoveryAvailable:     false,
-		CanPlay:               identity.Onboarded && !identity.IsBanned,
+		CanPlay:               !identity.NicknameRequired && !identity.IsBanned,
 		User:                  sessionUser(identity),
 	}
 	return payload, nil
+}
+
+func (a *api) suggestedNickname(identity persistence.Identity, fallbackName string) (string, error) {
+	raw := defaultStr(identity.ProviderName, defaultStr(fallbackName, defaultStr(identity.GoogleName, identity.DisplayName)))
+	if !identity.NicknameRequired {
+		return raw, nil
+	}
+	return a.store.SuggestNickname(identity.Sub, raw)
 }
 
 func (a *api) autoBootstrapAdmin(identity persistence.Identity) (persistence.Identity, error) {

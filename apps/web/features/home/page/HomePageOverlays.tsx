@@ -1,5 +1,5 @@
 import EndMatchOverlay from "../../../components/ui/EndMatchOverlay";
-import NicknameOnboardingModal from "../../../components/home/NicknameOnboardingModal";
+import RequiredNicknameModal from "../../../components/home/RequiredNicknameModal";
 import AppModalShell from "../../../components/ui/AppModalShell";
 import GuestVerificationOverlay from "./GuestVerificationOverlay";
 import type {
@@ -14,7 +14,7 @@ type HomePageOverlaysProps = {
   actions: Pick<
     HomeActions,
     | "setNicknameInput"
-    | "submitOnboardingNickname"
+    | "submitRequiredNickname"
     | "leaveGame"
     | "reportPlayer"
     | "startSingleplayer"
@@ -33,13 +33,13 @@ export default function HomePageOverlays({
   const activeNotification = overlays.notifications?.[0];
   return (
     <>
-      <NicknameOnboardingModal
-        open={overlays.onboardingOpen}
+      <RequiredNicknameModal
+        open={overlays.nicknameRequiredOpen}
         nicknameInput={auth.nicknameInput}
         nicknameError={auth.nicknameError}
         nicknameSaving={auth.nicknameSaving}
         onChangeNickname={actions.setNicknameInput}
-        onSubmit={() => void actions.submitOnboardingNickname()}
+        onSubmit={() => void actions.submitRequiredNickname()}
       />
       <GuestVerificationOverlay
         verification={overlays.guestVerification}

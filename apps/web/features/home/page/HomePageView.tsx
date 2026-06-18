@@ -4,8 +4,9 @@ import type { LobbyContentRoute } from '../../../components/ui/LobbyScreen';
 import HomePageChatDock from './HomePageChatDock';
 import HomePageLobby from './HomePageLobby';
 import HomePageOverlays from './HomePageOverlays';
+import { loadHomePageGame } from './lobby-preloading';
 
-const HomePageGame = dynamic(() => import('./HomePageGame'), {
+const HomePageGame = dynamic(loadHomePageGame, {
   ssr: false,
 });
 

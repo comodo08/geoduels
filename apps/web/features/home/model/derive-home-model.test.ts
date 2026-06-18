@@ -22,7 +22,7 @@ function createAuthState(overrides: Partial<SessionState> = {}): SessionState {
     rankedWins: 2,
     leaderboard: null,
     accessToken: 'access-token',
-    onboardingRequired: false,
+    nicknameRequired: false,
     nicknameInput: 'Self',
     nicknameError: '',
     nicknameSaving: false,

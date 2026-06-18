@@ -119,8 +119,8 @@ To remove stale or unavailable Street View panoramas from a Vali export, validat
 cd apps/web
 npm ci
 GOOGLE_MAPS_API_KEY='server-key' npm run validate:streetview -- \
-  --input ../../datasets/a-source-world.json \
-  --output ../../datasets/a-source-world.clean.json
+  --input ../../datasets/world.json \
+  --output ../../datasets/world.clean.json
 ```
 
 The key must have Street View Static API enabled and should be restricted to that API and, where practical, the machine's IP address. The validator calls only Google's no-charge Street View metadata endpoint and never requests imagery. Deleted panorama IDs are refreshed from their saved coordinates against the nearest outdoor panorama within 50 meters. The run is resumable through an append-only checkpoint and writes refreshed IDs and rejected locations beside the clean output.

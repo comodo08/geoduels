@@ -103,7 +103,7 @@ func (s *pgStore) DeleteAccount(userID string) error {
 		set email = null,
 			display_name = 'Deleted player',
 			avatar_url = null,
-			onboarded_at = null,
+			nickname_claimed_at = null,
 			account_type = 'guest',
 			is_admin = false,
 			is_moderator = false,

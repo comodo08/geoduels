@@ -50,7 +50,7 @@ describe('GameplaySocketClient', () => {
     });
 
     client.connect(
-      { userId: 'self', accessToken: 'access', onboardingRequired: false, nicknameInput: 'Self' },
+      { userId: 'self', accessToken: 'access', nicknameRequired: false, nicknameInput: 'Self' },
       'node-1',
       '/ws/node-1',
       'ticket-1'

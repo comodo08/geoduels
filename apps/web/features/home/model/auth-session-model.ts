@@ -13,7 +13,7 @@ type AuthResponseUser = {
 
 export type AuthResponse = {
   accessToken?: string;
-  onboardingRequired?: boolean;
+  nicknameRequired?: boolean;
   authMigrationRequired?: boolean;
   recoveryAvailable?: boolean;
   linkedProviders?: string[];
@@ -54,7 +54,7 @@ export function buildSessionFromAuthResponse(
         ? data.user.id
         : fallback.userId,
     accessToken: data.accessToken || "",
-    onboardingRequired: !!data.onboardingRequired,
+    nicknameRequired: !!data.nicknameRequired,
     authMigrationRequired: !!data.authMigrationRequired,
     recoveryAvailable: !!data.recoveryAvailable,
     linkedProviders: Array.isArray(data.linkedProviders)
@@ -63,7 +63,7 @@ export function buildSessionFromAuthResponse(
     canPlay:
       typeof data.canPlay === "boolean"
         ? data.canPlay
-        : !data.onboardingRequired && !data.authMigrationRequired,
+        : !data.nicknameRequired && !data.authMigrationRequired,
     nicknameInput: data.suggestedNickname || fallback.nicknameInput,
   };
 }

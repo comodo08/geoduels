@@ -2,8 +2,8 @@ package contentfilter
 
 import (
 	"errors"
+	"regexp"
 	"strings"
-	"unicode"
 
 	goaway "github.com/TwiN/go-away"
 )
@@ -14,7 +14,8 @@ const (
 )
 
 var (
-	ErrAbusiveText = errors.New("content failed safety check")
+	ErrAbusiveText  = errors.New("content failed safety check")
+	nicknamePattern = regexp.MustCompile(`^[A-Za-z0-9._]+$`)
 )
 
 // Filter is the swappable content safety boundary for user-authored text.
@@ -59,13 +60,41 @@ func SanitizeNickname(raw string) (string, error) {
 	if len([]rune(trimmed)) < MinNicknameLength || len([]rune(trimmed)) > MaxNicknameLength {
 		return "", errors.New("nickname must be 2-14 characters")
 	}
-	for _, r := range trimmed {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '_' || r == '-' {
-			continue
-		}
+	if !nicknamePattern.MatchString(trimmed) {
 		return "", errors.New("nickname contains invalid characters")
 	}
+	if strings.Contains(trimmed, "..") || strings.Contains(trimmed, "__") {
+		return "", errors.New("nickname cannot contain repeated dots or underscores")
+	}
 	return trimmed, nil
+}
+
+func NicknameSuggestionBase(raw string) string {
+	raw = strings.TrimSpace(raw)
+	var out strings.Builder
+	var previous rune
+	for _, r := range raw {
+		switch {
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			r = '.'
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_':
+		default:
+			continue
+		}
+		if (r == '.' || r == '_') && r == previous {
+			continue
+		}
+		out.WriteRune(r)
+		previous = r
+	}
+	candidate := out.String()
+	if len(candidate) > MaxNicknameLength {
+		candidate = candidate[:MaxNicknameLength]
+	}
+	if len(candidate) < MinNicknameLength {
+		return "Player"
+	}
+	return candidate
 }
 
 func ValidateNickname(raw string) (string, error) {

@@ -24,7 +24,7 @@ export type HomeAuthView = {
   userEmail: string;
   displayName: string;
   userAvatar: string;
-  onboardingRequired: boolean;
+  nicknameRequired: boolean;
   authMigrationRequired?: boolean;
   recoveryAvailable?: boolean;
   linkedProviders?: string[];
@@ -141,7 +141,7 @@ export type HomeGameView = {
 };
 
 export type HomeOverlaysView = {
-  onboardingOpen: boolean;
+  nicknameRequiredOpen: boolean;
   notifications: UserNotification[];
   guestVerification: {
     open: boolean;
@@ -241,7 +241,7 @@ export type HomeActions = {
   loadLeaderboard: () => void;
   clearAuthSession: (message?: string) => void;
   deleteAccount: () => Promise<void>;
-  submitOnboardingNickname: () => Promise<void>;
+  submitRequiredNickname: () => Promise<void>;
   submitProfileNickname: () => Promise<boolean>;
   selectBadge: (badgeId: string) => Promise<void>;
   startSupportDonation: () => Promise<void>;

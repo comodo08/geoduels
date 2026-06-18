@@ -612,7 +612,7 @@ export class GameController extends ObservableStore<GameState> {
     this.patchState(initialState);
     this.roundClock.reset();
     this.resultAnimRound = '';
-    this.matchController.setStatus(session.onboardingRequired ? 'idle' : 'ready');
+    this.matchController.setStatus(session.nicknameRequired ? 'idle' : 'ready');
   };
 
   forfeitMatch = () => {
