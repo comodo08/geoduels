@@ -466,7 +466,7 @@ export function useHomeModel(options?: {
         sessionController.setAuthPending({ authLoading: true, authError: "" });
         void (async () => {
           try {
-            await sessionController.bootstrapSession({ force: true });
+            await sessionController.bootstrapSession();
           } catch {
             if (cancelled) return;
             sessionController.setAuthPending({

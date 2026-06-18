@@ -62,7 +62,9 @@ func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) session(w http.ResponseWriter, r *http.Request) {
 	if err := a.writeRotatedSessionResponse(w, r); err != nil {
-		a.clearRefreshCookie(w, r)
+		// Session bootstrap can race with another request that has already
+		// rotated the same refresh token. Do not clear the cookie here: the
+		// other response may have installed the newer valid token.
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -159,6 +159,30 @@ func TestGuestLoginReusesExistingRefreshSession(t *testing.T) {
 	}
 }
 
+func TestSessionFailureDoesNotClearRefreshCookie(t *testing.T) {
+	a := &api{
+		store:                 &guestAuthTestStore{},
+		refreshCookieName:     "geoduels_refresh",
+		refreshCookieSameSite: http.SameSiteLaxMode,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/session", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "geoduels_refresh",
+		Value: "stale-token",
+	})
+	rec := httptest.NewRecorder()
+
+	a.session(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("session status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("session failure must not overwrite a possibly newer cookie, got %v", cookies)
+	}
+}
+
 func TestGuestLoginIgnoresNicknamePayload(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
