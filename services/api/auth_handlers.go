@@ -61,10 +61,7 @@ func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) session(w http.ResponseWriter, r *http.Request) {
-	if err := a.writeRotatedSessionResponse(w, r); err != nil {
-		// Session bootstrap can race with another request that has already
-		// rotated the same refresh token. Do not clear the cookie here: the
-		// other response may have installed the newer valid token.
+	if err := a.writeSessionFromCookie(w, r); err != nil {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -223,15 +220,13 @@ func (a *api) sessionIdentity(r *http.Request) (string, string) {
 	if claims, err := a.authenticatedClaims(r); err == nil {
 		return claims.SessionID, claims.Sub
 	}
-	refreshToken := a.readRefreshCookie(r)
-	if refreshToken == "" {
-		return "", ""
+	for _, refreshToken := range a.readRefreshCookies(r) {
+		rec, ok, err := a.store.GetAuthSessionByRefreshToken(auth.RefreshTokenHash(refreshToken))
+		if err == nil && ok {
+			return rec.ID, rec.UserID
+		}
 	}
-	rec, ok, err := a.store.GetAuthSessionByRefreshToken(auth.RefreshTokenHash(refreshToken))
-	if err != nil || !ok {
-		return "", ""
-	}
-	return rec.ID, rec.UserID
+	return "", ""
 }
 
 func (a *api) writeSessionResponse(w http.ResponseWriter, r *http.Request, identity persistence.Identity) error {
@@ -256,19 +251,46 @@ func (a *api) writeRotatedSessionResponse(w http.ResponseWriter, r *http.Request
 	return json.NewEncoder(w).Encode(payload)
 }
 
-func (a *api) rotateSessionFromCookie(r *http.Request) (contracts.AuthSessionPayload, string, error) {
-	refreshToken := a.readRefreshCookie(r)
-	if refreshToken == "" {
-		return contracts.AuthSessionPayload{}, "", errors.New("missing refresh token")
+func (a *api) writeSessionFromCookie(w http.ResponseWriter, r *http.Request) error {
+	rec, err := a.authSessionFromCookies(r)
+	if err != nil {
+		return err
 	}
-	currentHash := auth.RefreshTokenHash(refreshToken)
-	rec, ok, err := a.store.GetAuthSessionByRefreshToken(currentHash)
+	identity, err := a.store.GetIdentity(rec.UserID)
+	if err != nil {
+		return err
+	}
+	payload, err := a.issueAuthSessionPayload(identity, rec.ID)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(w).Encode(payload)
+}
+
+func (a *api) authSessionFromCookies(r *http.Request) (persistence.RefreshTokenRecord, error) {
+	refreshTokens := a.readRefreshCookies(r)
+	if len(refreshTokens) == 0 {
+		return persistence.RefreshTokenRecord{}, errors.New("missing refresh token")
+	}
+	for _, refreshToken := range refreshTokens {
+		candidate, ok, err := a.store.GetAuthSessionByRefreshToken(auth.RefreshTokenHash(refreshToken))
+		if err != nil {
+			return persistence.RefreshTokenRecord{}, err
+		}
+		if !ok || candidate.RevokedAt != nil || time.Now().After(candidate.ExpiresAt) {
+			continue
+		}
+		return candidate, nil
+	}
+	return persistence.RefreshTokenRecord{}, errors.New("session unavailable")
+}
+
+func (a *api) rotateSessionFromCookie(r *http.Request) (contracts.AuthSessionPayload, string, error) {
+	rec, err := a.authSessionFromCookies(r)
 	if err != nil {
 		return contracts.AuthSessionPayload{}, "", err
 	}
-	if !ok || rec.RevokedAt != nil || time.Now().After(rec.ExpiresAt) {
-		return contracts.AuthSessionPayload{}, "", errors.New("session unavailable")
-	}
+	currentHash := rec.RefreshTokenHash
 	nextRefreshToken, nextHash, err := auth.NewRefreshToken()
 	if err != nil {
 		return contracts.AuthSessionPayload{}, "", err
@@ -401,12 +423,22 @@ func (a *api) clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *api) readRefreshCookie(r *http.Request) string {
-	cookie, err := r.Cookie(a.refreshCookieName)
-	if err != nil {
-		return ""
+func (a *api) readRefreshCookies(r *http.Request) []string {
+	cookies := r.CookiesNamed(a.refreshCookieName)
+	values := make([]string, 0, len(cookies))
+	seen := make(map[string]struct{}, len(cookies))
+	for _, cookie := range cookies {
+		value := strings.TrimSpace(cookie.Value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
 	}
-	return strings.TrimSpace(cookie.Value)
+	return values
 }
 
 func requestIsHTTPS(r *http.Request) bool {

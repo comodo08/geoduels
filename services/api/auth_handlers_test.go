@@ -183,6 +183,98 @@ func TestSessionFailureDoesNotClearRefreshCookie(t *testing.T) {
 	}
 }
 
+func TestSessionUsesValidRefreshCookieWhenStaleDuplicateComesFirst(t *testing.T) {
+	store := &guestAuthTestStore{
+		identity: persistence.Identity{
+			Sub:         "user-1",
+			DisplayName: "Player",
+			AccountType: "registered",
+		},
+		sessions: map[string]persistence.RefreshTokenRecord{},
+	}
+	validToken := "valid-token"
+	validHash := auth.RefreshTokenHash(validToken)
+	store.sessions[validHash] = persistence.RefreshTokenRecord{
+		ID:               "session-1",
+		UserID:           "user-1",
+		RefreshTokenHash: validHash,
+		ExpiresAt:        time.Now().Add(time.Hour),
+		CreatedAt:        time.Now(),
+		LastUsedAt:       time.Now(),
+	}
+	a := &api{
+		store:                 store,
+		appAuthSecret:         []byte("01234567890123456789012345678901"),
+		accessTokenTTL:        15 * time.Minute,
+		refreshTokenTTL:       30 * 24 * time.Hour,
+		refreshCookieName:     "geoduels_refresh",
+		refreshCookieSameSite: http.SameSiteLaxMode,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/session", nil)
+	req.Header.Set("Cookie", "geoduels_refresh=stale-token; geoduels_refresh="+validToken)
+	rec := httptest.NewRecorder()
+
+	a.session(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("session status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("session bootstrap must not rotate the refresh cookie, got %v", cookies)
+	}
+	if _, ok := store.sessions[validHash]; !ok {
+		t.Fatal("session bootstrap unexpectedly rotated the stored refresh token")
+	}
+}
+
+func TestSessionBootstrapIsIdempotent(t *testing.T) {
+	store := &guestAuthTestStore{
+		identity: persistence.Identity{
+			Sub:         "user-1",
+			DisplayName: "Player",
+			AccountType: "registered",
+		},
+		sessions: map[string]persistence.RefreshTokenRecord{},
+	}
+	refreshToken := "valid-token"
+	refreshHash := auth.RefreshTokenHash(refreshToken)
+	store.sessions[refreshHash] = persistence.RefreshTokenRecord{
+		ID:               "session-1",
+		UserID:           "user-1",
+		RefreshTokenHash: refreshHash,
+		ExpiresAt:        time.Now().Add(time.Hour),
+		CreatedAt:        time.Now(),
+		LastUsedAt:       time.Now(),
+	}
+	a := &api{
+		store:                 store,
+		appAuthSecret:         []byte("01234567890123456789012345678901"),
+		accessTokenTTL:        15 * time.Minute,
+		refreshTokenTTL:       30 * 24 * time.Hour,
+		refreshCookieName:     "geoduels_refresh",
+		refreshCookieSameSite: http.SameSiteLaxMode,
+	}
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/session", nil)
+		req.AddCookie(&http.Cookie{Name: "geoduels_refresh", Value: refreshToken})
+		rec := httptest.NewRecorder()
+
+		a.session(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("session bootstrap %d status = %d, want %d; body = %s", attempt, rec.Code, http.StatusOK, rec.Body.String())
+		}
+		if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+			t.Fatalf("session bootstrap %d unexpectedly changed cookies: %v", attempt, cookies)
+		}
+	}
+	if _, ok := store.sessions[refreshHash]; !ok {
+		t.Fatal("repeated bootstrap unexpectedly rotated the stored refresh token")
+	}
+}
+
 func TestGuestLoginIgnoresNicknamePayload(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
