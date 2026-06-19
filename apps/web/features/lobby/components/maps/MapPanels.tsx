@@ -4,6 +4,7 @@ import { ArrowLeft, ChartNoAxesColumnIncreasing, ChevronDown, Heart, Loader2, Ma
 import AppModalShell from "../../../../components/ui/AppModalShell";
 import AvatarBadge from "../../../../components/ui/AvatarBadge";
 import { cn } from "../../../../lib/cn";
+import { toPublicEntityId } from "../../../../lib/entity-id";
 import type { MatchConfig } from "../../../matchmaking/lib/queue-client";
 import type { CustomMap, GameplayMapRole, MapDetails, MapScope, MapSort } from "../../../maps/lib/maps-client";
 import {
@@ -194,7 +195,10 @@ function MapCard({
     );
   }
   return (
-    <Link href={`/maps/${encodeURIComponent(item.id)}`} className="block w-full text-left">
+    <Link
+      href={`/maps/${encodeURIComponent(toPublicEntityId(item.id))}`}
+      className="block w-full text-left"
+    >
       {content}
     </Link>
   );

@@ -42,7 +42,7 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 			match_id, preset_id, mode, state, ranked, source_kind, source_party_id, source_party_invite_code,
 			node_id, node_epoch, public_route, config_json, map_id, map_revision_id, updated_at
 		)
-		values($1, $2, $3, 'live', $4, $5, nullif($6, ''), nullif($7, ''), $8, $9, $10, $11::jsonb, nullif($12, ''), nullif($13, ''), now())
+		values($1, $2, $3, 'live', $4, $5, nullif($6, '')::uuid, nullif($7, ''), $8, $9, $10, $11::jsonb, nullif($12, ''), nullif($13, '')::uuid, now())
 		on conflict (match_id) do update set
 			preset_id = excluded.preset_id,
 			mode = excluded.mode,
@@ -151,7 +151,7 @@ func (s *pgStore) MatchSessionSourceParty(matchID string) (string, string, bool,
 	defer cancel()
 	var partyID, inviteCode string
 	err := s.pool.QueryRow(ctx, `
-		select coalesce(source_party_id, ''), coalesce(source_party_invite_code, '')
+		select coalesce(source_party_id::text, ''), coalesce(source_party_invite_code, '')
 		from match_sessions
 		where match_id = $1
 	`, matchID).Scan(&partyID, &inviteCode)

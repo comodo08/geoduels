@@ -14,6 +14,10 @@ import { useMatchRouteSession } from "../../features/matchmaking/hooks/use-match
 import { getRuntimeConfig } from "../../lib/runtime-config";
 import { getSiteURL } from "../../lib/site";
 import { getTeamPresentation } from "../../lib/team-presentation";
+import {
+  normalizeEntityRouteId,
+  toPublicEntityId,
+} from "../../lib/entity-id";
 import type { MatchSessionResponse } from "../../features/matchmaking/lib/queue-client";
 
 export function normalizeRouteMatchId(
@@ -22,16 +26,16 @@ export function normalizeRouteMatchId(
 ) {
   if (typeof raw === "string") {
     const value = raw.trim();
-    return /^\[[^/]+\]$/.test(value) ? "" : value;
+    return /^\[[^/]+\]$/.test(value) ? "" : normalizeEntityRouteId(value);
   }
   const pathMatch = asPath.match(/^\/match\/([^?#/]+)/);
   if (pathMatch?.[1]) {
     try {
       const value = decodeURIComponent(pathMatch[1]).trim();
-      return /^\[[^/]+\]$/.test(value) ? "" : value;
+      return /^\[[^/]+\]$/.test(value) ? "" : normalizeEntityRouteId(value);
     } catch {
       const value = pathMatch[1].trim();
-      return /^\[[^/]+\]$/.test(value) ? "" : value;
+      return /^\[[^/]+\]$/.test(value) ? "" : normalizeEntityRouteId(value);
     }
   }
   return "";
@@ -139,7 +143,7 @@ export default function MatchPage() {
   const routeSession = useMatchRouteSession(routeMatchId || null);
   const siteURL = getSiteURL();
   const canonicalURL = routeMatchId
-    ? `${siteURL}/match/${encodeURIComponent(routeMatchId)}`
+    ? `${siteURL}/match/${encodeURIComponent(toPublicEntityId(routeMatchId))}`
     : `${siteURL}/`;
   const handleLeaveToParty = () => {
     const sourcePartyInviteCode =
@@ -156,7 +160,9 @@ export default function MatchPage() {
   const handlePlayAgain = async () => {
     const nextMatchId = await model.actions.startSingleplayer();
     if (nextMatchId) {
-      void router.push(`/match/${encodeURIComponent(nextMatchId)}`);
+      void router.push(
+        `/match/${encodeURIComponent(toPublicEntityId(nextMatchId))}`,
+      );
     }
     return nextMatchId;
   };
@@ -293,7 +299,7 @@ export default function MatchPage() {
                     type="button"
                     onClick={() =>
                       void router.replace(
-                        `/match/${encodeURIComponent(replacementMatchId)}`,
+                        `/match/${encodeURIComponent(toPublicEntityId(replacementMatchId))}`,
                       )
                     }
                     className="mt-6 inline-flex rounded-full border border-[#2ad18f]/40 bg-[#2ad18f]/10 px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white transition hover:bg-[#2ad18f]/20"

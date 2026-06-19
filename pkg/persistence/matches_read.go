@@ -75,7 +75,7 @@ func (s *pgStore) ListPlayerMatchHistory(userID string, limit int) ([]MatchHisto
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		select h.match_id, h.mode, h.started_at, h.ended_at, coalesce(h.winner_user_id, '')
+		select h.match_id, h.mode, h.started_at, h.ended_at, coalesce(h.winner_user_id::text, '')
 		from match_history h
 		join match_players p on p.match_id = h.match_id
 		where p.user_id = $1

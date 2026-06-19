@@ -91,7 +91,7 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 		set status = 'actioned',
 			queue = 'archive',
 			resolved_at = coalesce(resolved_at, now()),
-			resolved_by = nullif($2, ''),
+			resolved_by = nullif($2, '')::uuid,
 			resolution = $3,
 			resolution_code = 'ban_refund',
 			resolution_note = $3,
@@ -123,19 +123,19 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into moderation_actions(case_id, actor_user_id, target_user_id, action_type, reason)
-			values($1, nullif($2, ''), $3, 'ban', nullif($4, ''))
+			values($1, nullif($2, '')::uuid, $3, 'ban', nullif($4, ''))
 		`, caseID, actorUserID, userID, reason); err != nil {
 			return CheatingBanSummary{}, err
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into moderation_case_events(case_id, actor_user_id, event_type, body)
-			values($1, nullif($2, ''), 'action_ban', nullif($3, ''))
+			values($1, nullif($2, '')::uuid, 'action_ban', nullif($3, ''))
 		`, caseID, actorUserID, reason); err != nil {
 			return CheatingBanSummary{}, err
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into moderation_case_log(case_id, actor_user_id, event_type, reason_code, body)
-			values($1, nullif($2, ''), 'action_ban', 'ban_refund', nullif($3, ''))
+			values($1, nullif($2, '')::uuid, 'action_ban', 'ban_refund', nullif($3, ''))
 		`, caseID, actorUserID, reason); err != nil {
 			return CheatingBanSummary{}, err
 		}
@@ -147,7 +147,7 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into enforcement_actions(target_user_id, actor_user_id, source_case_id, action_type, reason_code, reason_note, metadata)
-		values($1, nullif($2, ''), $3, 'ban', 'cheating', nullif($4, ''), jsonb_build_object('refundsIssued', $5::int, 'totalRefunded', $6::int, 'caseIds', $7::jsonb))
+		values($1, nullif($2, '')::uuid, $3, 'ban', 'cheating', nullif($4, ''), jsonb_build_object('refundsIssued', $5::int, 'totalRefunded', $6::int, 'caseIds', $7::jsonb))
 	`, userID, actorUserID, sourceCaseID, reason, summary.Refunds.RefundsIssued, summary.Refunds.TotalRefunded, mustJSON(summary.ArchivedCaseIDs)); err != nil {
 		return CheatingBanSummary{}, err
 	}
@@ -172,7 +172,7 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 		if relatedCheater {
 			if _, err := tx.Exec(ctx, `
 				insert into ip_signup_bans(ip_address, reason, created_by, created_at, revoked_at)
-				values($1, $2, nullif($3, ''), now(), null)
+				values($1, $2, nullif($3, '')::uuid, now(), null)
 				on conflict (ip_address) do update set
 					reason = excluded.reason,
 					created_by = excluded.created_by,
@@ -350,9 +350,9 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 		select
 			e.id,
 			e.target_user_id,
-			coalesce(nullif(target.display_name, ''), e.target_user_id),
-			coalesce(e.actor_user_id, ''),
-			coalesce(nullif(actor.display_name, ''), coalesce(e.actor_user_id, '')),
+			coalesce(nullif(target.display_name, ''), e.target_user_id::text),
+			coalesce(e.actor_user_id::text, ''),
+			coalesce(nullif(actor.display_name, ''), e.actor_user_id::text, ''),
 			coalesce(e.source_case_id, 0),
 			e.action_type,
 			coalesce(e.reason_code, ''),
@@ -460,7 +460,7 @@ func (s *pgStore) createAutoDetectionCase(ctx context.Context, userID, matchID, 
 	defer tx.Rollback(ctx)
 	var displayName string
 	if err := tx.QueryRow(ctx, `
-		select coalesce(nullif(display_name, ''), id)
+		select coalesce(nullif(display_name, ''), id::text)
 		from users
 		where id = $1
 	`, userID).Scan(&displayName); err != nil {
@@ -587,7 +587,7 @@ func (s *pgStore) AddSignupIPBan(ipAddress, reason, createdBy string) error {
 	defer cancel()
 	_, err := s.pool.Exec(ctx, `
 		insert into ip_signup_bans(ip_address, reason, created_by, created_at, revoked_at)
-		values($1, nullif($2, ''), nullif($3, ''), now(), null)
+		values($1, nullif($2, ''), nullif($3, '')::uuid, now(), null)
 		on conflict (ip_address) do update set
 			reason = excluded.reason,
 			created_by = excluded.created_by,
@@ -622,7 +622,7 @@ func (s *pgStore) ListSignupIPBans(limit int) ([]SignupIPBan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		select id, ip_address, coalesce(reason, ''), coalesce(created_by, ''), created_at
+		select id, ip_address, coalesce(reason, ''), coalesce(created_by::text, ''), created_at
 		from ip_signup_bans
 		where revoked_at is null
 		order by created_at desc

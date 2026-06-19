@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"geoduels/pkg/auth"
+	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
@@ -120,7 +121,7 @@ func newAPI() (*api, error) {
 		return nil, errors.New("TURNSTILE_SECRET_KEY is required when TURNSTILE_GUEST_REQUIRED=true")
 	}
 	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
-	if err := store.ExpireStaleRuntimeMatches("solo-", singleplayerTTL); err != nil {
+	if err := store.ExpireStaleRuntimeMatches(string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		store.Close()
 		return nil, err
 	}

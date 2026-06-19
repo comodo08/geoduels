@@ -587,7 +587,7 @@ func (s *pgStore) GetIdentity(sub string) (Identity, error) {
 			coalesce(ui.provider_name, ''),
 			coalesce(u.avatar_url, ui.avatar_url, ''),
 			coalesce(u.account_type = 'registered' and u.nickname_claimed_at is null, false) as nickname_required,
-				coalesce(nullif(u.display_name, ''), ui.provider_name, u.id),
+				coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text),
 				u.account_type,
 				coalesce(u.is_admin, false),
 				coalesce(u.is_moderator, false),

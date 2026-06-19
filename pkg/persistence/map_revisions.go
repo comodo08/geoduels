@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"geoduels/pkg/entityid"
 )
 
 func (s *pgStore) ActivateMapRevision(mapKey, displayName string, dataset []byte) (MapRevisionSummary, error) {
@@ -27,7 +29,7 @@ func (s *pgStore) ActivateMapRevision(mapKey, displayName string, dataset []byte
 	}
 	sum := sha1.Sum(dataset)
 	contentHash := hex.EncodeToString(sum[:])
-	revisionID := mapKey + "-" + contentHash[:12]
+	revisionID := entityid.Derive("map-revision", mapKey+":"+contentHash)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

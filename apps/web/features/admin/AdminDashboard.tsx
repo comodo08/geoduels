@@ -17,6 +17,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
+import { toPublicEntityId } from "../../lib/entity-id";
 import { AdminDetailRow as DetailRow, AdminMetric as Metric, AdminPanel as Panel } from "./components/admin-primitives";
 import { formatAdminDate, fromLocalDateTime, localDateTime, slugify } from "./lib/admin-format";
 import {
@@ -346,7 +347,7 @@ function ModerationRoute(props: {
                 <div className="flex flex-wrap gap-2">
                   <Link
                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
-                    href={`/admin/players/${encodeURIComponent(selectedCase.targetUserId)}`}
+                    href={`/admin/players/${encodeURIComponent(toPublicEntityId(selectedCase.targetUserId))}`}
                   >
                     <ExternalLink className="h-4 w-4" />
                     Full Profile
@@ -373,7 +374,7 @@ function ModerationRoute(props: {
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Target Account</p>
                     <Link
                       className="inline-flex items-center gap-2 text-sm font-semibold text-sky-300 hover:text-white"
-                      href={`/admin/players/${encodeURIComponent(target.userId)}`}
+                      href={`/admin/players/${encodeURIComponent(toPublicEntityId(target.userId))}`}
                     >
                       Check full profile
                       <ChevronRight className="h-4 w-4" />
@@ -406,7 +407,7 @@ function ModerationRoute(props: {
                     return (
                       <Link
                         key={match.matchId}
-                        href={`/match/${encodeURIComponent(match.matchId)}`}
+                        href={`/match/${encodeURIComponent(toPublicEntityId(match.matchId))}`}
                         className="grid gap-2 rounded-md border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-sm hover:bg-slate-900 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
                       >
                         <div className="min-w-0">
@@ -441,7 +442,7 @@ function ModerationRoute(props: {
                         {item.ruleId ? <span className="text-slate-500">{item.ruleId}</span> : null}
                       </div>
                       {item.matchId ? (
-                        <Link className="mt-2 block text-sm text-sky-300 hover:text-white" href={`/match/${encodeURIComponent(item.matchId)}`}>
+                        <Link className="mt-2 block text-sm text-sky-300 hover:text-white" href={`/match/${encodeURIComponent(toPublicEntityId(item.matchId))}`}>
                           Match {item.matchId}
                         </Link>
                       ) : null}
@@ -459,7 +460,7 @@ function ModerationRoute(props: {
                       <p className="font-semibold text-white">{report.category} · {report.reporterName || report.reporterUserId}</p>
                       <p className="mt-1 text-slate-400">Weight {report.reporterWeight.toFixed(2)}</p>
                       {report.reason ? <p className="mt-1 text-slate-300">{report.reason}</p> : null}
-                      <Link className="mt-2 block text-sky-300 hover:text-white" href={`/match/${encodeURIComponent(report.matchId)}`}>
+                      <Link className="mt-2 block text-sky-300 hover:text-white" href={`/match/${encodeURIComponent(toPublicEntityId(report.matchId))}`}>
                         Match {report.matchId}
                       </Link>
                     </div>
@@ -569,7 +570,7 @@ function PlayersRoute(props: {
             {players.map((player) => (
               <tr key={player.userId}>
                 <td className="px-4 py-3">
-                  <Link className="text-left font-bold text-white hover:text-emerald-300" href={`/admin/players/${encodeURIComponent(player.userId)}`}>
+                  <Link className="text-left font-bold text-white hover:text-emerald-300" href={`/admin/players/${encodeURIComponent(toPublicEntityId(player.userId))}`}>
                     {player.displayName || player.userId}
                   </Link>
                   <p className="mt-1 text-xs text-slate-500">{props.canManageAdmin ? player.email || player.userId : player.userId}</p>
@@ -578,7 +579,7 @@ function PlayersRoute(props: {
                 <td className="px-4 py-3 text-slate-400">{player.wins}W / {player.gamesPlayed}G</td>
                 <td className="px-4 py-3">{player.isBanned ? "Banned" : "Active"}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 font-semibold text-slate-100 hover:border-emerald-400 hover:text-emerald-200" href={`/admin/players/${encodeURIComponent(player.userId)}`}>
+                  <Link className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-2 font-semibold text-slate-100 hover:border-emerald-400 hover:text-emerald-200" href={`/admin/players/${encodeURIComponent(toPublicEntityId(player.userId))}`}>
                     Details
                     <ChevronRight className="h-4 w-4" />
                   </Link>
@@ -714,7 +715,7 @@ function PlayerDetailRoute(props: {
           <h3 className="font-black text-white">Recent Matches</h3>
           <div className="mt-3 space-y-2">
             {matches.map((match) => (
-              <Link key={match.matchId} href={`/match/${encodeURIComponent(match.matchId)}`} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-900/60 p-3 text-sm hover:bg-slate-900">
+              <Link key={match.matchId} href={`/match/${encodeURIComponent(toPublicEntityId(match.matchId))}`} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-900/60 p-3 text-sm hover:bg-slate-900">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-white">{match.matchId}</p>
                   <p className="mt-1 text-slate-500">{match.mode} · {formatDate(match.endedAt)}</p>

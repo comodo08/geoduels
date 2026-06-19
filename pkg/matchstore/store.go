@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"geoduels/pkg/contracts"
+	"geoduels/pkg/entityid"
 )
 
 var atomicMatchScript = redis.NewScript(`
@@ -521,7 +522,7 @@ func matchFromTickets(opponent, self ticket) contracts.MatchFound {
 		seasonID = opponent.SeasonID
 	}
 	return contracts.MatchFound{
-		MatchID:  "m-" + intStr(time.Now().UnixMilli()),
+		MatchID:  entityid.New(),
 		Mode:     contracts.ModeDuel,
 		SeasonID: seasonID,
 		Config: contracts.NormalizeMatchConfig(contracts.MatchConfig{

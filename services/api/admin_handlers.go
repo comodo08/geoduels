@@ -142,7 +142,7 @@ func (a *api) adminPlayerDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	detail, err := a.store.GetAdminPlayerDetail(strings.TrimSpace(mux.Vars(r)["id"]))
+	detail, err := a.store.GetAdminPlayerDetail(a.resolveEntityID("user", mux.Vars(r)["id"]))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "player not found", http.StatusNotFound)
@@ -193,7 +193,7 @@ func (a *api) adminPlayerMatches(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	matches, err := a.store.ListPlayerMatchHistory(strings.TrimSpace(mux.Vars(r)["id"]), 50)
+	matches, err := a.store.ListPlayerMatchHistory(a.resolveEntityID("user", mux.Vars(r)["id"]), 50)
 	if err != nil {
 		http.Error(w, "match history unavailable", http.StatusInternalServerError)
 		return
@@ -216,7 +216,7 @@ func (a *api) adminMatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	matchID := strings.TrimSpace(mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
 	messages, err := a.store.ListChatMessages("match:"+matchID, limit)
 	if err != nil {
 		http.Error(w, "chat log unavailable", http.StatusInternalServerError)
@@ -411,7 +411,7 @@ func (a *api) adminBanPlayer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	summary, err := a.store.BanPlayerForCheating(strings.TrimSpace(mux.Vars(r)["id"]), req.Reason, admin.Sub)
+	summary, err := a.store.BanPlayerForCheating(a.resolveEntityID("user", mux.Vars(r)["id"]), req.Reason, admin.Sub)
 	if err != nil {
 		http.Error(w, "failed to ban player", http.StatusInternalServerError)
 		return
@@ -425,7 +425,7 @@ func (a *api) adminUnbanPlayer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if err := a.store.SetPlayerBan(strings.TrimSpace(mux.Vars(r)["id"]), "", false); err != nil {
+	if err := a.store.SetPlayerBan(a.resolveEntityID("user", mux.Vars(r)["id"]), "", false); err != nil {
 		http.Error(w, "failed to unban player", http.StatusInternalServerError)
 		return
 	}
@@ -437,7 +437,7 @@ func (a *api) adminClearReporterMute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if err := a.store.ClearReporterMute(strings.TrimSpace(mux.Vars(r)["id"])); err != nil {
+	if err := a.store.ClearReporterMute(a.resolveEntityID("user", mux.Vars(r)["id"])); err != nil {
 		http.Error(w, "failed to unmute reporter", http.StatusInternalServerError)
 		return
 	}
@@ -449,7 +449,7 @@ func (a *api) adminPromoteModerator(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	userID := strings.TrimSpace(mux.Vars(r)["id"])
+	userID := a.resolveEntityID("user", mux.Vars(r)["id"])
 	if err := a.store.SetUserModerator(userID, true); err != nil {
 		http.Error(w, "failed to promote moderator", http.StatusInternalServerError)
 		return
@@ -462,7 +462,7 @@ func (a *api) adminDemoteModerator(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if err := a.store.SetUserModerator(strings.TrimSpace(mux.Vars(r)["id"]), false); err != nil {
+	if err := a.store.SetUserModerator(a.resolveEntityID("user", mux.Vars(r)["id"]), false); err != nil {
 		http.Error(w, "failed to demote moderator", http.StatusInternalServerError)
 		return
 	}
@@ -502,7 +502,7 @@ func (a *api) adminSetMapCreatorTier(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "map creator administration unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	quota, err := repository.SetMapCreatorTierOverride(strings.TrimSpace(mux.Vars(r)["id"]), tier)
+	quota, err := repository.SetMapCreatorTierOverride(a.resolveEntityID("user", mux.Vars(r)["id"]), tier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -543,7 +543,7 @@ func (a *api) adminGrantRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := a.store.GrantUserRole(req.UserID, req.Role, admin.Sub, req.Reason); err != nil {
+	if err := a.store.GrantUserRole(a.resolveEntityID("user", req.UserID), req.Role, admin.Sub, req.Reason); err != nil {
 		http.Error(w, "failed to grant role", http.StatusInternalServerError)
 		return
 	}
@@ -563,7 +563,7 @@ func (a *api) adminRevokeRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := a.store.RevokeUserRole(strings.TrimSpace(mux.Vars(r)["id"]), strings.TrimSpace(mux.Vars(r)["role"]), admin.Sub, req.Reason); err != nil {
+	if err := a.store.RevokeUserRole(a.resolveEntityID("user", mux.Vars(r)["id"]), strings.TrimSpace(mux.Vars(r)["role"]), admin.Sub, req.Reason); err != nil {
 		http.Error(w, "failed to revoke role", http.StatusInternalServerError)
 		return
 	}

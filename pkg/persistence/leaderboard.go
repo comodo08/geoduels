@@ -35,7 +35,7 @@ func (s *pgStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]L
 				order by r.mmr desc, r.updated_at asc, r.user_id asc
 			) as rank,
 			r.user_id,
-			coalesce(nullif(u.display_name, r.user_id), ui.provider_name, r.user_id) as display_name,
+			coalesce(nullif(u.display_name, r.user_id::text), ui.provider_name, r.user_id::text) as display_name,
 			coalesce(u.avatar_url, ui.avatar_url, '') as avatar_url,
 			r.mmr,
 			coalesce(rs.games_played, 0) as games_played,
@@ -126,7 +126,7 @@ func (s *pgStore) GetLeaderboardOverview(userID, mode, seasonID string, limit in
 					and u.banned_at is null
 			)
 		select
-			coalesce(max(rank) filter (where user_id = $3), 0) as self_rank,
+			coalesce(max(rank) filter (where user_id = nullif($3,'')::uuid), 0) as self_rank,
 			coalesce(max(total_players), 0) as total_players
 		from ranked
 	`, mode, seasonID, userID).Scan(&selfRank, &totalPlayers); err != nil {

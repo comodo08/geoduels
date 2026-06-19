@@ -348,7 +348,7 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 		sourceKind = "party"
 		var partyID string
 		if err := tx.QueryRow(ctx, `
-			select coalesce(source_party_id, '')
+			select coalesce(source_party_id::text, '')
 			from match_sessions
 			where match_id = $1
 		`, matchID).Scan(&partyID); err != nil {
@@ -390,8 +390,8 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 			replay_zstd, replay_codec, replay_schema_version, replay_uncompressed_bytes,
 			replay_sha256, replay_expires_at, round_count
 		)
-		values($1, $2, $3, $4, nullif($5, ''), $6, $7, $8, nullif($9, ''),
-		       nullif($10, ''), nullif($11, ''), $12, $13, $14, $15, $16,
+		values($1, $2, $3, $4, nullif($5, '')::uuid, $6, $7, nullif($8, '')::uuid, nullif($9, ''),
+		       nullif($10, ''), nullif($11, '')::uuid, $12, $13, $14, $15, $16,
 		       $4 + make_interval(days => $17), $18)
 		on conflict (match_id) do update set
 			mode = excluded.mode,

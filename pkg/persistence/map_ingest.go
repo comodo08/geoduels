@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"geoduels/pkg/contracts"
+	"geoduels/pkg/entityid"
 )
 
 func (s *pgStore) CreateCustomMap(userID, displayName, description, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error) {
-	mapID := "map-" + randomHex(20)
+	mapID := entityid.New()
 	return s.ingestCustomMap(userID, mapID, displayName, description, "private", difficulty, thumbnailKey, thumbnailVariant, source, true)
 }
 
@@ -72,7 +73,7 @@ func (s *pgStore) ingestCustomMap(userID, mapID, displayName, description, visib
 		`, mapID, userID, displayName, strings.TrimSpace(description), visibility, difficulty, thumbnailVariant, thumbnailKey)
 	} else {
 		var owner string
-		if err = tx.QueryRow(ctx, `select coalesce(owner_user_id, '') from maps where map_key=$1 and archived_at is null for update`, mapID).Scan(&owner); err == nil && owner != userID {
+		if err = tx.QueryRow(ctx, `select coalesce(owner_user_id::text, '') from maps where map_key=$1 and archived_at is null for update`, mapID).Scan(&owner); err == nil && owner != userID {
 			err = errors.New("map is not owned by this account")
 		}
 	}
@@ -80,7 +81,7 @@ func (s *pgStore) ingestCustomMap(userID, mapID, displayName, description, visib
 		return contracts.CustomMap{}, err
 	}
 
-	revisionID := mapID + "-" + digest[:12]
+	revisionID := entityid.Derive("map-revision", mapID+":"+digest)
 	var revisionStorageID int32
 	var existing string
 	err = tx.QueryRow(ctx, `select id,storage_id from map_revisions where map_key=$1 and content_hash=$2`, mapID, digest).Scan(&existing, &revisionStorageID)
@@ -187,7 +188,7 @@ func (s *pgStore) SetMapFavorite(userID, mapID string, favorite bool) (contracts
 	if err := tx.QueryRow(ctx, `
 		select
 			exists(select 1 from maps where map_key=$1 and archived_at is null and (published_at is not null or owner_user_id is null or owner_user_id=$2)),
-			coalesce((select owner_user_id from maps where map_key=$1 and archived_at is null), '')
+			coalesce((select owner_user_id::text from maps where map_key=$1 and archived_at is null), '')
 	`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible, &ownerUserID); err != nil {
 		return contracts.CustomMap{}, err
 	}

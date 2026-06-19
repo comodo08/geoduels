@@ -91,7 +91,7 @@ func main() {
 		log.Fatal(err)
 	}
 	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
-	if err := store.ExpireStaleRuntimeMatches("solo-", singleplayerTTL); err != nil {
+	if err := store.ExpireStaleRuntimeMatches(string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
 	ticketSecret, err := requiredSecret("GAMEPLAY_TICKET_SECRET", 32)

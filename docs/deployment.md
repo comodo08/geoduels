@@ -47,6 +47,17 @@ For each release:
 
 Migration 42 is a special staged operation: `scripts/compact-storage.sh` only runs while the schema version is exactly `42`. Apply migration 42, smoke-test compatible code, stop writes and compact, then continue with migration 43 and later. A database already beyond version 42 requires a separately planned PostgreSQL maintenance operation.
 
+Migration 47 rewrites entity primary keys, foreign keys, and their indexes from
+`text` to `uuid`. Put the application in maintenance mode, stop all writers,
+take a verified backup, apply the migration, and deploy UUID-compatible
+application images before reopening traffic. The migration preserves old route
+identifiers in `legacy_id_aliases`; do not remove that table during the
+compatibility window. Drain active matches first and clear stale queue,
+assignment, and presence data from Redis before traffic resumes.
+When migrations 42 and 47 are performed in the same maintenance window, keep
+all writers stopped from storage compaction through the UUID migration and
+deploy the UUID-compatible application before reopening traffic.
+
 ## Post-Deploy Checks
 
 - `/health`, `/health/live`, and `/health/ready` for API and all deployed workers/services

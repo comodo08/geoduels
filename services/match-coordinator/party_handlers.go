@@ -18,6 +18,7 @@ import (
 
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
+	"geoduels/pkg/entityid"
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/partyevents"
@@ -612,7 +613,7 @@ func (q *matchCoordinator) partyMatchFound(snap contracts.PartySnapshot) (contra
 		return contracts.MatchFound{}, errors.New("unsupported party mode")
 	}
 	match := contracts.MatchFound{
-		MatchID:               "m-" + strconvTimeID(),
+		MatchID:               entityid.New(),
 		Mode:                  snap.Mode,
 		Unranked:              true,
 		Players:               []string{},

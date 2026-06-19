@@ -169,7 +169,7 @@ func (a *api) getMap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, found, err := catalog.GetMap(userID, mux.Vars(r)["id"])
+	item, found, err := catalog.GetMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
 	if err != nil {
 		http.Error(w, "map unavailable", http.StatusInternalServerError)
 		return
@@ -245,7 +245,7 @@ func (a *api) uploadMapRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer closeFile()
-	item, err := catalog.UploadCustomMapRevision(userID, mux.Vars(r)["id"], file)
+	item, err := catalog.UploadCustomMapRevision(userID, resolveCompactEntityID(mux.Vars(r)["id"]), file)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -275,7 +275,7 @@ func (a *api) updateMap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	item, err := catalog.UpdateCustomMap(userID, mux.Vars(r)["id"], update)
+	item, err := catalog.UpdateCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]), update)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -301,7 +301,7 @@ func (a *api) archiveMap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identity unavailable", http.StatusInternalServerError)
 		return
 	}
-	err = catalog.ArchiveCustomMap(userID, mux.Vars(r)["id"], identity.IsAdmin)
+	err = catalog.ArchiveCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]), identity.IsAdmin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -322,7 +322,7 @@ func (a *api) publishMap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.PublishCustomMap(userID, mux.Vars(r)["id"])
+	item, err := catalog.PublishCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -344,7 +344,7 @@ func (a *api) setMapOfficial(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.SetMapOfficial(admin.Sub, mux.Vars(r)["id"], true)
+	item, err := catalog.SetMapOfficial(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), true)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -366,7 +366,7 @@ func (a *api) unsetMapOfficial(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.SetMapOfficial(admin.Sub, mux.Vars(r)["id"], false)
+	item, err := catalog.SetMapOfficial(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), false)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -388,7 +388,7 @@ func (a *api) setGameplayMapRole(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.SetGameplayMapRole(admin.Sub, mux.Vars(r)["id"], mux.Vars(r)["role"])
+	item, err := catalog.SetGameplayMapRole(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), mux.Vars(r)["role"])
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -409,7 +409,7 @@ func (a *api) favoriteMap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.SetMapFavorite(userID, mux.Vars(r)["id"], true)
+	item, err := catalog.SetMapFavorite(userID, resolveCompactEntityID(mux.Vars(r)["id"]), true)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -430,7 +430,7 @@ func (a *api) unfavoriteMap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := catalog.SetMapFavorite(userID, mux.Vars(r)["id"], false)
+	item, err := catalog.SetMapFavorite(userID, resolveCompactEntityID(mux.Vars(r)["id"]), false)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -448,7 +448,7 @@ func (a *api) listMapComments(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := catalog.ListMapComments(userID, mux.Vars(r)["id"])
+	items, err := catalog.ListMapComments(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
 	if err != nil {
 		http.Error(w, "comments unavailable", http.StatusInternalServerError)
 		return
@@ -461,7 +461,7 @@ func (a *api) createMapComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if allowed, retryAfter, err := a.allowMapComment(userID, mux.Vars(r)["id"]); err != nil {
+	if allowed, retryAfter, err := a.allowMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"])); err != nil {
 		http.Error(w, "comments temporarily unavailable", http.StatusServiceUnavailable)
 		return
 	} else if !allowed {
@@ -484,7 +484,7 @@ func (a *api) createMapComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	item, err := catalog.CreateMapComment(userID, mux.Vars(r)["id"], input)
+	item, err := catalog.CreateMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"]), input)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -511,7 +511,7 @@ func (a *api) deleteMapComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err = catalog.DeleteMapComment(userID, mux.Vars(r)["id"], mux.Vars(r)["commentId"], profile.IsAdmin || profile.IsModerator)
+	err = catalog.DeleteMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"]), a.resolveEntityID("comment", mux.Vars(r)["commentId"]), profile.IsAdmin || profile.IsModerator)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -540,7 +540,7 @@ func (a *api) setMapCommentLike(w http.ResponseWriter, r *http.Request, liked bo
 	if !ok {
 		return
 	}
-	item, err := catalog.SetMapCommentLike(userID, mux.Vars(r)["id"], mux.Vars(r)["commentId"], liked)
+	item, err := catalog.SetMapCommentLike(userID, resolveCompactEntityID(mux.Vars(r)["id"]), a.resolveEntityID("comment", mux.Vars(r)["commentId"]), liked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return

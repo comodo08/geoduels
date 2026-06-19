@@ -207,7 +207,7 @@ func refreshModerationCaseSummary(ctx context.Context, tx pgx.Tx, caseID int64) 
 			select
 				count(*)::int as report_count,
 				count(distinct reporter_user_id)::int as unique_reporter_count,
-				coalesce(max(reported_user_id), '') as target_user_id
+				coalesce(max(reported_user_id)::text, '') as target_user_id
 			from moderation_reports
 			where case_id = $1
 		)
@@ -265,10 +265,10 @@ func refreshModerationCaseSummary(ctx context.Context, tx pgx.Tx, caseID int64) 
 		returning
 			id, target_user_id, target_display_name, status, priority, score,
 			report_count, unique_reporter_count, categories::text,
-			coalesce(summary, ''), coalesce(assigned_to, ''),
+			coalesce(summary, ''), coalesce(assigned_to::text, ''),
 			latest_activity_at, created_at, notification_sent_at,
 			coalesce(queue, ''), coalesce(source, ''), risk_score, risk_breakdown::text,
-			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by, ''),
+			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by::text, ''),
 			coalesce(resolution_code, ''), coalesce(resolution_note, '')
 	`, caseID, score, reportCount, uniqueReporterCount, categoriesRaw, priority, shouldNotify, reporterScore, recentReportPressure, gameplayEvidence, moderationActiveRiskThreshold)
 	summary, err := scanModerationCaseSummary(row)

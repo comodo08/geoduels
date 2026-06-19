@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"geoduels/pkg/contracts"
+	"geoduels/pkg/entityid"
 )
 
 func (s *pgStore) ListMapComments(userID, mapID string) ([]contracts.MapComment, error) {
@@ -62,8 +63,8 @@ func (s *pgStore) CreateMapComment(userID, mapID string, input contracts.MapComm
 			return contracts.MapComment{}, errors.New("duplicate comment")
 		}
 	}
-	id := "mc-" + randomHex(16)
-	if _, err := tx.Exec(ctx, `insert into map_comments(id,map_id,parent_id,user_id,body) values($1,$2,nullif($3,''),$4,$5)`, id, strings.TrimSpace(mapID), parentID, strings.TrimSpace(userID), body); err != nil {
+	id := entityid.New()
+	if _, err := tx.Exec(ctx, `insert into map_comments(id,map_id,parent_id,user_id,body) values($1,$2,nullif($3,'')::uuid,$4,$5)`, id, strings.TrimSpace(mapID), parentID, strings.TrimSpace(userID), body); err != nil {
 		return contracts.MapComment{}, err
 	}
 	if err := incrementMapCommentStats(ctx, tx, strings.TrimSpace(mapID), strings.TrimSpace(userID)); err != nil {
@@ -131,7 +132,7 @@ func (s *pgStore) SetMapCommentLike(userID, mapID, commentID string, liked bool)
 			join maps m on m.map_key=c.map_id
 			where c.id=$1 and c.map_id=$2 and c.status='visible'
 			  and m.archived_at is null
-			  and (m.published_at is not null or m.owner_user_id is null or m.owner_user_id=$3)
+			  and (m.published_at is not null or m.owner_user_id is null or m.owner_user_id=nullif($3,'')::uuid)
 		)
 	`, commentID, mapID, userID).Scan(&visible); err != nil {
 		return contracts.MapComment{}, err
@@ -186,10 +187,10 @@ func (s *pgStore) listMapComments(ctx context.Context, userID, mapID string) ([]
 	profile, _ := s.GetProfile(userID)
 	canModerate := profile.IsAdmin || profile.IsModerator
 	rows, err := s.pool.Query(ctx, `
-		select c.id, c.map_id, coalesce(c.parent_id,''), c.user_id, coalesce(u.display_name, c.user_id), coalesce(u.avatar_url, ''),
+		select c.id, c.map_id, coalesce(c.parent_id::text,''), c.user_id, coalesce(u.display_name, c.user_id::text), coalesce(u.avatar_url, ''),
 		       case when c.status='visible' then c.body else '' end,
-		       c.status, (c.user_id=$2 or $3), c.like_count,
-		       exists(select 1 from map_comment_likes l where l.comment_id=c.id and l.user_id=$2),
+		       c.status, (c.user_id=nullif($2,'')::uuid or $3), c.like_count,
+		       exists(select 1 from map_comment_likes l where l.comment_id=c.id and l.user_id=nullif($2,'')::uuid),
 		       c.created_at, c.updated_at
 		from map_comments c
 		left join users u on u.id = c.user_id

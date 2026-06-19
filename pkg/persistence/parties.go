@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"geoduels/pkg/contracts"
+	"geoduels/pkg/entityid"
 )
 
 var ErrPartyMapUnavailable = errors.New("selected map is not accessible or ready")
@@ -52,7 +53,7 @@ func (s *pgStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapS
 			return contracts.PartySnapshot{}, fmt.Errorf("begin create party tx: %w", err)
 		}
 		inviteCode := newPartyCode()
-		partyID := newPartyID("pty")
+		partyID := newPartyID()
 		_, err = tx.Exec(ctx, `
 			insert into parties(id, invite_code, owner_user_id, state, mode, map_scope, expires_at, map_id)
 			values($1, $2, $3, 'open', $4, $5, $6, $7)
@@ -593,9 +594,9 @@ func (s *pgStore) getParty(whereClause, value string) (contracts.PartySnapshot, 
 	var snap contracts.PartySnapshot
 	row := s.pool.QueryRow(ctx, `
 		select l.id, l.invite_code, l.owner_user_id, l.state, l.mode, l.map_scope,
-		       coalesce(l.active_match_id, l.started_match_id, ''),
-		       coalesce(l.last_match_id, ''),
-		       coalesce(l.started_match_id, ''),
+		       coalesce(l.active_match_id::text, l.started_match_id::text, ''),
+		       coalesce(l.last_match_id::text, ''),
+		       coalesce(l.started_match_id::text, ''),
 		       l.created_at, l.expires_at, l.config_json::text, coalesce(l.map_id, ''),
 		       coalesce(mp.display_name, ''), coalesce(mp.location_count, 0)
 		from parties l
@@ -747,8 +748,8 @@ func (s *pgStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 	return out, nil
 }
 
-func newPartyID(prefix string) string {
-	return prefix + "-" + randomHex(10)
+func newPartyID() string {
+	return entityid.New()
 }
 
 func newPartyCode() string {
@@ -763,18 +764,4 @@ func newPartyCode() string {
 		buf[i] = alphabet[int(b)%len(alphabet)]
 	}
 	return string(buf)
-}
-
-func randomHex(n int) string {
-	buf := make([]byte, n)
-	if _, err := rand.Read(buf); err != nil {
-		return strings.ToLower(time.Now().Format("150405000000"))[:n]
-	}
-	const hexAlphabet = "0123456789abcdef"
-	out := make([]byte, n*2)
-	for i, b := range buf {
-		out[i*2] = hexAlphabet[b>>4]
-		out[i*2+1] = hexAlphabet[b&0x0f]
-	}
-	return string(out[:n])
 }

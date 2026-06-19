@@ -57,7 +57,7 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 	}
 	var owner, visibility, status, revisionID, displayName string
 	var count int
-	err = tx.QueryRow(ctx, `select coalesce(owner_user_id,''), visibility, status, coalesce(active_revision_id,''), display_name, location_count from maps where map_key=$1 and archived_at is null for share`, mapID).Scan(&owner, &visibility, &status, &revisionID, &displayName, &count)
+	err = tx.QueryRow(ctx, `select coalesce(owner_user_id::text,''), visibility, status, coalesce(active_revision_id::text,''), display_name, location_count from maps where map_key=$1 and archived_at is null for share`, mapID).Scan(&owner, &visibility, &status, &revisionID, &displayName, &count)
 	if err != nil {
 		return fmt.Errorf("selected map unavailable: %w", err)
 	}

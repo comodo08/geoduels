@@ -17,6 +17,7 @@ import (
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
+	"geoduels/pkg/entityid"
 	"geoduels/pkg/maintenance"
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/persistence"
@@ -212,7 +213,7 @@ func (a *api) optionalAuthenticatedClaims(r *http.Request) (auth.AppClaims, bool
 	if !strings.HasPrefix(authz, "Bearer ") {
 		return auth.AppClaims{}, false
 	}
-	claims, err := auth.ValidateAppAccessToken(a.appAuthSecret, strings.TrimSpace(strings.TrimPrefix(authz, "Bearer ")))
+	claims, err := a.authenticatedClaims(r)
 	if err != nil {
 		return auth.AppClaims{}, false
 	}
@@ -224,7 +225,7 @@ func (a *api) match(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	id := mux.Vars(r)["id"]
+	id := a.resolveEntityID("match", mux.Vars(r)["id"])
 	snapshot, found, err := a.getPublicFinalMatchSnapshot(id)
 	if err != nil || !found {
 		http.Error(w, "match not found", http.StatusNotFound)
@@ -243,7 +244,7 @@ func (a *api) matchSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identity not found", http.StatusUnauthorized)
 		return
 	}
-	matchID := strings.TrimSpace(mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
 	if matchID == "" {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
@@ -258,7 +259,7 @@ func (a *api) matchSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) matchRoute(w http.ResponseWriter, r *http.Request) {
-	matchID := strings.TrimSpace(mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
 	if matchID == "" {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
@@ -278,7 +279,7 @@ func (a *api) matchRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) matchBootstrap(w http.ResponseWriter, r *http.Request) {
-	matchID := strings.TrimSpace(mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
 	if matchID == "" {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
@@ -431,6 +432,7 @@ func (a *api) getPublicFinalMatchSnapshot(matchID string) (*contracts.MatchSnaps
 	if err := json.Unmarshal(raw, &snapshot); err != nil {
 		return nil, false, err
 	}
+	snapshot = contracts.NormalizeSnapshotEntityIDs(snapshot, a.resolveEntityID)
 	snapshot = sanitizeFinalMatchSnapshot(snapshot)
 	if snapshot.State == "" {
 		snapshot.State = contracts.MatchEnded
@@ -463,7 +465,7 @@ func (a *api) createMatchReport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	matchID := strings.TrimSpace(mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
 	var req struct {
 		ReportedUserID string `json:"reportedUserId"`
 		Category       string `json:"category"`
@@ -599,7 +601,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		requestedConfig.MapID = resolvedMapID
 	}
 	found := contracts.MatchFound{
-		MatchID: "solo-" + soloSessionID(),
+		MatchID: soloSessionID(),
 		Mode:    contracts.ModeSingleplayer,
 		Config: contracts.NormalizeMatchConfig(contracts.MatchConfig{
 			Ruleset:             requestedConfig.Ruleset,
@@ -642,7 +644,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func soloSessionID() string {
-	return strconv.FormatInt(time.Now().UnixNano(), 36)
+	return entityid.New()
 }
 
 func (a *api) replaceActiveSingleplayer(ctx context.Context, userID string, assigned coordinator.Assignment) error {

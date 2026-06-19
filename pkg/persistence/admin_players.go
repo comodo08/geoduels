@@ -17,10 +17,10 @@ func (s *pgStore) ListUserRoles() ([]UserRoleGrant, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
 			ur.user_id,
-			coalesce(nullif(u.display_name, ''), u.id),
+			coalesce(nullif(u.display_name, ''), u.id::text),
 			coalesce(u.email, ''),
 			ur.role,
-			coalesce(ur.granted_by, ''),
+			coalesce(ur.granted_by::text, ''),
 			ur.granted_at,
 			ur.revoked_at,
 			coalesce(ur.reason, '')
@@ -90,7 +90,7 @@ func (s *pgStore) GrantUserRole(userID, role, grantedBy, reason string) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into user_roles(user_id, role, granted_by, granted_at, reason)
-		values($1, $2, nullif($3, ''), now(), nullif($4, ''))
+		values($1, $2, nullif($3, '')::uuid, now(), nullif($4, ''))
 		on conflict (user_id, role) where revoked_at is null do update set
 			granted_by = excluded.granted_by,
 			reason = excluded.reason
@@ -182,7 +182,7 @@ func (s *pgStore) SearchPlayers(query string, limit int) ([]AdminPlayerSummary, 
 		select
 			u.id,
 			coalesce(u.email, ''),
-			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id),
+			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text),
 			coalesce(u.avatar_url, ui.avatar_url, ''),
 			coalesce(r.mmr, $3),
 				coalesce(us.games_played, 0),
@@ -216,7 +216,7 @@ func (s *pgStore) SearchPlayers(query string, limit int) ([]AdminPlayerSummary, 
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $1 and rs.season_id = $2
 		left join moderation_reporter_reputation rep on rep.user_id = u.id
 		where $4 = '%%'
-		   or lower(u.id) like $4
+		   or lower(u.id::text) like $4
 		   or lower(coalesce(u.email, '')) like $4
 		   or lower(coalesce(u.display_name, ui.provider_name, '')) like $4
 		   or exists (
@@ -291,7 +291,7 @@ func (s *pgStore) getAdminPlayerSummary(ctx context.Context, userID string) (Adm
 		select
 			u.id,
 			coalesce(u.email, ''),
-			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id),
+			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text),
 			coalesce(u.avatar_url, ui.avatar_url, ''),
 			coalesce(r.mmr, $4),
 			coalesce(us.games_played, 0),
@@ -400,7 +400,7 @@ func (s *pgStore) adminPlayerStats(ctx context.Context, userID string) (AdminPla
 			count(*) filter (where h.mode = $2)::int,
 			count(*) filter (where h.mode = 'singleplayer')::int,
 			count(*) filter (where h.winner_user_id = $1)::int,
-			count(*) filter (where h.mode = $2 and nullif(h.winner_user_id, '') is not null and h.winner_user_id <> $1)::int
+			count(*) filter (where h.mode = $2 and h.winner_user_id is not null and h.winner_user_id <> $1)::int
 		from match_history h
 		join match_players p on p.match_id = h.match_id
 		where p.user_id = $1
@@ -579,7 +579,7 @@ func banUserOAuthIdentities(ctx context.Context, tx pgx.Tx, userID, reason, acto
 	actorUserID = strings.TrimSpace(actorUserID)
 	_, err := tx.Exec(ctx, `
 		insert into oauth_identity_bans(provider, provider_user_id, banned_user_id, reason, created_by, created_at, revoked_at)
-		select provider, provider_user_id, $1, nullif($2, ''), nullif($3, ''), now(), null
+		select provider, provider_user_id, $1, nullif($2, ''), nullif($3, '')::uuid, now(), null
 		from (
 			select provider, provider_user_id
 			from user_identity_history

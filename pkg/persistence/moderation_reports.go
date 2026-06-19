@@ -162,7 +162,7 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 	var reportedName string
 	var reportedUserID string
 	if err := tx.QueryRow(ctx, `
-		select id, coalesce(nullif(display_name, ''), id)
+		select id, coalesce(nullif(display_name, ''), id::text)
 		from users
 		where coalesce(account_type, 'registered') <> 'guest'
 			and (
@@ -183,7 +183,7 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 	rows, err := tx.Query(ctx, `
 		select
 			u.id,
-			coalesce(nullif(u.display_name, ''), u.id),
+			coalesce(nullif(u.display_name, ''), u.id::text),
 			u.created_at,
 			coalesce(rep.reports_confirmed, 0),
 			coalesce(rep.reports_dismissed, 0),
@@ -288,7 +288,7 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into moderation_case_events(case_id, actor_user_id, event_type, body, metadata)
-			values($1, nullif($2, ''), 'debug_report_created', $3, jsonb_build_object('reportId', $4::bigint, 'matchId', $5::text, 'reporterUserId', $6::text, 'category', $7::text))
+			values($1, nullif($2, '')::uuid, 'debug_report_created', $3, jsonb_build_object('reportId', $4::bigint, 'matchId', $5::text, 'reporterUserId', $6::text, 'category', $7::text))
 		`, caseID, params.CreatedBy, params.Reason, reportID, matchID, reporter.id, params.Category); err != nil {
 			return DebugModerationReportsResult{}, err
 		}
@@ -297,7 +297,7 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 
 	if _, err := tx.Exec(ctx, `
 		insert into moderation_case_events(case_id, actor_user_id, event_type, body, metadata)
-		values($1, nullif($2, ''), 'debug_reports_created', $3, jsonb_build_object('count', $4::int))
+		values($1, nullif($2, '')::uuid, 'debug_reports_created', $3, jsonb_build_object('count', $4::int))
 	`, caseID, params.CreatedBy, params.Reason, len(createdReporterIDs)); err != nil {
 		return DebugModerationReportsResult{}, err
 	}

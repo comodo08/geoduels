@@ -53,10 +53,10 @@ func (s *pgStore) ListModerationCases(status string, limit int) ([]ModerationCas
 		select
 			id, target_user_id, target_display_name, status, priority, score,
 			report_count, unique_reporter_count, categories::text,
-			coalesce(summary, ''), coalesce(assigned_to, ''),
+			coalesce(summary, ''), coalesce(assigned_to::text, ''),
 			latest_activity_at, created_at, notification_sent_at,
 			coalesce(queue, ''), coalesce(source, ''), risk_score, risk_breakdown::text,
-			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by, ''),
+			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by::text, ''),
 			coalesce(resolution_code, ''), coalesce(resolution_note, '')
 		from moderation_cases
 		where status = any($1)
@@ -92,10 +92,10 @@ func (s *pgStore) GetModerationCase(caseID int64) (ModerationCaseDetail, error) 
 		select
 			id, target_user_id, target_display_name, status, priority, score,
 			report_count, unique_reporter_count, categories::text,
-			coalesce(summary, ''), coalesce(assigned_to, ''),
+			coalesce(summary, ''), coalesce(assigned_to::text, ''),
 			latest_activity_at, created_at, notification_sent_at,
 			coalesce(queue, ''), coalesce(source, ''), risk_score, risk_breakdown::text,
-			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by, ''),
+			confidence, claimed_at, claim_expires_at, resolved_at, coalesce(resolved_by::text, ''),
 			coalesce(resolution_code, ''), coalesce(resolution_note, '')
 		from moderation_cases
 		where id = $1
@@ -181,7 +181,7 @@ func (s *pgStore) AddModerationCaseAction(params ModerationCaseActionParams) (Mo
 					else queue
 				end,
 				resolved_at = case when $2 in ('actioned', 'dismissed', 'duplicate') then now() else resolved_at end,
-				resolved_by = case when $2 in ('actioned', 'dismissed', 'duplicate') then nullif($3, '') else resolved_by end,
+				resolved_by = case when $2 in ('actioned', 'dismissed', 'duplicate') then nullif($3, '')::uuid else resolved_by end,
 				resolution = nullif($4, ''),
 				resolution_code = case when $2 in ('actioned', 'dismissed', 'duplicate') then $2 else resolution_code end,
 				resolution_note = case when $2 in ('actioned', 'dismissed', 'duplicate') then nullif($4, '') else resolution_note end,
@@ -218,7 +218,7 @@ func (s *pgStore) AddModerationCaseAction(params ModerationCaseActionParams) (Mo
 			set status = 'dismissed',
 				queue = 'archive',
 				resolved_at = now(),
-				resolved_by = nullif($2, ''),
+				resolved_by = nullif($2, '')::uuid,
 				resolution = nullif($3, ''),
 				resolution_code = 'inconclusive',
 				resolution_note = nullif($3, ''),
@@ -241,7 +241,7 @@ func (s *pgStore) AddModerationCaseAction(params ModerationCaseActionParams) (Mo
 			set status = 'dismissed',
 				queue = 'archive',
 				resolved_at = now(),
-				resolved_by = nullif($2, ''),
+				resolved_by = nullif($2, '')::uuid,
 				resolution = nullif($3, ''),
 				resolution_code = 'abusive_reports',
 				resolution_note = nullif($3, ''),
@@ -271,7 +271,7 @@ func (s *pgStore) AddModerationCaseAction(params ModerationCaseActionParams) (Mo
 	if params.ActionType == "assign" {
 		_, err = tx.Exec(ctx, `
 			update moderation_cases
-			set assigned_to = nullif($2, ''),
+			set assigned_to = nullif($2, '')::uuid,
 				status = 'reviewing',
 				queue = 'active',
 				updated_at = now(),
@@ -318,19 +318,19 @@ func (s *pgStore) AddModerationCaseAction(params ModerationCaseActionParams) (Mo
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into moderation_actions(case_id, actor_user_id, target_user_id, action_type, reason)
-		values($1, nullif($2, ''), $3, $4, nullif($5, ''))
+		values($1, nullif($2, '')::uuid, $3, $4, nullif($5, ''))
 	`, params.CaseID, params.ActorUserID, targetUserID, params.ActionType, params.Reason); err != nil {
 		return ModerationCaseDetail{}, err
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into moderation_case_events(case_id, actor_user_id, event_type, body)
-		values($1, nullif($2, ''), $3, nullif($4, ''))
+		values($1, nullif($2, '')::uuid, $3, nullif($4, ''))
 	`, params.CaseID, params.ActorUserID, "action_"+params.ActionType, params.Reason); err != nil {
 		return ModerationCaseDetail{}, err
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into moderation_case_log(case_id, actor_user_id, event_type, body, metadata)
-		values($1, nullif($2, ''), $3, nullif($4, ''), jsonb_build_object('actionType', $5::text, 'status', $6::text))
+		values($1, nullif($2, '')::uuid, $3, nullif($4, ''), jsonb_build_object('actionType', $5::text, 'status', $6::text))
 	`, params.CaseID, params.ActorUserID, "action_"+params.ActionType, params.Reason, params.ActionType, params.Status); err != nil {
 		return ModerationCaseDetail{}, err
 	}
@@ -429,9 +429,9 @@ func (s *pgStore) listModerationCaseReports(ctx context.Context, caseID int64) (
 	rows, err := s.pool.Query(ctx, `
 		select
 			r.id, r.case_id, r.match_id, r.reporter_user_id,
-			coalesce(nullif(reporter.display_name, ''), r.reporter_user_id),
+			coalesce(nullif(reporter.display_name, ''), r.reporter_user_id::text),
 			r.reported_user_id,
-			coalesce(nullif(reported.display_name, ''), r.reported_user_id),
+			coalesce(nullif(reported.display_name, ''), r.reported_user_id::text),
 			r.category, coalesce(r.reason, ''), r.reporter_weight, r.created_at
 		from moderation_reports r
 		left join users reporter on reporter.id = r.reporter_user_id
@@ -457,19 +457,19 @@ func (s *pgStore) listModerationCaseReports(ctx context.Context, caseID int64) (
 func (s *pgStore) listModerationCaseMatches(ctx context.Context, caseID int64, targetUserID string) ([]ModerationMatchSummary, error) {
 	rows, err := s.pool.Query(ctx, `
 		with case_matches as (
-			select match_id from moderation_reports where case_id = $1 and match_id <> ''
+			select match_id from moderation_reports where case_id = $1
 			union
-			select match_id from moderation_evidence where case_id = $1 and match_id is not null and match_id <> ''
+			select match_id from moderation_evidence where case_id = $1 and match_id is not null
 		)
 		select
 			cm.match_id,
 			coalesce(h.mode, ''),
 			h.started_at,
 			h.ended_at,
-			coalesce(h.winner_user_id, ''),
+			coalesce(h.winner_user_id::text, ''),
 			coalesce(h.round_count, 0),
-			coalesce(p.user_id, ''),
-			coalesce(nullif(p.display_name, ''), p.user_id, ''),
+			coalesce(p.user_id::text, ''),
+			coalesce(nullif(p.display_name, ''), p.user_id::text, ''),
 			coalesce(p.total_score, 0),
 			coalesce(p.hp, 0)
 		from case_matches cm
@@ -518,7 +518,7 @@ func (s *pgStore) listModerationCaseMatches(ctx context.Context, caseID int64, t
 
 func (s *pgStore) listModerationCaseEvents(ctx context.Context, caseID int64) ([]ModerationCaseEvent, error) {
 	rows, err := s.pool.Query(ctx, `
-		select id, case_id, coalesce(actor_user_id, ''), event_type, coalesce(body, ''), created_at
+		select id, case_id, coalesce(actor_user_id::text, ''), event_type, coalesce(body, ''), created_at
 		from moderation_case_events
 		where case_id = $1
 		order by created_at desc
@@ -540,7 +540,7 @@ func (s *pgStore) listModerationCaseEvents(ctx context.Context, caseID int64) ([
 
 func (s *pgStore) listModerationCaseActions(ctx context.Context, caseID int64) ([]ModerationActionSummary, error) {
 	rows, err := s.pool.Query(ctx, `
-		select id, case_id, coalesce(actor_user_id, ''), target_user_id, action_type, coalesce(reason, ''), created_at
+		select id, case_id, coalesce(actor_user_id::text, ''), target_user_id, action_type, coalesce(reason, ''), created_at
 		from moderation_actions
 		where case_id = $1
 		order by created_at desc
@@ -563,8 +563,8 @@ func (s *pgStore) listModerationCaseActions(ctx context.Context, caseID int64) (
 func (s *pgStore) listModerationEvidence(ctx context.Context, caseID int64) ([]ModerationEvidenceSummary, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
-			id, case_id, evidence_type, coalesce(match_id, ''), coalesce(round_id, ''),
-			coalesce(subject_user_id, ''), coalesce(detector_version, ''), coalesce(rule_id, ''),
+			id, case_id, evidence_type, coalesce(match_id::text, ''), coalesce(round_id, ''),
+			coalesce(subject_user_id::text, ''), coalesce(detector_version, ''), coalesce(rule_id, ''),
 			score, weight, payload_json::text, occurred_at, created_at
 		from moderation_evidence
 		where case_id = $1
@@ -594,7 +594,7 @@ func (s *pgStore) listModerationEvidence(ctx context.Context, caseID int64) ([]M
 func (s *pgStore) listModerationCaseLog(ctx context.Context, caseID int64) ([]ModerationCaseLogEntry, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
-			id, case_id, coalesce(actor_user_id, ''), event_type,
+			id, case_id, coalesce(actor_user_id::text, ''), event_type,
 			coalesce(reason_code, ''), coalesce(body, ''), metadata::text, created_at
 		from moderation_case_log
 		where case_id = $1
@@ -649,7 +649,7 @@ func (s *pgStore) assignModerationCase(caseID int64, actorUserID, assignedTo str
 	}
 	if _, err := tx.Exec(ctx, fmt.Sprintf(`
 		update moderation_cases
-		set assigned_to = nullif($2, ''),
+		set assigned_to = nullif($2, '')::uuid,
 			claimed_at = $3,
 			claim_expires_at = $4,
 			status = %s,
@@ -662,7 +662,7 @@ func (s *pgStore) assignModerationCase(caseID int64, actorUserID, assignedTo str
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into moderation_case_log(case_id, actor_user_id, event_type, metadata)
-		values($1, nullif($2, ''), $3, jsonb_build_object('assignedTo', $4::text))
+		values($1, nullif($2, '')::uuid, $3, jsonb_build_object('assignedTo', $4::text))
 	`, caseID, actorUserID, eventType, assignedTo); err != nil {
 		return ModerationCaseDetail{}, err
 	}

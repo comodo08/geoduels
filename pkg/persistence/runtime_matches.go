@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -64,8 +63,8 @@ func (s *pgStore) RecordRuntimeMatch(matchID, state string, ownerEpoch int64, te
 	return err
 }
 
-func (s *pgStore) ExpireStaleRuntimeMatches(prefix string, olderThan time.Duration) error {
-	if strings.TrimSpace(prefix) == "" || olderThan <= 0 {
+func (s *pgStore) ExpireStaleRuntimeMatches(mode string, olderThan time.Duration) error {
+	if mode == "" || olderThan <= 0 {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -75,9 +74,12 @@ func (s *pgStore) ExpireStaleRuntimeMatches(prefix string, olderThan time.Durati
 		set state = $1,
 			ended_at = now()
 		where state = $2
-		  and id like $3
+		  and exists (
+		    select 1 from match_sessions ms
+		    where ms.match_id=runtime_matches.id and ms.mode=$3
+		  )
 		  and started_at < now() - $4::interval
 		  and ended_at is null
-	`, string(contracts.MatchEnded), string(contracts.MatchLive), prefix+"%", olderThan.String())
+	`, string(contracts.MatchEnded), string(contracts.MatchLive), mode, olderThan.String())
 	return err
 }

@@ -61,7 +61,7 @@ func main() {
 		log.Fatal(err)
 	}
 	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
-	if err := persist.ExpireStaleRuntimeMatches("solo-", singleplayerTTL); err != nil {
+	if err := persist.ExpireStaleRuntimeMatches(string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
 	if err := persist.ExpireOpenParties(); err != nil {
@@ -494,15 +494,30 @@ func (q *matchCoordinator) launcher() matchlaunch.Launcher {
 }
 
 func (q *matchCoordinator) authenticatedClaims(r *http.Request) (auth.AppClaims, error) {
+	var claims auth.AppClaims
+	var err error
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if strings.HasPrefix(authz, "Bearer ") {
-		return auth.ValidateAppAccessToken(q.appSecret, strings.TrimSpace(strings.TrimPrefix(authz, "Bearer ")))
+		claims, err = auth.ValidateAppAccessToken(q.appSecret, strings.TrimSpace(strings.TrimPrefix(authz, "Bearer ")))
+	} else {
+		accessToken := strings.TrimSpace(r.URL.Query().Get("accessToken"))
+		if accessToken == "" {
+			return auth.AppClaims{}, errors.New("missing bearer token")
+		}
+		claims, err = auth.ValidateAppAccessToken(q.appSecret, accessToken)
 	}
-	accessToken := strings.TrimSpace(r.URL.Query().Get("accessToken"))
-	if accessToken == "" {
-		return auth.AppClaims{}, errors.New("missing bearer token")
+	if err != nil {
+		return auth.AppClaims{}, err
 	}
-	return auth.ValidateAppAccessToken(q.appSecret, accessToken)
+	if resolver, ok := q.persist.(interface {
+		ResolveLegacyEntityID(entityType, legacyID string) (string, bool, error)
+	}); ok {
+		if id, found, resolveErr := resolver.ResolveLegacyEntityID("user", claims.Sub); resolveErr == nil && found {
+			claims.Sub = id
+			claims.Subject = id
+		}
+	}
+	return claims, nil
 }
 
 func (q *matchCoordinator) writeQueueMessage(conn *websocket.Conn, writeMu *sync.Mutex, event string, payload any) bool {

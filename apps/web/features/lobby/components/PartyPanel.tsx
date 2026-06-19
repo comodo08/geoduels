@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { Copy, Crown, Loader2, LogOut, Map as MapIcon, Play, UserMinus, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
+import { toPublicEntityId } from "../../../lib/entity-id";
 import type { MatchConfig, GameRuleset } from "../../matchmaking/lib/queue-client";
 import type { PartyRuntimeStatus } from "../controllers/party-controller";
 import type { PartySnapshot, PartyTeamId, PartyMode } from "../lib/party-client";
@@ -133,7 +134,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                 </p>
                 {currentMember?.inActiveMatch && activeMatchId ? (
                   <LobbyActionLink
-                    href={`/match/${encodeURIComponent(activeMatchId)}`}
+                    href={`/match/${encodeURIComponent(toPublicEntityId(activeMatchId))}`}
                     size="md"
                     className="mt-3"
                   >

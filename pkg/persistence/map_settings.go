@@ -167,7 +167,7 @@ func (s *pgStore) ensureReadyMapTx(ctx context.Context, tx pgx.Tx, mapID string,
 	var status, revisionID string
 	var count int
 	if err := tx.QueryRow(ctx, `
-		select status, coalesce(active_revision_id,''), location_count
+		select status, coalesce(active_revision_id::text,''), location_count
 		from maps
 		where map_key=$1 and archived_at is null
 		for share

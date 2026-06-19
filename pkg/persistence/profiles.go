@@ -81,7 +81,7 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 	p.SeasonID = seasonID
 	row := s.pool.QueryRow(ctx, `
 		select
-			coalesce(nullif(u.display_name, seed.user_id), ui.provider_name, $1) as display_name,
+			coalesce(nullif(u.display_name, seed.user_id::text), ui.provider_name, $1::text) as display_name,
 			coalesce(u.avatar_url, ui.avatar_url, '') as avatar_url,
 			coalesce(r.mmr, $4) as mmr,
 			coalesce(r.rd, $5) as rating_rd,
@@ -96,7 +96,7 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 				coalesce(u.ban_reason, '') as ban_reason,
 				coalesce(u.selected_badge_code, 0) as selected_badge_code,
 				coalesce(u.selected_badge_season_id, '') as selected_badge_season_id
-		from (select $1 as user_id) seed
+		from (select $1::uuid as user_id) seed
 		left join users u on u.id = seed.user_id
 		left join lateral (
 			select provider_name, avatar_url

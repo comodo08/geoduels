@@ -15,6 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"geoduels/pkg/entityid"
 )
 
 const defaultMapKey = "a-source-world"
@@ -124,7 +126,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 func upsertRevision(ctx context.Context, pool *pgxpool.Pool, mapKey, sourceHash string) (revisionID string, shouldIngest bool, err error) {
-	revisionID = mapKey + "-" + sourceHash[:12]
+	revisionID = entityid.Derive("map-revision", mapKey+":"+sourceHash)
 	if _, err := pool.Exec(ctx, `
 		insert into maps(map_key, display_name) values($1, $2)
 		on conflict (map_key) do nothing

@@ -274,6 +274,60 @@ type MatchSnapshot struct {
 	GraceWindowSec  int                           `json:"graceWindowSec"`
 }
 
+// NormalizeSnapshotEntityIDs upgrades retained legacy replay payloads after
+// database entity keys have moved to UUIDs.
+func NormalizeSnapshotEntityIDs(snap MatchSnapshot, resolve func(entityType, value string) string) MatchSnapshot {
+	if resolve == nil {
+		return snap
+	}
+	snap.MatchID = resolve("match", snap.MatchID)
+	players := make(map[string]PlayerState, len(snap.Players))
+	for key, player := range snap.Players {
+		id := resolve("user", key)
+		player.UserID = resolve("user", player.UserID)
+		if player.UserID == "" {
+			player.UserID = id
+		}
+		players[id] = player
+	}
+	snap.Players = players
+	for key, team := range snap.Teams {
+		for index, userID := range team.Players {
+			team.Players[index] = resolve("user", userID)
+		}
+		snap.Teams[key] = team
+	}
+	ratings := make(map[string]RatingDeltaPreview, len(snap.RatingPreview))
+	for userID, preview := range snap.RatingPreview {
+		ratings[resolve("user", userID)] = preview
+	}
+	snap.RatingPreview = ratings
+	normalizeRoundResult := func(result *RoundResult) {
+		if result == nil {
+			return
+		}
+		roundPlayers := make(map[string]RoundPlayerResult, len(result.Players))
+		for key, player := range result.Players {
+			id := resolve("user", key)
+			player.UserID = resolve("user", player.UserID)
+			if player.UserID == "" {
+				player.UserID = id
+			}
+			roundPlayers[id] = player
+		}
+		result.Players = roundPlayers
+		for key, team := range result.Teams {
+			team.RepresentativeUserID = resolve("user", team.RepresentativeUserID)
+			result.Teams[key] = team
+		}
+	}
+	normalizeRoundResult(snap.LastRoundResult)
+	for _, result := range snap.RoundResults {
+		normalizeRoundResult(result)
+	}
+	return snap
+}
+
 type ClientGuessPoint struct {
 	Lat float64 `json:"lat"`
 	Lng float64 `json:"lng"`

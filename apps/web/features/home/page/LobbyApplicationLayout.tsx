@@ -2,6 +2,10 @@ import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import type { LobbyContentRoute } from "../../../components/ui/LobbyScreen";
+import {
+  normalizeEntityRouteId,
+  toPublicEntityId,
+} from "../../../lib/entity-id";
 import { useHomeModel } from "../model/useHomeModel";
 import HomePageView from "./HomePageView";
 import { scheduleLobbyPreloading } from "./lobby-preloading";
@@ -38,7 +42,7 @@ export function LobbyApplicationLayout({ children }: { children: ReactNode }) {
     lobbyRoute === "map-details" &&
     router.isReady &&
     typeof router.query.id === "string"
-      ? router.query.id
+      ? normalizeEntityRouteId(router.query.id)
       : "";
   const prevMatchIdRef = useRef("");
 
@@ -87,7 +91,9 @@ export function LobbyApplicationLayout({ children }: { children: ReactNode }) {
     const prevMatchId = prevMatchIdRef.current;
     prevMatchIdRef.current = nextMatchId;
     if (!nextMatchId || nextMatchId === prevMatchId) return;
-    void router.push(`/match/${encodeURIComponent(nextMatchId)}`);
+    void router.push(
+      `/match/${encodeURIComponent(toPublicEntityId(nextMatchId))}`,
+    );
   }, [model.view.meta.activeMatchId, router]);
 
   return (

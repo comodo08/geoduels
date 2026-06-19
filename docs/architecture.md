@@ -23,6 +23,16 @@ This document describes the current runtime implemented in this repository. Olde
 - `pkg/duel` and `pkg/singleplayer` own match rules and round progression.
 - `pkg/gameticket` issues short-lived gameplay admission tickets.
 
+## Entity identifiers
+
+- Durable users, auth sessions, matches, parties, map revisions, comments, chat conversations, and chat messages use PostgreSQL `uuid` keys.
+- New keys are UUIDv7 for index locality. Deterministic UUIDs are used only for compatibility keys such as chat conversation scopes and migrated legacy identifiers.
+- Service contracts, JWT subjects, Redis values, and websocket payloads carry canonical UUID strings.
+- Browser routes render UUIDs as reversible 26-character Crockford Base32 values. Human map slugs and party invite codes remain text.
+- `legacy_id_aliases` resolves links and access tokens issued before the UUID migration.
+- Match mode is explicit state; identifier prefixes are not used to determine gameplay behavior.
+- Text fields ending in `_id` are reserved for external identifiers, semantic keys, or polymorphic scope values; internal entity and foreign keys use `uuid`.
+
 ## End-to-end flows
 
 ### Auth

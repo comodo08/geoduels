@@ -1,9 +1,7 @@
 package persistence
 
 import (
-	"crypto/rand"
 	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"geoduels/pkg/entityid"
 )
 
 func getenvInt(name string, fallback int) int {
@@ -146,15 +146,11 @@ func nullable(v string) any {
 }
 
 func newUserID() string {
-	b := make([]byte, 12)
-	_, _ = rand.Read(b)
-	return "u_" + hex.EncodeToString(b)
+	return entityid.New()
 }
 
 func newDebugMatchID(index int) string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return fmt.Sprintf("debug-report-%s-%02d", hex.EncodeToString(b), index)
+	return entityid.New()
 }
 
 func normalizeDBURLForContainer(dsn string) string {

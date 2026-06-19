@@ -216,7 +216,14 @@ func (a *api) authenticatedClaims(r *http.Request) (auth.AppClaims, error) {
 		return auth.AppClaims{}, errors.New("missing bearer token")
 	}
 	tok := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-	return auth.ValidateAppAccessToken(a.appAuthSecret, tok)
+	claims, err := auth.ValidateAppAccessToken(a.appAuthSecret, tok)
+	if err != nil {
+		return auth.AppClaims{}, err
+	}
+	claims.Sub = a.resolveEntityID("user", claims.Sub)
+	claims.Subject = claims.Sub
+	claims.SessionID = a.resolveEntityID("session", claims.SessionID)
+	return claims, nil
 }
 
 func (a *api) sessionIdentity(r *http.Request) (string, string) {
