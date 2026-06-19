@@ -392,7 +392,7 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 		)
 		values($1, $2, $3, $4, nullif($5, '')::uuid, $6, $7, nullif($8, '')::uuid, nullif($9, ''),
 		       nullif($10, ''), nullif($11, '')::uuid, $12, $13, $14, $15, $16,
-		       $4 + make_interval(days => $17), $18)
+		       $4::timestamptz + make_interval(days => $17::integer), $18)
 		on conflict (match_id) do update set
 			mode = excluded.mode,
 			started_at = excluded.started_at,

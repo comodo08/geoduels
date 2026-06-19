@@ -20,6 +20,34 @@ func TestRecordMatchResultFinalRankedDeltaCastsParameters(t *testing.T) {
 	}
 }
 
+func TestRecordMatchHistoryCastsReplayExpirationParameters(t *testing.T) {
+	body, err := os.ReadFile("matches_write.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if strings.Contains(source, "$4 + make_interval(days => $17)") {
+		t.Fatal("replay expiration must cast pgx timestamp and integer parameters")
+	}
+	if !strings.Contains(source, "$4::timestamptz + make_interval(days => $17::integer)") {
+		t.Fatal("typed replay expiration expression is missing")
+	}
+}
+
+func TestModerationProjectionCastsUUIDBeforeAggregate(t *testing.T) {
+	body, err := os.ReadFile("moderation_scoring.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if strings.Contains(source, "max(reported_user_id)::text") {
+		t.Fatal("PostgreSQL cannot aggregate UUID values with max before casting")
+	}
+	if !strings.Contains(source, "max(reported_user_id::text)") {
+		t.Fatal("moderation projection must cast UUID values before max")
+	}
+}
+
 func TestCheatingBanRefundQueryUsesCompactRatingColumns(t *testing.T) {
 	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {

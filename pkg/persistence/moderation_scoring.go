@@ -207,7 +207,7 @@ func refreshModerationCaseSummary(ctx context.Context, tx pgx.Tx, caseID int64) 
 			select
 				count(*)::int as report_count,
 				count(distinct reporter_user_id)::int as unique_reporter_count,
-				coalesce(max(reported_user_id)::text, '') as target_user_id
+				coalesce(max(reported_user_id::text), '') as target_user_id
 			from moderation_reports
 			where case_id = $1
 		)
