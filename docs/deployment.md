@@ -31,3 +31,26 @@ The public release workflow needs `OPS_REPO_TOKEN` with access to the private op
 - `OPS_REPOSITORY`, default `sourcelocation/geoduels-prod`
 - `REGISTRY`, default `ghcr.io/<repository-owner>`
 - `PRODUCTION_SITE_URL`, default `https://geoduels.io`
+
+## Database Migrations
+
+The release workflow does not apply PostgreSQL migrations. Migration execution is an explicit production operation owned by the private ops process.
+
+For each release:
+
+1. Review every migration added since the currently deployed schema version, including its down migration and application compatibility window.
+2. Back up PostgreSQL and confirm sufficient free disk space before table rewrites or `VACUUM FULL`.
+3. Pause writes or enter maintenance mode when a migration requires it.
+4. Apply migrations with the release's `db/migrations` directory before rolling out code that requires the new schema.
+5. Run database and API smoke tests, then allow Flux to roll out the new images.
+6. Roll back application images only when the previous application is compatible with the migrated schema. Run down migrations only as a separately reviewed operation.
+
+Migration 42 is a special staged operation: `scripts/compact-storage.sh` only runs while the schema version is exactly `42`. Apply migration 42, smoke-test compatible code, stop writes and compact, then continue with migration 43 and later. A database already beyond version 42 requires a separately planned PostgreSQL maintenance operation.
+
+## Post-Deploy Checks
+
+- `/health`, `/health/live`, and `/health/ready` for API and all deployed workers/services
+- browser auth bootstrap and refresh
+- queue join, assignment, realtime websocket connection, and match completion
+- public match history and player profile routes
+- map browse/upload flow when map-related migrations changed

@@ -5,16 +5,19 @@ This document describes the current runtime implemented in this repository. Olde
 ## Runtime roles
 
 - `apps/web`: Next.js browser client and route shell.
-- `services/api`: auth, profile, leaderboard, singleplayer bootstrap, match-route bootstrap/session endpoints.
-- `services/match-coordinator`: duel queue websocket endpoint, assignment, recovery, online count, maintenance exposure.
+- `services/api`: browser auth/session rotation, self and public profiles, leaderboard, maps, singleplayer launch, match-route lookup/history, moderation/admin, content, and support APIs.
+- `services/match-coordinator`: duel queue websocket endpoint, parties, party presence/chat coordination, gameplay-node assignment, online count, and maintenance exposure.
 - `services/realtime-gateway`: public websocket gateway for `/ws/{node}`.
 - `services/gameplay-node`: authoritative in-memory duel and singleplayer execution for assigned matches.
+- `services/moderation-worker`: background moderation projection and enforcement processing.
+- `services/discord-worker`: Discord membership/role reconciliation and badge synchronization.
 - `workers/location-ingest`: bootstraps official datasets; user uploads are handled by the API.
+- `workers/storage-maintenance`: bounded replay compression and retention cleanup.
 
 ## Data ownership
 
-- PostgreSQL is the durable source of truth for users, identities, sessions, stats, ranks, runtime match metadata, and final match snapshots.
-- Redis is used for queue state, gameplay-node registration, route assignment, presence, and maintenance status.
+- PostgreSQL is the durable source of truth for users, identities, sessions, profiles, stats, ranks, maps and immutable revisions, parties, chat, moderation, runtime match metadata, compact match summaries, and retained replays.
+- Redis is used for queue state, gameplay-node registration, route assignment, presence/pubsub, and maintenance status.
 - `pkg/persistence` owns Postgres persistence behavior.
 - `pkg/coordinator` owns Redis-backed node registration, assignment, and presence.
 - `pkg/duel` and `pkg/singleplayer` own match rules and round progression.
@@ -26,8 +29,9 @@ This document describes the current runtime implemented in this repository. Olde
 
 1. Browser loads `apps/web`.
 2. Web bootstraps auth through `GET /v1/auth/session`.
-3. `services/api` rotates the session cookie and returns a short-lived app access JWT.
-4. The browser keeps the access JWT in memory only.
+3. `services/api` validates the `HttpOnly` refresh-session cookie and returns a short-lived app access JWT without rotating the refresh token.
+4. Explicit refresh through `POST /v1/auth/refresh` rotates the refresh token and returns a new app access JWT.
+5. The browser keeps the access JWT in memory only.
 
 ### Duel
 
@@ -46,9 +50,18 @@ This document describes the current runtime implemented in this repository. Olde
 3. `api` returns assignment plus gameplay ticket.
 4. Browser connects through `realtime-gateway` to the assigned node.
 
+### Parties
+
+1. Authenticated browsers create or join parties through `services/match-coordinator`.
+2. The coordinator persists durable party membership/configuration in PostgreSQL and uses websocket presence for live updates.
+3. Party chat uses the durable `party` conversation scope and remains available while a party-sourced match is active.
+4. The party owner selects a permitted ready map and starts the configured duel, team duel, or free-for-all match.
+5. Match session/history responses retain the source party identifiers so players can return to the party.
+
 ### Match route bootstrap
 
 - `/match/[id]` is the canonical route for a specific match.
+- `/players/[id]` is the public profile route for public-safe rating, badge, and recent match-history data.
 - Cold loads resolve through `GET /v1/matches/{id}/bootstrap`.
 - Already-authenticated refreshes can resolve through `GET /v1/matches/{id}/session`.
 - The route can resolve to:
@@ -61,9 +74,10 @@ This document describes the current runtime implemented in this repository. Olde
 ## Routing and scaling boundaries
 
 - `match-coordinator` is responsible for duel creation and assignment.
-- `api` is responsible for singleplayer creation and route bootstrap/session endpoints.
+- `api` is responsible for browser identity/session ownership, singleplayer creation, durable content APIs, and route bootstrap/session endpoints.
 - `realtime-gateway` is only a routing/proxy layer.
 - `gameplay-node` is the in-memory authority for the matches assigned to it.
+- `moderation-worker` and `discord-worker` process background work independently from latency-sensitive request and match paths.
 - Queueing and realtime simulation are intentionally separate scaling boundaries.
 
 ## Reconnect and session model
@@ -99,6 +113,14 @@ This document describes the current runtime implemented in this repository. Olde
 ## Location pipeline
 
 - Custom-map JSON is streamed through the API, validated, normalized into immutable PostgreSQL revisions, and then discarded.
+- Map upload quotas are derived from the creator's base/trusted/established trust tier. Trust uses account age and qualified community favorites/maps; moderation restrictions lower the effective tier.
 - Match launch selects and persists the full bounded round plan before assigning a gameplay node.
 - `gameplay-node` consumes the supplied in-memory plan and does not query or preload map catalogs.
 - Redis is not used for map contents, lobby map settings, or per-match location deduplication.
+
+## Match persistence and retention
+
+- Compact match summaries and participant projections are retained durably for profiles, rankings, moderation, and match lists.
+- Full replay snapshots are Zstandard-compressed when written and retained for 30 days by default.
+- Replays referenced by moderation reports/evidence are pinned by clearing their expiration.
+- `workers/storage-maintenance` compresses legacy JSON replays and clears expired replay payloads without deleting compact match history.

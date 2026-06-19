@@ -11,11 +11,14 @@ https://geoduels.io/
 ### Runtime topology
 
 - `apps/web` (Next.js): browser UI and gameplay shell.
-- `services/api` (Go): auth/session/profile endpoints and backend API surface (`/v1`).
-- `services/match-coordinator` (Go): matchmaking over websocket (`/queue`), assignment, maintenance status, and recovery (`/v1/session/recover`).
+- `services/api` (Go): auth/session/profile, public player profiles, maps, parties, match history, moderation/admin, content, and support APIs (`/v1`).
+- `services/match-coordinator` (Go): matchmaking over websocket (`/queue`), party coordination/chat, assignment, presence, and maintenance status. Resumable-session lookup is exposed by the API at `/v1/session/resumable`.
 - `services/realtime-gateway` (Go): websocket gatewaying (`/ws/{node}`) to the assigned gameplay node.
 - `services/gameplay-node` (Go): round engine and authoritative match state broadcast for assigned matches.
+- `services/moderation-worker` (Go): background moderation projection and enforcement processing.
+- `services/discord-worker` (Go): Discord role synchronization and membership badge processing.
 - `workers/location-ingest` (Go): one-off bootstrap utility for official location datasets.
+- `workers/storage-maintenance` (Go): replay compression, retention cleanup, and other bounded storage maintenance.
 
 ### Data and state
 
@@ -37,7 +40,12 @@ Before step 4, the launching service resolves the selected immutable map revisio
 ## Custom maps
 
 - Signed-in non-guest accounts upload JSON through `/v1/maps`; uploads are validated and normalized directly into PostgreSQL, and the source file is discarded.
-- Quotas are enforced transactionally: 10 active maps, 250,000 active locations, 20 revisions per map, 3 uploads per hour, and 10 per day.
+- Creator trust tiers enforce transactional quotas:
+  - base: 10 maps, 200,000 active locations, 10 uploads/hour, and 30 uploads/day
+  - trusted: 25 maps, 500,000 active locations, 10 uploads/hour, and 30 uploads/day
+  - established: 100 maps, 1,000,000 active locations, 10 uploads/hour, and 30 uploads/day
+- Trust advances from account age and qualified favorites/maps. Moderation restrictions force the base tier, and administrators can apply a tier override.
+- Each map may retain at most 10 immutable revisions. The current tier's active-location allowance is also the per-map location ceiling.
 - Ranked duels always use the official server-selected map. Private lobbies may select an accessible ready map independently from movement rules.
 
 ### Match route flow
@@ -74,6 +82,8 @@ Production images are built from service Dockerfiles and pushed to registry:
 - `geoduels-match-coordinator`
 - `geoduels-realtime-gateway`
 - `geoduels-gameplay-node`
+- `geoduels-moderation-worker`
+- `geoduels-discord-worker`
 - `geoduels-web`
 - `geoduels-location-ingest`
 
@@ -110,7 +120,6 @@ POSTGRES_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disab
 docker compose up -d gameplay-node match-coordinator realtime-gateway api
 cd apps/web
 npm ci
-cp .env.local.example .env.local
 npm run dev
 ```
 
@@ -134,6 +143,17 @@ Endpoints:
 - API health: `http://localhost:8080/health`
 - Queue health: `http://localhost:8090/health`
 - Gameplay health: `http://localhost:8091/health`
+- Realtime health: `http://localhost:8092/health`
+- Moderation worker health, when started: `http://localhost:8093/health`
+- Discord worker health, when started: `http://localhost:8094/health`
+
+The core playable stack is `gameplay-node`, `match-coordinator`, `realtime-gateway`, and `api`. Start the background workers when exercising their features:
+
+```bash
+docker compose up -d moderation-worker discord-worker
+```
+
+`discord-worker` requires the Discord bot and guild environment variables from `.env`.
 
 Stop:
 
@@ -163,6 +183,40 @@ Triggered by git tag push.
 6. Merge the generated release PR to trigger production rollout through Flux.
 7. Run post-deploy health checks for `/health`, queue flow, and websocket gameplay.
 
+### Storage optimization migration
+
+Migration 42 removes redundant match guesses/indexes, converts map locations to compact fixed-width values, and stores new replays as Zstandard-compressed PostgreSQL blobs with 30-day retention. Apply it during a write maintenance window.
+
+The compaction helper intentionally requires the database to be exactly at schema version 42. During an upgrade from an older schema, apply migration 42 by itself, start the migration-42-compatible application, run smoke tests, stop writes, compact, and only then apply migrations 43 and later:
+
+```bash
+CONFIRM_STORAGE_COMPACTION=yes \
+MIGRATIONS_DB_URL='postgres://user:pass@host:5432/geoduels?sslmode=disable' \
+./scripts/compact-storage.sh
+```
+
+Do not run the helper after migrations 43 or later have been applied; it will refuse to proceed. For a database already beyond version 42, plan any `VACUUM FULL` work separately with a PostgreSQL administrator instead of changing the script's version guard.
+
+To accelerate legacy replay compression and retention cleanup before compaction:
+
+```bash
+POSTGRES_URL='postgres://user:pass@host:5432/geoduels?sslmode=disable' \
+go run ./workers/storage-maintenance -batch-size 1000 -max-batches 0
+```
+
+For production PostgreSQL, enable `wal_compression=on` and `track_io_timing=on` in server configuration. Keep at least 15 GiB free before running the rewrite.
+
+## Documentation
+
+- [`AGENTS.md`](AGENTS.md) - repository boundaries and essential context for coding agents.
+- [`docs/architecture.md`](docs/architecture.md) - service ownership, data flow, routing, reconnects, maintenance, and persistence.
+- [`docs/development.md`](docs/development.md) - local macOS setup, service startup, tests, and the k3d development environment.
+- [`docs/deployment.md`](docs/deployment.md) - production release flow, database migration policy, and post-deploy checks.
+- [`apps/web/docs/frontend-architecture.md`](apps/web/docs/frontend-architecture.md) - frontend ownership, shared UI and styling rules, and file-size budgets.
+- [`infra/k3s/README.md`](infra/k3s/README.md) - reusable Kubernetes manifests and local k3d scaling tests.
+- [`apps/web/assets/source-map-thumbnails/README.md`](apps/web/assets/source-map-thumbnails/README.md) - source requirements and attribution for generated map thumbnails.
+- [`CONTRIBUTOR_LICENSE_AGREEMENT.md`](CONTRIBUTOR_LICENSE_AGREEMENT.md) - contributor licensing terms.
+
 ## Repo pointers
 
 - `docker-compose.yml` - local stack
@@ -170,4 +224,3 @@ Triggered by git tag push.
 - `infra/k3s/overlays/k3d` - local 3-node k3d overlay for routing/scaling tests
 - production overlays and Flux cluster state live in the private ops repository
 - `services/*/Dockerfile`, `apps/web/Dockerfile`, `workers/location-ingest/Dockerfile` - production image definitions
-- `docs/architecture.md` - current runtime architecture
