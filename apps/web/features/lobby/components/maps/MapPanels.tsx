@@ -288,7 +288,7 @@ export function MapsPanel({
                 <LobbySectionHeader
                   eyebrow="Upload Map"
                   title={<span className="text-[18px]">Create a custom map</span>}
-                  description="Create a custom map from a GeoDuels JSON file."
+                  description="Create a custom map from a JSON file."
                 />
                 <Link href="/maps/upload" className="inline-flex min-h-[42px] items-center justify-center rounded-[12px] bg-accentPrimary px-4 text-sm font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-accentPrimaryDeep">
                   <Upload className="mr-2" size={17} />

@@ -213,7 +213,7 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 			from match_history h
 			join match_players cheater on cheater.match_id = h.match_id and cheater.user_id = $1
 			join match_players opponent on opponent.match_id = h.match_id and opponent.user_id <> $1
-			left join lobbies l on l.active_match_id = h.match_id
+			left join parties l on l.active_match_id = h.match_id
 				or l.started_match_id = h.match_id
 				or l.last_match_id = h.match_id
 			where h.mode = $2
