@@ -89,6 +89,10 @@ type AdminRepository interface {
 	RevokeUserRole(userID, role, revokedBy, reason string) error
 }
 
+type MapCreatorAdminRepository interface {
+	SetMapCreatorTierOverride(userID string, tier *int) (contracts.MapUploadQuota, error)
+}
+
 type ContentRepository interface {
 	GetLobbyChangelog(defaultContent LobbyChangelogContent) (LobbyChangelogContent, error)
 	SetLobbyChangelog(content LobbyChangelogContent) error
@@ -98,6 +102,8 @@ type ContentRepository interface {
 	UpdateChangelogPost(id int64, input ChangelogPostInput) (ChangelogPost, bool, error)
 	GetModerationSettings() (ModerationSettings, error)
 	SetModerationSettings(settings ModerationSettings) error
+	GetDiscordIntegrationSettings() (DiscordIntegrationSettings, error)
+	SetDiscordIntegrationSettings(settings DiscordIntegrationSettings) error
 }
 
 type SeasonRepository interface {
@@ -127,6 +133,28 @@ type RuntimeRepository interface {
 	CompleteMatchSession(matchID string) error
 	MatchSessionSourceParty(matchID string) (string, string, bool, error)
 	ExpireStaleRuntimeMatches(prefix string, olderThan time.Duration) error
+}
+
+type StorageCleanupResult struct {
+	ReplaysCompressed    int64
+	ExpiredReplays       int64
+	RuntimeMatches       int64
+	MatchSessions        int64
+	MatchPlans           int64
+	ChatMessages         int64
+	ChatConversations    int64
+	AuthSessions         int64
+	Parties              int64
+	MapUploadEvents      int64
+	MapDailyUsers        int64
+	UserNotifications    int64
+	NotificationOutbox   int64
+	DiscordSyncOutbox    int64
+	InactiveMapRevisions int64
+}
+
+type StorageMaintenance interface {
+	CleanupStorage(batchSize int) (StorageCleanupResult, error)
 }
 
 type ChatRepository interface {

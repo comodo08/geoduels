@@ -1,17 +1,17 @@
-import type { LobbyRuntimeState } from "../../lobby/controllers/lobby-controller";
+import type { PartyRuntimeState } from "../../lobby/controllers/party-controller";
 import type { MatchState } from "../../matchmaking/controllers/match-controller";
 
 export function selectActiveChatConversationId(params: {
   userId: string;
-  lobby: LobbyRuntimeState;
+  party: PartyRuntimeState;
   match: MatchState;
 }) {
-  const lobbySnapshot = params.lobby.snapshot;
+  const partySnapshot = params.party.snapshot;
   if (
-    lobbySnapshot?.id &&
-    lobbySnapshot.members.some((member) => member.userId === params.userId)
+    partySnapshot?.id &&
+    partySnapshot.members.some((member) => member.userId === params.userId)
   ) {
-    return `party:${lobbySnapshot.id}`;
+    return `party:${partySnapshot.id}`;
   }
   if (params.match.sourcePartyId) {
     return `party:${params.match.sourcePartyId}`;

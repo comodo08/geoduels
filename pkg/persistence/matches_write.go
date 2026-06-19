@@ -314,7 +314,7 @@ func (s *pgStore) RecordFinalMatchSnapshot(matchID string, snapshot []byte) erro
 	return nil
 }
 
-func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap contracts.MatchSnapshot, replaySnapshot string) error {
+func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap contracts.MatchSnapshot, replaySnapshot []byte) error {
 	if matchID == "" {
 		matchID = snap.MatchID
 	}
@@ -379,27 +379,43 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 	mapID := snap.Config.MapID
 	var mapRevisionID string
 	_ = tx.QueryRow(ctx, `select map_id, map_revision_id from match_round_plans where match_id=$1 order by round_index limit 1`, matchID).Scan(&mapID, &mapRevisionID)
+	compressedReplay, replayHash, err := compressReplay(replaySnapshot)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		insert into match_history(
-			match_id, mode, state, started_at, ended_at, winner_user_id, snapshot_json,
-			ranked, source_kind, source_party_id, ruleset, map_key, map_revision_id, replay_json
+			match_id, mode, started_at, ended_at, winner_user_id,
+			ranked, source_kind, source_party_id, ruleset, map_key, map_revision_id,
+			replay_zstd, replay_codec, replay_schema_version, replay_uncompressed_bytes,
+			replay_sha256, replay_expires_at, round_count
 		)
-		values($1, $2, $3, $4, $5, nullif($6, ''), $7::jsonb, $8, $9, $10, nullif($11, ''), nullif($12, ''), nullif($13, ''), $14::jsonb)
+		values($1, $2, $3, $4, nullif($5, ''), $6, $7, $8, nullif($9, ''),
+		       nullif($10, ''), nullif($11, ''), $12, $13, $14, $15, $16,
+		       $4 + make_interval(days => $17), $18)
 		on conflict (match_id) do update set
 			mode = excluded.mode,
-			state = excluded.state,
 			started_at = excluded.started_at,
 			ended_at = excluded.ended_at,
 			winner_user_id = excluded.winner_user_id,
-			snapshot_json = excluded.snapshot_json,
 			ranked = excluded.ranked,
 			source_kind = excluded.source_kind,
-				source_party_id = excluded.source_party_id,
-				ruleset = excluded.ruleset,
-				map_key = excluded.map_key,
-				map_revision_id = excluded.map_revision_id,
-				replay_json = excluded.replay_json
-	`, matchID, string(snap.Mode), string(snap.State), startedAt, endedAt, winner, replaySnapshot, ranked, sourceKind, sourcePartyID, ruleset, mapID, mapRevisionID, replaySnapshot); err != nil {
+			source_party_id = excluded.source_party_id,
+			ruleset = excluded.ruleset,
+			map_key = excluded.map_key,
+			map_revision_id = excluded.map_revision_id,
+			replay_json = null,
+			replay_zstd = excluded.replay_zstd,
+			replay_codec = excluded.replay_codec,
+			replay_schema_version = excluded.replay_schema_version,
+			replay_uncompressed_bytes = excluded.replay_uncompressed_bytes,
+			replay_sha256 = excluded.replay_sha256,
+			replay_expires_at = excluded.replay_expires_at,
+			round_count = excluded.round_count
+	`, matchID, string(snap.Mode), startedAt, endedAt, winner,
+		ranked, sourceKind, sourcePartyID, ruleset, mapID, mapRevisionID,
+		compressedReplay, replayCodecZstd, replaySchemaVersion, len(replaySnapshot),
+		replayHash[:], replayRetentionDays, len(snap.RoundResults)); err != nil {
 		return err
 	}
 	for userID, player := range snap.Players {
@@ -407,16 +423,22 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 		if displayName == "" {
 			displayName = userID
 		}
+		totalScore := 0
+		for _, round := range snap.RoundResults {
+			if round != nil {
+				totalScore += round.Players[userID].Score
+			}
+		}
 		if _, err := tx.Exec(ctx, `
-			insert into match_players(match_id, user_id, display_name, mmr, hp, rating_rd, ranked_games_played)
+			insert into match_players(match_id, user_id, display_name, mmr, hp, rating_rd, total_score)
 			values($1, $2, $3, $4, $5, $6, $7)
 			on conflict (match_id, user_id) do update set
 				display_name = excluded.display_name,
 				mmr = excluded.mmr,
 				hp = excluded.hp,
 				rating_rd = excluded.rating_rd,
-				ranked_games_played = excluded.ranked_games_played
-		`, matchID, userID, displayName, player.MMR, player.HP, clampRatingRD(player.RatingRD), player.RankedGamesPlayed); err != nil {
+				total_score = excluded.total_score
+		`, matchID, userID, displayName, player.MMR, player.HP, clampRatingRD(player.RatingRD), totalScore); err != nil {
 			return err
 		}
 	}
@@ -425,36 +447,6 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 			continue
 		}
 		for userID, result := range round.Players {
-			guessUnixMS := nullableInt64(result.GuessUnixMS)
-			guessMS := nullableInt64(result.GuessMS)
-			guessedAt := any(endedAt)
-			if result.GuessUnixMS > 0 {
-				guessedAt = time.UnixMilli(result.GuessUnixMS)
-			}
-			if _, err := tx.Exec(ctx, `
-				insert into match_round_guesses(
-					match_id, round_id, round_number, user_id, lat, lng, actual_lat, actual_lng,
-					distance_km, score, guess_unix_ms, guess_ms, ruleset, ranked, source_kind, map_key, map_revision_id, guessed_at
-				)
-				values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, nullif($13, ''), $14, $15, nullif($16, ''), nullif($17, ''), $18)
-				on conflict (match_id, round_id, user_id) do update set
-					lat = excluded.lat,
-					lng = excluded.lng,
-					actual_lat = excluded.actual_lat,
-					actual_lng = excluded.actual_lng,
-					distance_km = excluded.distance_km,
-					score = excluded.score,
-					guess_unix_ms = excluded.guess_unix_ms,
-					guess_ms = excluded.guess_ms,
-					ruleset = excluded.ruleset,
-					ranked = excluded.ranked,
-					source_kind = excluded.source_kind,
-					map_key = excluded.map_key,
-					map_revision_id = excluded.map_revision_id,
-					guessed_at = excluded.guessed_at
-			`, matchID, round.RoundID, round.RoundNumber, userID, result.Lat, result.Lng, round.ActualLocation.Lat, round.ActualLocation.Lng, result.DistanceKm, result.Score, guessUnixMS, guessMS, ruleset, ranked, sourceKind, mapID, mapRevisionID, guessedAt); err != nil {
-				return err
-			}
 			if snap.Mode == contracts.ModeDuel && !snap.Unranked && !privatePartyMatch && result.GuessMS > 0 {
 				occurredAt := endedAt
 				if result.GuessUnixMS > 0 {
@@ -462,15 +454,15 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 				}
 				if _, err := tx.Exec(ctx, `
 					insert into ranked_guess_events(
-						user_id, match_id, round_id, round_number, ruleset, score, guess_ms, evidence, occurred_at
+						user_id, match_id, round_number, score, guess_ms, evidence, occurred_at
 					)
-					values($1, $2, $3, $4, $5, $6, $7, $8, $9)
-					on conflict (match_id, round_id, user_id) do update set
+					values($1, $2, $3, $4, $5, $6, $7)
+					on conflict (match_id, round_number, user_id) do update set
 						score = excluded.score,
 						guess_ms = excluded.guess_ms,
 						evidence = excluded.evidence,
 						occurred_at = excluded.occurred_at
-				`, userID, matchID, round.RoundID, round.RoundNumber, string(contracts.NormalizeRuleset(snap.Config.Ruleset)), result.Score, result.GuessMS, guessEvidence(result.Score, result.GuessMS), occurredAt); err != nil {
+				`, userID, matchID, round.RoundNumber, result.Score, min(result.GuessMS, int64(2147483647)), guessEvidence(result.Score, result.GuessMS), occurredAt); err != nil {
 					return err
 				}
 			}
@@ -479,7 +471,7 @@ func recordMatchHistory(ctx context.Context, tx pgx.Tx, matchID string, snap con
 	return nil
 }
 
-func finalReplaySnapshotJSON(snap contracts.MatchSnapshot) (string, error) {
+func finalReplaySnapshotJSON(snap contracts.MatchSnapshot) ([]byte, error) {
 	snap.CurrentRound = nil
 	snap.RoundMSLeft = 0
 	snap.PhaseEndsAt = 0
@@ -498,9 +490,9 @@ func finalReplaySnapshotJSON(snap contracts.MatchSnapshot) (string, error) {
 	}
 	body, err := json.Marshal(snap)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(body), nil
+	return body, nil
 }
 
 func guessEvidence(score int, guessMS int64) float64 {
@@ -571,11 +563,4 @@ func snapshotWinner(snap contracts.MatchSnapshot) string {
 		return ""
 	}
 	return winner
-}
-
-func nullableInt64(v int64) any {
-	if v == 0 {
-		return nil
-	}
-	return v
 }

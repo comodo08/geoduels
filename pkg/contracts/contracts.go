@@ -903,6 +903,27 @@ type MapListOptions struct {
 	Search string `json:"search"`
 }
 
+type MapUploadQuota struct {
+	Tier                     string `json:"tier"`
+	TierOverride             string `json:"tierOverride,omitempty"`
+	QualifiedFavorites       int    `json:"qualifiedFavorites"`
+	QualifiedMaps            int    `json:"qualifiedMaps"`
+	AccountAgeDays           int    `json:"accountAgeDays"`
+	NextTier                 string `json:"nextTier,omitempty"`
+	FavoritesNeeded          int    `json:"favoritesNeeded,omitempty"`
+	MapsNeeded               int    `json:"mapsNeeded,omitempty"`
+	DaysNeeded               int    `json:"daysNeeded,omitempty"`
+	MaxMaps                  int    `json:"maxMaps"`
+	MaxActiveLocations       int    `json:"maxActiveLocations"`
+	MaxMapLocations          int    `json:"maxMapLocations"`
+	MaxUploadsPerHour        int    `json:"maxUploadsPerHour"`
+	MaxUploadsPerDay         int    `json:"maxUploadsPerDay"`
+	MaxUploadedLocationsHour int    `json:"maxUploadedLocationsPerHour"`
+	CurrentMaps              int    `json:"currentMaps"`
+	CurrentActiveLocations   int    `json:"currentActiveLocations"`
+	RestrictedByModeration   bool   `json:"restrictedByModeration,omitempty"`
+}
+
 type GameplayMapSettings struct {
 	RankedMovingMapID       string `json:"rankedMovingMapId"`
 	RankedNMPZMapID         string `json:"rankedNmpzMapId"`
@@ -925,6 +946,8 @@ type MapComment struct {
 	Body            string       `json:"body"`
 	Status          string       `json:"status"`
 	CanDelete       bool         `json:"canDelete,omitempty"`
+	LikeCount       int          `json:"likeCount"`
+	Liked           bool         `json:"liked,omitempty"`
 	CreatedAt       time.Time    `json:"createdAt"`
 	UpdatedAt       time.Time    `json:"updatedAt"`
 	Replies         []MapComment `json:"replies,omitempty"`

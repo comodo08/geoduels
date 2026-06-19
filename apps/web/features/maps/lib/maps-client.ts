@@ -44,11 +44,33 @@ export type MapComment = {
   body: string;
   status: "visible" | "deleted" | "moderated";
   canDelete?: boolean;
+  likeCount: number;
+  liked?: boolean;
   createdAt: string;
   updatedAt: string;
   replies?: MapComment[];
 };
 export type MapDetails = { map: CustomMap; countryStats: MapCountryStat[]; comments: MapComment[] };
+export type MapUploadQuota = {
+  tier: "base" | "trusted" | "established";
+  tierOverride?: "base" | "trusted" | "established";
+  qualifiedFavorites: number;
+  qualifiedMaps: number;
+  accountAgeDays: number;
+  nextTier?: "trusted" | "established";
+  favoritesNeeded?: number;
+  mapsNeeded?: number;
+  daysNeeded?: number;
+  maxMaps: number;
+  maxActiveLocations: number;
+  maxMapLocations: number;
+  maxUploadsPerHour: number;
+  maxUploadsPerDay: number;
+  maxUploadedLocationsPerHour: number;
+  currentMaps: number;
+  currentActiveLocations: number;
+  restrictedByModeration?: boolean;
+};
 
 function headers(accessToken: string): HeadersInit {
   return { Authorization: `Bearer ${accessToken}` };
@@ -64,6 +86,10 @@ export async function listMaps(config: RuntimeConfig, accessToken: string | unde
 
 export async function getMap(config: RuntimeConfig, accessToken: string | undefined, mapId: string): Promise<MapDetails> {
   return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}`, { headers: authHeaders(accessToken) }), "Map request failed");
+}
+
+export async function getMapUploadQuota(config: RuntimeConfig, accessToken: string): Promise<MapUploadQuota> {
+  return expectJSON(await apiFetch(config, "/v1/maps/quota", { headers: headers(accessToken) }), "Map quota request failed");
 }
 
 export async function createMap(config: RuntimeConfig, accessToken: string, input: { file: File; displayName: string; description: string; difficulty: "easy" | "normal" | "hard"; thumbnailKey: string; thumbnailVariant?: number }): Promise<CustomMap> {
@@ -119,12 +145,19 @@ export async function deleteMapComment(config: RuntimeConfig, accessToken: strin
   if (!response.ok) throw new Error((await response.text()) || "Could not delete comment");
 }
 
-export async function validateMapFile(file: File): Promise<number> {
-  if (file.size > 64 * 1024 * 1024) throw new Error("Map file exceeds 64 MiB");
+export async function setMapCommentLike(config: RuntimeConfig, accessToken: string, mapId: string, commentId: string, liked: boolean): Promise<MapComment> {
+  return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}/comments/${encodeURIComponent(commentId)}/like`, {
+    method: liked ? "POST" : "DELETE",
+    headers: headers(accessToken),
+  }), "Could not update comment like");
+}
+
+export async function validateMapFile(file: File, maxLocations = 1_000_000): Promise<number> {
+  if (file.size > 128 * 1024 * 1024) throw new Error("Map file exceeds 128 MiB");
   const raw = JSON.parse(await file.text());
   const locations = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray(raw.customCoordinates) ? raw.customCoordinates : null;
   if (!locations) throw new Error("Map JSON must be an array or a map-making.app export");
-  if (locations.length > 100_000) throw new Error("Map exceeds 100,000 locations");
+  if (locations.length > maxLocations) throw new Error(`Map exceeds ${maxLocations.toLocaleString()} locations for your tier`);
   const coordinates = new Set<string>();
   const panos = new Set<string>();
   let valid = 0;

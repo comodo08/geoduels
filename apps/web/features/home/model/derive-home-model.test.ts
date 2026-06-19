@@ -458,7 +458,7 @@ describe('deriveHomeModel', () => {
     }
   });
 
-  it('hides elo deltas for unranked private lobby matches', () => {
+  it('hides elo deltas for unranked party matches', () => {
     const snapshot = createSnapshot({
       unranked: true,
       state: 'ended',

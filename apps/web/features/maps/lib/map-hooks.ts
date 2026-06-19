@@ -5,9 +5,11 @@ import {
   createMapComment,
   deleteMapComment,
   getMap,
+  getMapUploadQuota,
   listMaps,
   publishMap,
   setGameplayMapRole,
+  setMapCommentLike,
   setMapFavorite,
   setMapOfficial,
   uploadMapRevision,
@@ -52,6 +54,18 @@ function markMapDetailsCommentDeleted(details: MapDetails | undefined, commentId
   return changed ? { ...details, comments } : details;
 }
 
+function updateComment(items: MapComment[], commentId: string, update: (comment: MapComment) => MapComment): MapComment[] {
+  return items.map((comment) => {
+    if (comment.id === commentId) return update(comment);
+    if (!comment.replies?.length) return comment;
+    return { ...comment, replies: updateComment(comment.replies, commentId, update) };
+  });
+}
+
+function updateMapDetailsComment(details: MapDetails | undefined, commentId: string, update: (comment: MapComment) => MapComment): MapDetails | undefined {
+  return details ? { ...details, comments: updateComment(details.comments, commentId, update) } : details;
+}
+
 export function useMapList(
   config: RuntimeConfig,
   accessToken: string | undefined,
@@ -77,6 +91,15 @@ export function useMapDetails(config: RuntimeConfig, accessToken: string | undef
     queryFn: () => getMap(config, accessToken, mapId),
     enabled: !!mapId,
     staleTime: 60_000,
+  });
+}
+
+export function useMapUploadQuota(config: RuntimeConfig, accessToken: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["map-upload-quota", accessToken ? "authenticated" : "anonymous"],
+    queryFn: () => getMapUploadQuota(config, accessToken || ""),
+    enabled: enabled && !!accessToken,
+    staleTime: 30_000,
   });
 }
 
@@ -115,10 +138,37 @@ export function useMapComments(config: RuntimeConfig, accessToken: string | unde
         void queryClient.invalidateQueries({ queryKey: ["maps"] });
       },
     }),
+    likeComment: useMutation({
+      mutationFn: ({ commentId, liked }: { commentId: string; liked: boolean }) =>
+        setMapCommentLike(config, accessToken || "", mapId, commentId, liked),
+      onMutate: async ({ commentId, liked }) => {
+        await queryClient.cancelQueries({ queryKey: ["map-details", mapId] });
+        const previous = queryClient.getQueriesData<MapDetails>({ queryKey: ["map-details", mapId] });
+        queryClient.setQueriesData<MapDetails>(
+          { queryKey: ["map-details", mapId] },
+          (details) => updateMapDetailsComment(details, commentId, (comment) => ({
+            ...comment,
+            liked,
+            likeCount: Math.max(0, comment.likeCount + (liked ? 1 : -1)),
+          })),
+        );
+        return { previous };
+      },
+      onError: (_error, _vars, context) => {
+        context?.previous.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      },
+      onSuccess: (item) => {
+        queryClient.setQueriesData<MapDetails>(
+          { queryKey: ["map-details", mapId] },
+          (details) => updateMapDetailsComment(details, item.id, () => item),
+        );
+      },
+      onSettled: () => void queryClient.invalidateQueries({ queryKey: ["map-details", mapId] }),
+    }),
   };
 }
 
-export function useMapManagement(config: RuntimeConfig, accessToken: string | undefined, onUploadError: (message: string) => void) {
+export function useMapManagement(config: RuntimeConfig, accessToken: string | undefined, onUploadError: (message: string) => void, maxMapLocations = 1_000_000) {
   const queryClient = useQueryClient();
   return {
     archiveMap: useMutation({
@@ -147,10 +197,13 @@ export function useMapManagement(config: RuntimeConfig, accessToken: string | un
     }),
     uploadRevision: useMutation({
       mutationFn: async ({ mapId, file }: { mapId: string; file: File }) => {
-        await validateMapFile(file);
+        await validateMapFile(file, maxMapLocations);
         return uploadMapRevision(config, accessToken || "", mapId, file);
       },
-      onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["maps"] }),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: ["maps"] });
+        void queryClient.invalidateQueries({ queryKey: ["map-upload-quota"] });
+      },
       onError: (error) => onUploadError(error instanceof Error ? error.message : "Revision upload failed"),
     }),
   };

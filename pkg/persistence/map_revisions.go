@@ -48,17 +48,19 @@ func (s *pgStore) ActivateMapRevision(mapKey, displayName string, dataset []byte
 
 	inserted := true
 	var existing string
-	err = tx.QueryRow(ctx, `select id from map_revisions where map_key = $1 and content_hash = $2 limit 1`, mapKey, contentHash).Scan(&existing)
+	var revisionStorageID int32
+	err = tx.QueryRow(ctx, `select id,storage_id from map_revisions where map_key = $1 and content_hash = $2 limit 1`, mapKey, contentHash).Scan(&existing, &revisionStorageID)
 	if err == nil {
 		revisionID = existing
 		inserted = false
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return MapRevisionSummary{}, err
 	} else {
-		if _, err := tx.Exec(ctx, `
+		if err := tx.QueryRow(ctx, `
 			insert into map_revisions(id, map_key, content_hash, status, row_count)
 			values($1, $2, $3, 'validated', 0)
-		`, revisionID, mapKey, contentHash); err != nil {
+			returning storage_id
+		`, revisionID, mapKey, contentHash).Scan(&revisionStorageID); err != nil {
 			return MapRevisionSummary{}, err
 		}
 	}
@@ -66,12 +68,12 @@ func (s *pgStore) ActivateMapRevision(mapKey, displayName string, dataset []byte
 	if inserted {
 		block := make([][]any, 0, len(rows))
 		for _, r := range rows {
-			block = append(block, []any{revisionID, r.Lat, r.Lng, r.Country, r.PanoID, r.Heading, r.Pitch, r.RandKey})
+			block = append(block, []any{revisionStorageID, r.LatE7, r.LngE7, r.Country, r.PanoID, r.HeadingCDeg, r.PitchCDeg, r.RandKey})
 		}
 		if _, err := tx.CopyFrom(
 			ctx,
 			pgx.Identifier{"locations"},
-			[]string{"map_revision_id", "lat", "lng", "country", "pano_id", "heading", "pitch", "rand_key"},
+			[]string{"revision_storage_id", "lat_e7", "lng_e7", "country", "pano_id", "heading_cdeg", "pitch_cdeg", "rand_key_i"},
 			pgx.CopyFromRows(block),
 		); err != nil {
 			return MapRevisionSummary{}, err

@@ -141,6 +141,14 @@ func (s *recoverTestStore) SetModerationSettings(settings persistence.Moderation
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) GetDiscordIntegrationSettings() (persistence.DiscordIntegrationSettings, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) SetDiscordIntegrationSettings(settings persistence.DiscordIntegrationSettings) error {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) GetRankedSeasonSettings() (persistence.RankedSeasonSettings, error) {
 	panic("unexpected call")
 }

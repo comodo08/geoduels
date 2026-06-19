@@ -15,8 +15,8 @@ type InviteModalProps = {
   maintenanceIsActive: boolean;
   playPaused: boolean;
   authError: string;
-  createInviteLobby: () => Promise<boolean>;
-  joinInviteLobby: (inviteCode?: string) => Promise<boolean>;
+  createParty: () => Promise<boolean>;
+  joinParty: (inviteCode?: string) => Promise<boolean>;
   onClose: () => void;
 };
 
@@ -28,8 +28,8 @@ export function InviteModal({
   maintenanceIsActive,
   playPaused,
   authError,
-  createInviteLobby,
-  joinInviteLobby,
+  createParty,
+  joinParty,
   onClose,
 }: InviteModalProps) {
   const normalizedInviteCode = inviteCodeInput.trim().toUpperCase();
@@ -37,7 +37,7 @@ export function InviteModal({
 
   const join = async () => {
     if (!normalizedInviteCode) return;
-    if (await joinInviteLobby(normalizedInviteCode)) onClose();
+    if (await joinParty(normalizedInviteCode)) onClose();
   };
 
   return (
@@ -47,7 +47,7 @@ export function InviteModal({
           type="button"
           onClick={() => {
             void (async () => {
-              if (await createInviteLobby()) onClose();
+              if (await createParty()) onClose();
             })();
           }}
           disabled={inviteActionsDisabled || playPaused}

@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -84,7 +83,7 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 		return errors.New("selected map has too few locations")
 	}
 	for i, row := range selected {
-		if _, err := tx.Exec(ctx, `insert into match_round_plans(match_id,round_index,map_id,map_revision_id,location_id,lat,lng,country,pano_id,heading,pitch) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict(match_id,round_index) do nothing`, found.MatchID, i, mapID, revisionID, row.ID, row.Lat, row.Lng, row.Country, row.PanoID, row.Heading, row.Pitch); err != nil {
+		if _, err := tx.Exec(ctx, `insert into match_round_plans(match_id,round_index,map_id,map_revision_id,lat,lng,country,pano_id,heading,pitch) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) on conflict(match_id,round_index) do nothing`, found.MatchID, i, mapID, revisionID, row.Lat, row.Lng, row.Country, row.PanoID, row.Heading, row.Pitch); err != nil {
 			return err
 		}
 		found.PlannedRounds = append(found.PlannedRounds, contracts.PlannedRound{RoundIndex: i, Location: row.LocationPoint})
@@ -112,13 +111,12 @@ func selectedMapAccessible(ownerUserID, accessUserID, visibility string) bool {
 }
 
 type plannedLocation struct {
-	ID int64
 	contracts.LocationPoint
 }
 
-func selectPlanRows(ctx context.Context, tx pgx.Tx, revisionID string, pivot float64, limit int) ([]plannedLocation, error) {
+func selectPlanRows(ctx context.Context, tx pgx.Tx, revisionID string, pivot int32, limit int) ([]plannedLocation, error) {
 	query := func(op string, n int) ([]plannedLocation, error) {
-		rows, err := tx.Query(ctx, `select id,lat,lng,coalesce(country,''),pano_id,heading,pitch from locations where map_revision_id=$1 and rand_key `+op+` $2 order by rand_key asc limit $3`, revisionID, pivot, n)
+		rows, err := tx.Query(ctx, `select lat_e7::float8/10000000.0,lng_e7::float8/10000000.0,coalesce(country,''),pano_id,heading_cdeg::float8/100.0,pitch_cdeg::float8/100.0 from locations where revision_storage_id=(select storage_id from map_revisions where id=$1) and rand_key_i `+op+` $2 order by rand_key_i asc limit $3`, revisionID, pivot, n)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +124,7 @@ func selectPlanRows(ctx context.Context, tx pgx.Tx, revisionID string, pivot flo
 		out := []plannedLocation{}
 		for rows.Next() {
 			var p plannedLocation
-			if err := rows.Scan(&p.ID, &p.Lat, &p.Lng, &p.Country, &p.PanoID, &p.Heading, &p.Pitch); err != nil {
+			if err := rows.Scan(&p.Lat, &p.Lng, &p.Country, &p.PanoID, &p.Heading, &p.Pitch); err != nil {
 				return nil, err
 			}
 			out = append(out, p)
@@ -146,9 +144,9 @@ func selectPlanRows(ctx context.Context, tx pgx.Tx, revisionID string, pivot flo
 	}
 	return out, nil
 }
-func deterministicPivot(matchID, revisionID string) float64 {
+func deterministicPivot(matchID, revisionID string) int32 {
 	sum := sha256.Sum256([]byte(matchID + ":" + revisionID))
-	return float64(binary.BigEndian.Uint64(sum[:8])) / float64(math.MaxUint64)
+	return int32(binary.BigEndian.Uint32(sum[:4]) >> 8)
 }
 
 func incrementMapPlayStats(ctx context.Context, tx pgx.Tx, mapID string, players []string) error {

@@ -424,6 +424,16 @@ export type AdminModerationSettings = {
   discordWebhookUrl: string;
 };
 
+export type AdminDiscordIntegrationSettings = {
+  guildId: string;
+  joinsChannelId: string;
+  elo1000RoleId: string;
+  elo1500RoleId: string;
+  elo2000RoleId: string;
+  managedRoleIds?: string[];
+  reconcileIntervalMinutes: number;
+};
+
 export type AdminRankedSeasonSettings = {
   activeSeasonId: string;
   monthlyResetDay: number;
@@ -465,6 +475,38 @@ export async function requestAdminPutModerationSettings(
     );
   }
   return resp.json() as Promise<AdminModerationSettings>;
+}
+
+export async function requestAdminDiscordIntegrationSettings(
+  config: RuntimeConfig,
+  accessToken: string,
+) {
+  const resp = await apiFetch(config, `/v1/admin/integrations/discord`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to load Discord integration settings"));
+  }
+  return resp.json() as Promise<AdminDiscordIntegrationSettings>;
+}
+
+export async function requestAdminPutDiscordIntegrationSettings(
+  config: RuntimeConfig,
+  accessToken: string,
+  settings: AdminDiscordIntegrationSettings,
+) {
+  const resp = await apiFetch(config, `/v1/admin/integrations/discord`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(settings),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to save Discord integration settings"));
+  }
+  return resp.json() as Promise<AdminDiscordIntegrationSettings>;
 }
 
 export async function requestAdminRankedSeason(

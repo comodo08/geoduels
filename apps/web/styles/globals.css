@@ -281,7 +281,21 @@ img {
   border: 0;
 }
 
+.actualLocationLink {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.actualLocationLink:focus-visible {
+  outline: 3px solid rgba(125, 195, 255, 0.95);
+  outline-offset: 3px;
+}
+
 .actualLocationPin {
+  display: block;
   width: 30px;
   height: 30px;
   border-radius: 9999px;

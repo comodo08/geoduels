@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRuntimeConfigFixture } from "../../../test/runtime-config.fixture";
-import { createLobby, fetchLobby, streamLobby, updateLobbySettings } from "./lobby-client";
+import { createParty, fetchParty, streamParty, updatePartySettings } from "./party-client";
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -22,7 +22,7 @@ class MockWebSocket {
   }
 }
 
-describe("lobby-client", () => {
+describe("party-client", () => {
   const originalFetch = global.fetch;
   const originalWebSocket = global.WebSocket;
   const runtimeConfig = createRuntimeConfigFixture({
@@ -37,11 +37,11 @@ describe("lobby-client", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends lobby commands to the match coordinator", async () => {
+  it("sends party commands to the match coordinator", async () => {
     global.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        id: "lob-1",
+        id: "party-1",
         inviteCode: "ABC123",
         ownerUserId: "u1",
         state: "open",
@@ -51,10 +51,10 @@ describe("lobby-client", () => {
       }),
     }) as Response) as typeof fetch;
 
-    await createLobby(runtimeConfig, "access-token");
-    await updateLobbySettings(
+    await createParty(runtimeConfig, "access-token");
+    await updatePartySettings(
       runtimeConfig,
-      "lob-1",
+      "party-1",
       "access-token",
       { ruleset: "moving", roundTimerMode: "none" },
       "team_duel",
@@ -67,7 +67,7 @@ describe("lobby-client", () => {
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      "http://coordinator.example.test/parties/lob-1/settings",
+      "http://coordinator.example.test/parties/party-1/settings",
       expect.objectContaining({ method: "PATCH" }),
     );
   });
@@ -76,7 +76,7 @@ describe("lobby-client", () => {
     global.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        id: "lob-1",
+        id: "party-1",
         inviteCode: "ABC123",
         ownerUserId: "u1",
         state: "open",
@@ -86,18 +86,18 @@ describe("lobby-client", () => {
       }),
     }) as Response) as typeof fetch;
 
-    await fetchLobby(runtimeConfig, "ABC123");
+    await fetchParty(runtimeConfig, "ABC123");
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://coordinator.example.test/parties/ABC123",
     );
   });
 
-  it("streams lobby websocket snapshots", async () => {
+  it("streams party websocket snapshots", async () => {
     global.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     const controller = new AbortController();
     const onEvent = vi.fn();
-    const ready = streamLobby(
+    const ready = streamParty(
       runtimeConfig,
       {
         userId: "u1",
@@ -105,19 +105,19 @@ describe("lobby-client", () => {
         nicknameRequired: false,
         nicknameInput: "",
       },
-      "lob-1",
+      "party-1",
       controller.signal,
       onEvent,
     );
 
     expect(MockWebSocket.instances).toHaveLength(1);
     expect(MockWebSocket.instances[0]?.url).toBe(
-      "ws://coordinator.example.test/parties/lob-1/ws?accessToken=access-token",
+      "ws://coordinator.example.test/parties/party-1/ws?accessToken=access-token",
     );
     MockWebSocket.instances[0]?.emitMessage({
       type: "party_snapshot",
       payload: {
-        id: "lob-1",
+        id: "party-1",
         inviteCode: "ABC123",
         ownerUserId: "u1",
         state: "open",
@@ -129,8 +129,8 @@ describe("lobby-client", () => {
 
     expect(onEvent).toHaveBeenCalledWith({
       type: "party_snapshot",
-      lobby: expect.objectContaining({
-        id: "lob-1",
+      party: expect.objectContaining({
+        id: "party-1",
         inviteCode: "ABC123",
         members: [expect.objectContaining({ connected: true })],
       }),

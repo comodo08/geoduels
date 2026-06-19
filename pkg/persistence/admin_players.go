@@ -424,30 +424,8 @@ func (s *pgStore) adminPlayerEloHistory(ctx context.Context, userID string, days
 		with ranked_matches as (
 			select
 				h.ended_at,
-				coalesce(
-					p.rating_after,
-					p.rating_before + case
-						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
-						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
-						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
-					end,
-					p.mmr + case
-						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
-						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
-						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
-					end,
-					p.rating_before,
-					p.mmr
-				)::int as rating_after,
-				coalesce(
-					p.final_ranked_delta,
-					case
-						when h.winner_user_id = $1 then nullif(h.replay_json->'ratingPreview'->($1::text)->>'win', '')::int
-						when nullif(h.winner_user_id, '') is null then nullif(h.replay_json->'ratingPreview'->($1::text)->>'draw', '')::int
-						else nullif(h.replay_json->'ratingPreview'->($1::text)->>'lose', '')::int
-					end,
-					0
-				)::int as delta
+				coalesce(p.rating_after, p.rating_before, p.mmr)::int as rating_after,
+				coalesce(p.final_ranked_delta, 0)::int as delta
 			from match_history h
 			join match_players p on p.match_id = h.match_id
 			where p.user_id = $1

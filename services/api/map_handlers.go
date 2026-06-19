@@ -18,7 +18,7 @@ import (
 	"geoduels/pkg/persistence"
 )
 
-const maxMapUploadBytes = int64(64 << 20)
+const maxMapUploadBytes = int64(128 << 20)
 
 func (a *api) allowMapUploadAttempt(userID string) (bool, time.Duration, error) {
 	if a.redis == nil {
@@ -29,7 +29,7 @@ func (a *api) allowMapUploadAttempt(userID string) (bool, time.Duration, error) 
 	result, err := guestSignupRateLimitScript.Run(ctx, a.redis, []string{
 		"api:ratelimit:map_upload:hour:" + userID,
 		"api:ratelimit:map_upload:day:" + userID,
-	}, time.Hour.Milliseconds(), 3, (24 * time.Hour).Milliseconds(), 10).Slice()
+	}, time.Hour.Milliseconds(), 10, (24 * time.Hour).Milliseconds(), 30).Slice()
 	if err != nil {
 		return false, 0, err
 	}
@@ -144,6 +144,23 @@ func (a *api) listMaps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSONResponse(w, items)
+}
+
+func (a *api) mapUploadQuota(w http.ResponseWriter, r *http.Request) {
+	userID, ok := a.mapUser(w, r, true)
+	if !ok {
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	quota, err := catalog.GetMapUploadQuota(userID)
+	if err != nil {
+		http.Error(w, "map quota unavailable", http.StatusInternalServerError)
+		return
+	}
+	writeJSONResponse(w, quota)
 }
 
 func (a *api) getMap(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +296,12 @@ func (a *api) archiveMap(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := catalog.ArchiveCustomMap(userID, mux.Vars(r)["id"])
+	identity, err := a.store.GetIdentity(userID)
+	if err != nil {
+		http.Error(w, "identity unavailable", http.StatusInternalServerError)
+		return
+	}
+	err = catalog.ArchiveCustomMap(userID, mux.Vars(r)["id"], identity.IsAdmin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return
@@ -501,10 +523,39 @@ func (a *api) deleteMapComment(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *api) likeMapComment(w http.ResponseWriter, r *http.Request) {
+	a.setMapCommentLike(w, r, true)
+}
+
+func (a *api) unlikeMapComment(w http.ResponseWriter, r *http.Request) {
+	a.setMapCommentLike(w, r, false)
+}
+
+func (a *api) setMapCommentLike(w http.ResponseWriter, r *http.Request, liked bool) {
+	userID, ok := a.mapUser(w, r, true)
+	if !ok {
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	item, err := catalog.SetMapCommentLike(userID, mux.Vars(r)["id"], mux.Vars(r)["commentId"], liked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "could not update comment like", http.StatusBadRequest)
+		return
+	}
+	writeJSONResponse(w, item)
+}
+
 func mapUploadFile(w http.ResponseWriter, r *http.Request) (io.Reader, func(), error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxMapUploadBytes)
 	if err := r.ParseMultipartForm(maxMapUploadBytes); err != nil {
-		return nil, func() {}, errors.New("map upload must be multipart JSON under 64 MiB")
+		return nil, func() {}, errors.New("map upload must be multipart JSON under 128 MiB")
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -512,7 +563,7 @@ func mapUploadFile(w http.ResponseWriter, r *http.Request) (io.Reader, func(), e
 	}
 	if header.Size > maxMapUploadBytes {
 		file.Close()
-		return nil, func() {}, errors.New("map file exceeds 64 MiB")
+		return nil, func() {}, errors.New("map file exceeds 128 MiB")
 	}
 	if name := strings.ToLower(header.Filename); name != "" && !strings.HasSuffix(name, ".json") {
 		file.Close()

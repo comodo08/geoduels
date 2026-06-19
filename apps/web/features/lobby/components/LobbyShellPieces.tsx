@@ -172,7 +172,7 @@ function FooterDot() {
   return <div className="h-1 w-1 rounded-full bg-[#6b8b80]/40" />;
 }
 
-export function InviteLobbyCard({
+export function InvitePartyCard({
   disabled,
   onClick,
 }: {
@@ -199,7 +199,7 @@ export function InviteLobbyCard({
   );
 }
 
-export function PrivateLobbyErrorNotice({ message }: { message: string }) {
+export function PartyErrorNotice({ message }: { message: string }) {
   if (!message) return null;
   return (
     <div role="alert" className="mb-4 w-full max-w-[1160px] pointer-events-auto">

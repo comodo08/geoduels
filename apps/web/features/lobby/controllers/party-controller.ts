@@ -5,24 +5,24 @@ import type { AuthSessionSnapshot } from "../../auth/session";
 import type { MatchController } from "../../matchmaking/controllers/match-controller";
 import type { MatchConfig } from "../../matchmaking/lib/queue-client";
 import {
-  applyLobbyPatch,
-  createLobby as requestCreateLobby,
-  fetchLobby,
-  joinLobby as requestJoinLobby,
-  kickLobbyMember as requestKickLobbyMember,
-  leaveLobby as requestLeaveLobby,
-  startLobby as requestStartLobby,
-  streamLobby,
-  touchLobbyPresence,
-  transferLobbyOwner as requestTransferLobbyOwner,
-  updateLobbySettings as requestUpdateLobbySettings,
-  updateLobbyTeam as requestUpdateLobbyTeam,
-  type LobbySnapshot,
-  type LobbyTeamId,
+  applyPartyPatch,
+  createParty,
+  fetchParty,
+  joinParty,
+  kickPartyMember,
+  leaveParty,
+  startParty,
+  streamParty,
+  touchPartyPresence,
+  transferPartyOwner,
+  updatePartySettings,
+  updatePartyTeam,
+  type PartySnapshot,
+  type PartyTeamId,
   type PartyMode,
-} from "../lib/lobby-client";
+} from "../lib/party-client";
 
-export type LobbyRuntimeStatus =
+export type PartyRuntimeStatus =
   | "idle"
   | "creating"
   | "joining"
@@ -32,17 +32,17 @@ export type LobbyRuntimeStatus =
   | "leaving"
   | "error";
 
-export type LobbyRuntimeState = {
-  status: LobbyRuntimeStatus;
-  lobbyId: string;
+export type PartyRuntimeState = {
+  status: PartyRuntimeStatus;
+  partyId: string;
   inviteCode: string;
-  snapshot: LobbySnapshot | null;
+  snapshot: PartySnapshot | null;
   error: string;
 };
 
-const initialState: LobbyRuntimeState = {
+const initialState: PartyRuntimeState = {
   status: "idle",
-  lobbyId: "",
+  partyId: "",
   inviteCode: "",
   snapshot: null,
   error: "",
@@ -53,19 +53,19 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function normalizeLobbySnapshot(next: LobbySnapshot): LobbySnapshot {
+function normalizePartySnapshot(next: PartySnapshot): PartySnapshot {
   return next;
 }
 
-export function jitteredLobbyDelay(baseMs = 5000): number {
+export function jitteredPartyDelay(baseMs = 5000): number {
   return Math.max(1000, Math.round(baseMs * (0.8 + Math.random() * 0.4)));
 }
 
-export class LobbyController extends ObservableStore<LobbyRuntimeState> {
+export class PartyController extends ObservableStore<PartyRuntimeState> {
   private readonly config: RuntimeConfig;
   private readonly sessionController: SessionController;
   private readonly matchController: MatchController;
-  private state: LobbyRuntimeState = initialState;
+  private state: PartyRuntimeState = initialState;
   private streamAbort: AbortController | null = null;
   private streamSession: AuthSessionSnapshot | null = null;
   private presenceInterval: number | null = null;
@@ -108,7 +108,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     this.patchState(initialState);
   };
 
-  ensureLobby = async (inviteCode: string) => {
+  ensureParty = async (inviteCode: string) => {
     const code = inviteCode.trim().toUpperCase();
     if (!code) return;
     if (this.state.inviteCode === code && this.state.snapshot) {
@@ -126,20 +126,20 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     this.patchState({
       status: "connecting",
       inviteCode: code,
-      lobbyId: "",
+      partyId: "",
       snapshot: null,
       error: "",
     });
     try {
-      const snap = await fetchLobby(this.config, code);
+      const snap = await fetchParty(this.config, code);
       if (!snap) {
         this.patchState({ status: "error", error: "Party not found" });
         return;
       }
       this.patchState({
-        lobbyId: snap.id,
+        partyId: snap.id,
         inviteCode: snap.inviteCode,
-        snapshot: normalizeLobbySnapshot(snap),
+        snapshot: normalizePartySnapshot(snap),
       });
       this.markExistingMatchHandled(snap);
       if (!this.isCurrentUserMember(snap)) {
@@ -155,12 +155,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  createLobby = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
+  createParty = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
     this.patchState({ status: "creating", error: "" });
     try {
       const session = await this.playableSession();
       if (!session) return false;
-      const snap = await requestCreateLobby(
+      const snap = await createParty(
         this.config,
         session.accessToken,
         mode,
@@ -169,12 +169,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
       this.handledMatchId = "";
       this.patchState({
         status: "connecting",
-        lobbyId: snap.id,
+        partyId: snap.id,
         inviteCode: snap.inviteCode,
         snapshot: snap,
       });
       this.markExistingMatchHandled(snap);
-      await this.connectToLobby(session, snap.id, { waitForSnapshot: true });
+      await this.connectToParty(session, snap.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
       this.patchState({
@@ -185,7 +185,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  joinLobby = async (requestedInviteCode?: string) => {
+  joinParty = async (requestedInviteCode?: string) => {
     const code = (
       requestedInviteCode ||
       this.state.inviteCode ||
@@ -202,16 +202,16 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     try {
       const session = await this.playableSession();
       if (!session) return false;
-      const snap = await requestJoinLobby(this.config, code, session.accessToken);
+      const snap = await joinParty(this.config, code, session.accessToken);
       this.handledMatchId = "";
       this.patchState({
         status: "connecting",
-        lobbyId: snap.id,
+        partyId: snap.id,
         inviteCode: snap.inviteCode,
         snapshot: snap,
       });
       this.markExistingMatchHandled(snap);
-      await this.connectToLobby(session, snap.id, { waitForSnapshot: true });
+      await this.connectToParty(session, snap.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
       this.patchState({
@@ -222,14 +222,14 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  leaveLobby = async () => {
-    if (!this.state.lobbyId) return;
-    const lobbyId = this.state.lobbyId;
+  leaveParty = async () => {
+    if (!this.state.partyId) return;
+    const partyId = this.state.partyId;
     const session = this.sessionController.getSessionSnapshot();
     this.patchState({ status: "leaving", error: "" });
     try {
       if (session) {
-        await requestLeaveLobby(this.config, lobbyId, session.accessToken);
+        await leaveParty(this.config, partyId, session.accessToken);
       }
       this.reset();
     } catch (error) {
@@ -242,12 +242,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
 
   kickMember = async (userId: string) => {
     const session = this.sessionController.getSessionSnapshot();
-    if (!this.state.lobbyId || !session) return;
+    if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await requestKickLobbyMember(
+      const next = await kickPartyMember(
         this.config,
-        this.state.lobbyId,
+        this.state.partyId,
         session.accessToken,
         userId,
       );
@@ -261,12 +261,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
 
   transferOwner = async (userId: string) => {
     const session = this.sessionController.getSessionSnapshot();
-    if (!this.state.lobbyId || !session) return;
+    if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await requestTransferLobbyOwner(
+      const next = await transferPartyOwner(
         this.config,
-        this.state.lobbyId,
+        this.state.partyId,
         session.accessToken,
         userId,
       );
@@ -278,14 +278,14 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  startLobby = async () => {
+  startParty = async () => {
     const session = this.sessionController.getSessionSnapshot();
-    if (!this.state.lobbyId || !session) return;
+    if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const assignment = await requestStartLobby(
+      const assignment = await startParty(
         this.config,
-        this.state.lobbyId,
+        this.state.partyId,
         session.accessToken,
       );
       this.handledMatchId = assignment.matchId;
@@ -301,12 +301,12 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
 
   updateSettings = async (matchConfig: MatchConfig, mode?: PartyMode) => {
     const session = this.sessionController.getSessionSnapshot();
-    if (!this.state.lobbyId || !session) return;
+    if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await requestUpdateLobbySettings(
+      const next = await updatePartySettings(
         this.config,
-        this.state.lobbyId,
+        this.state.partyId,
         session.accessToken,
         matchConfig,
         mode,
@@ -319,14 +319,14 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }
   };
 
-  switchTeam = async (teamId: LobbyTeamId) => {
+  switchTeam = async (teamId: PartyTeamId) => {
     const session = this.sessionController.getSessionSnapshot();
-    if (!this.state.lobbyId || !session) return;
+    if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await requestUpdateLobbyTeam(
+      const next = await updatePartyTeam(
         this.config,
-        this.state.lobbyId,
+        this.state.partyId,
         session.accessToken,
         teamId,
       );
@@ -351,19 +351,19 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   }
 
   private async ensureStream() {
-    if (!this.state.lobbyId || !this.isCurrentUserMember(this.state.snapshot)) {
+    if (!this.state.partyId || !this.isCurrentUserMember(this.state.snapshot)) {
       return;
     }
     const session =
       this.sessionController.getSessionSnapshot() ||
       (await this.sessionController.ensureFreshSession());
     if (!session) return;
-    await this.connectToLobby(session, this.state.lobbyId);
+    await this.connectToParty(session, this.state.partyId);
   }
 
-  private async connectToLobby(
+  private async connectToParty(
     session: AuthSessionSnapshot,
-    lobbyId: string,
+    partyId: string,
     options?: { waitForSnapshot?: boolean },
   ) {
     this.clearReconnectTimer();
@@ -393,10 +393,10 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
           }, 10000);
         })
       : Promise.resolve();
-    void streamLobby(
+    void streamParty(
       this.config,
       session,
-      lobbyId,
+      partyId,
       controller.signal,
       (event) => {
         if (requestId !== this.connectRequestId) return;
@@ -405,14 +405,14 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
           this.reconnectAttempt = 0;
           this.stopPollLoop();
           this.startPresenceLoop();
-          this.patchSnapshot(event.lobby, "ready");
+          this.patchSnapshot(event.party, "ready");
           readyResolve?.();
           readyResolve = null;
           readyReject = null;
           return;
         }
         if (event.type === "party_patch") {
-          const next = applyLobbyPatch(this.state.snapshot, event.patch);
+          const next = applyPartyPatch(this.state.snapshot, event.patch);
           if (next) {
             this.reconnectAttempt = 0;
             this.startPresenceLoop();
@@ -445,7 +445,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
           readyReject(new Error("Party connection closed"));
           return;
         }
-        if (this.state.snapshot && this.state.lobbyId) {
+        if (this.state.snapshot && this.state.partyId) {
           this.patchState({ status: "reconnecting" });
           this.startPollLoop();
           this.scheduleReconnect();
@@ -464,7 +464,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
             ? error
             : new Error("Party connection failed"),
         );
-        if (!readyReject && this.state.snapshot && this.state.lobbyId) {
+        if (!readyReject && this.state.snapshot && this.state.partyId) {
           this.startPollLoop();
           this.scheduleReconnect();
         }
@@ -481,11 +481,11 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   private startPresenceLoop() {
     if (this.presenceInterval) return;
     const tick = () => {
-      this.presenceInterval = window.setTimeout(tick, jitteredLobbyDelay());
+      this.presenceInterval = window.setTimeout(tick, jitteredPartyDelay());
       const session = this.streamSession || this.sessionController.getSessionSnapshot();
-      const lobbyId = this.state.lobbyId;
-      if (!session?.accessToken || !lobbyId || !this.isCurrentUserMember(this.state.snapshot)) return;
-      void touchLobbyPresence(this.config, lobbyId, session.accessToken).catch(() => {
+      const partyId = this.state.partyId;
+      if (!session?.accessToken || !partyId || !this.isCurrentUserMember(this.state.snapshot)) return;
+      void touchPartyPresence(this.config, partyId, session.accessToken).catch(() => {
         // Presence is advisory; reconnect/polling handles visible recovery.
       });
     };
@@ -500,10 +500,10 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   private startPollLoop() {
     if (this.pollInterval) return;
     const poll = () => {
-      this.pollInterval = window.setTimeout(poll, jitteredLobbyDelay());
+      this.pollInterval = window.setTimeout(poll, jitteredPartyDelay());
       const code = this.state.inviteCode || this.state.snapshot?.inviteCode || "";
       if (!code) return;
-      void fetchLobby(this.config, code)
+      void fetchParty(this.config, code)
         .then((snap) => {
           if (snap) this.patchSnapshot(snap, this.state.status === "reconnecting" ? "reconnecting" : "ready");
         })
@@ -523,7 +523,7 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimeout || !this.state.lobbyId) return;
+    if (this.reconnectTimeout || !this.state.partyId) return;
     const delays = [1000, 2000, 5000, 10000];
     const delay = delays[Math.min(this.reconnectAttempt, delays.length - 1)];
     this.reconnectAttempt += 1;
@@ -535,29 +535,29 @@ export class LobbyController extends ObservableStore<LobbyRuntimeState> {
     }, delay);
   }
 
-  private patchSnapshot(next: LobbySnapshot, status: LobbyRuntimeStatus = "ready") {
-    const snapshot = normalizeLobbySnapshot(next);
+  private patchSnapshot(next: PartySnapshot, status: PartyRuntimeStatus = "ready") {
+    const snapshot = normalizePartySnapshot(next);
     this.patchState({
       status,
-      lobbyId: snapshot.id,
+      partyId: snapshot.id,
       inviteCode: snapshot.inviteCode,
       snapshot,
       error: "",
     });
   }
 
-  private isCurrentUserMember(snapshot: LobbySnapshot | null) {
+  private isCurrentUserMember(snapshot: PartySnapshot | null) {
     const session = this.sessionController.getSessionSnapshot();
     if (!snapshot || !session?.userId) return false;
     return snapshot.members.some((member) => member.userId === session.userId);
   }
 
-  private markExistingMatchHandled(snapshot: LobbySnapshot) {
+  private markExistingMatchHandled(snapshot: PartySnapshot) {
     if (snapshot.state !== "in_match" && snapshot.state !== "started") return;
     this.handledMatchId = snapshot.activeMatchId || snapshot.startedMatchId || "";
   }
 
-  private patchState(patch: Partial<LobbyRuntimeState>) {
+  private patchState(patch: Partial<PartyRuntimeState>) {
     this.state = { ...this.state, ...patch };
     if (!this.destroyed) {
       this.emit();

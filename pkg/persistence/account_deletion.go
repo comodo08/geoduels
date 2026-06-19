@@ -75,18 +75,13 @@ func (s *pgStore) DeleteAccount(userID string) error {
 	}
 	rows.Close()
 	if _, err := tx.Exec(ctx, `
-		insert into user_identity_history(user_id, provider, provider_user_id, email, provider_name, avatar_url, first_seen_at, last_seen_at, deleted_at)
-		select user_id, provider, provider_user_id, email, provider_name, avatar_url, created_at, last_seen_at, now()
+		insert into user_identity_history(user_id, provider, provider_user_id, email, provider_name, first_seen_at, last_seen_at, deleted_at)
+		select user_id, provider, provider_user_id, email, provider_name, created_at, last_seen_at, now()
 		from user_identities
 		where user_id = $1
 		on conflict (user_id, provider, provider_user_id) do update set
 			email = excluded.email,
 			provider_name = excluded.provider_name,
-			avatar_url = case
-				when excluded.avatar_url is null then user_identity_history.avatar_url
-				when excluded.avatar_url = '' then user_identity_history.avatar_url
-				else excluded.avatar_url
-			end,
 			last_seen_at = greatest(user_identity_history.last_seen_at, excluded.last_seen_at),
 			deleted_at = coalesce(user_identity_history.deleted_at, excluded.deleted_at)
 	`, userID); err != nil {

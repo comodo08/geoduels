@@ -25,6 +25,7 @@ import {
   requestAdminClaimModerationCase,
   requestAdminClearMaintenance,
   requestAdminDebugTestReports,
+  requestAdminDiscordIntegrationSettings,
   requestAdminEnforcementActions,
   requestAdminGrantRole,
   requestAdminCreateChangelogPost,
@@ -39,6 +40,7 @@ import {
   requestAdminPlayerMatches,
   requestAdminPlayers,
   requestAdminPutMaintenance,
+  requestAdminPutDiscordIntegrationSettings,
   requestAdminPutModerationSettings,
   requestAdminRankedSeason,
   requestAdminReleaseModerationCase,
@@ -101,6 +103,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-changelog"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-maintenance"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-moderation-settings"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-discord-integration-settings"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-ranked-season"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-enforcement-actions"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-roles"] }),
@@ -850,6 +853,14 @@ function OperationsRoute(props: {
   const [queuePaused, setQueuePaused] = useState(false);
   const [playPaused, setPlayPaused] = useState(false);
   const [webhook, setWebhook] = useState("");
+  const [discordSettings, setDiscordSettings] = useState({
+    guildId: "",
+    joinsChannelId: "",
+    elo1000RoleId: "",
+    elo1500RoleId: "",
+    elo2000RoleId: "",
+    reconcileIntervalMinutes: 15,
+  });
   const [ipAddress, setIPAddress] = useState("");
   const [ipReason, setIPReason] = useState("");
   const [monthlyResetDay, setMonthlyResetDay] = useState("1");
@@ -868,6 +879,11 @@ function OperationsRoute(props: {
     queryKey: ["admin-moderation-settings", props.accessToken],
     enabled: props.canManageAdmin && !!props.accessToken,
     queryFn: () => requestAdminModerationSettings(props.config, props.accessToken),
+  });
+  const discordSettingsQuery = useQuery({
+    queryKey: ["admin-discord-integration-settings", props.accessToken],
+    enabled: props.canManageAdmin && !!props.accessToken,
+    queryFn: () => requestAdminDiscordIntegrationSettings(props.config, props.accessToken),
   });
   const ipBansQuery = useQuery({
     queryKey: ["admin-ip-signup-bans", props.accessToken],
@@ -932,6 +948,11 @@ function OperationsRoute(props: {
   }, [settingsQuery.data?.discordWebhookUrl]);
 
   useEffect(() => {
+    if (!discordSettingsQuery.data) return;
+    setDiscordSettings(discordSettingsQuery.data);
+  }, [discordSettingsQuery.data]);
+
+  useEffect(() => {
     if (typeof seasonQuery.data?.monthlyResetDay !== "number") return;
     setMonthlyResetDay(String(seasonQuery.data.monthlyResetDay));
   }, [seasonQuery.data?.monthlyResetDay]);
@@ -977,6 +998,15 @@ function OperationsRoute(props: {
   });
   const saveSettings = useMutation({
     mutationFn: () => requestAdminPutModerationSettings(props.config, props.accessToken, { discordWebhookUrl: webhook }),
+    onSuccess: props.refreshAdminData,
+  });
+  const saveDiscordSettings = useMutation({
+    mutationFn: () =>
+      requestAdminPutDiscordIntegrationSettings(
+        props.config,
+        props.accessToken,
+        discordSettings,
+      ),
     onSuccess: props.refreshAdminData,
   });
   const addIPBan = useMutation({
@@ -1039,6 +1069,67 @@ function OperationsRoute(props: {
             <h3 className="font-black text-white">Report Notifications</h3>
             <Input className="mt-4 w-full" type="password" value={webhook} onChange={(event) => setWebhook(event.target.value)} placeholder="Discord webhook URL" />
             <Button className="mt-3" onClick={() => void saveSettings.mutateAsync()}>Save Webhook</Button>
+          </Panel>
+        ) : null}
+
+        {props.leaf === "discord" ? (
+          <Panel className="p-4 xl:col-span-2">
+            <h3 className="font-black text-white">Discord Integration</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              The bot token remains a deployment secret. These IDs refresh in the worker automatically.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Input
+                value={discordSettings.guildId}
+                onChange={(event) => setDiscordSettings((current) => ({ ...current, guildId: event.target.value }))}
+                placeholder="Guild ID"
+              />
+              <Input
+                value={discordSettings.joinsChannelId}
+                onChange={(event) => setDiscordSettings((current) => ({ ...current, joinsChannelId: event.target.value }))}
+                placeholder="#joins channel ID (optional)"
+              />
+              <Input
+                value={discordSettings.elo1000RoleId}
+                onChange={(event) => setDiscordSettings((current) => ({ ...current, elo1000RoleId: event.target.value }))}
+                placeholder="1k ELO role ID"
+              />
+              <Input
+                value={discordSettings.elo1500RoleId}
+                onChange={(event) => setDiscordSettings((current) => ({ ...current, elo1500RoleId: event.target.value }))}
+                placeholder="1.5k ELO role ID"
+              />
+              <Input
+                value={discordSettings.elo2000RoleId}
+                onChange={(event) => setDiscordSettings((current) => ({ ...current, elo2000RoleId: event.target.value }))}
+                placeholder="2k ELO role ID"
+              />
+              <Input
+                type="number"
+                min={1}
+                max={1440}
+                value={discordSettings.reconcileIntervalMinutes}
+                onChange={(event) => setDiscordSettings((current) => ({
+                  ...current,
+                  reconcileIntervalMinutes: Number(event.target.value),
+                }))}
+                placeholder="Reconciliation interval (minutes)"
+              />
+            </div>
+            <Button
+              className="mt-4"
+              disabled={
+                saveDiscordSettings.isPending ||
+                discordSettings.reconcileIntervalMinutes < 1 ||
+                discordSettings.reconcileIntervalMinutes > 1440
+              }
+              onClick={() => void saveDiscordSettings.mutateAsync()}
+            >
+              Save Discord Settings
+            </Button>
+            {saveDiscordSettings.error ? (
+              <p className="mt-3 text-sm text-red-300">{saveDiscordSettings.error.message}</p>
+            ) : null}
           </Panel>
         ) : null}
 

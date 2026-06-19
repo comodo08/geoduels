@@ -17,9 +17,10 @@ import {
   useMapDetails,
   useMapList,
   useMapManagement,
+  useMapUploadQuota,
 } from "../../../maps/lib/map-hooks";
 import { mapThumbnailURL } from "../../../maps/lib/map-thumbnails";
-import type { PartyMode } from "../../lib/lobby-client";
+import type { PartyMode } from "../../lib/party-client";
 import { isMapScope, type LobbyContentRoute } from "../../lib/lobby-ui";
 import { MapUploadForm } from "../MapUploadForm";
 import {
@@ -88,14 +89,14 @@ type MapRouteSurfaceProps = {
   accessToken: string;
   canUploadCustomMaps: boolean;
   contentRoute: Extract<LobbyContentRoute, "maps" | "map-details" | "map-upload">;
-  createInviteLobby: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
+  createParty: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
   displayName: string;
   isAdmin: boolean;
   isModerator: boolean;
   mapId: string;
   mapPickerFlow: boolean;
-  privateLobbyActive: boolean;
-  saveLobbyConfig: (patch: MatchConfig) => void;
+  partyActive: boolean;
+  savePartyConfig: (patch: MatchConfig) => void;
   singleplayerDisabled: boolean;
   startSingleplayer: (config?: MatchConfig) => void | Promise<string>;
   userAvatar?: string;
@@ -108,14 +109,14 @@ export function MapRouteSurface({
   accessToken,
   canUploadCustomMaps,
   contentRoute,
-  createInviteLobby,
+  createParty,
   displayName,
   isAdmin,
   isModerator,
   mapId,
   mapPickerFlow,
-  privateLobbyActive,
-  saveLobbyConfig,
+  partyActive,
+  savePartyConfig,
   singleplayerDisabled,
   startSingleplayer,
   userAvatar,
@@ -140,7 +141,6 @@ export function MapRouteSurface({
   const [replyToCommentId, setReplyToCommentId] = useState("");
   const [commentComposerFocused, setCommentComposerFocused] = useState(false);
   const [expandedCommentIds, setExpandedCommentIds] = useState<Record<string, boolean>>({});
-  const [likedCommentIds, setLikedCommentIds] = useState<Record<string, boolean>>({});
   const [openCommentMenuId, setOpenCommentMenuId] = useState("");
 
   const setMapScope = browser.setMapScope;
@@ -161,15 +161,16 @@ export function MapRouteSurface({
     { enabled: contentRoute === "maps" },
   );
   const selectedMapQuery = useMapDetails(runtimeConfig, accessToken, contentRoute === "map-details" ? mapId : "", userId);
+  const mapQuotaQuery = useMapUploadQuota(runtimeConfig, accessToken, canUploadCustomMaps);
   const favoriteMapMutation = useFavoriteMap(runtimeConfig, accessToken);
   const mapComments = useMapComments(runtimeConfig, accessToken, contentRoute === "map-details" ? mapId : "");
-  const mapManagement = useMapManagement(runtimeConfig, accessToken, setMapUploadError);
+  const mapManagement = useMapManagement(runtimeConfig, accessToken, setMapUploadError, mapQuotaQuery.data?.maxMapLocations);
   const createMapMutation = useMutation({
     mutationFn: async () => {
       if (!accessToken) throw new Error("Sign in to upload maps");
       if (!canUploadCustomMaps) throw new Error("Upgrade your guest profile to upload custom maps");
       if (!mapFile) throw new Error("Choose a JSON map file");
-      await validateMapFile(mapFile);
+      await validateMapFile(mapFile, mapQuotaQuery.data?.maxMapLocations);
       return createMap(runtimeConfig, accessToken, {
         file: mapFile,
         displayName: mapName,
@@ -189,6 +190,7 @@ export function MapRouteSurface({
       setMapThumbnailSearch("");
       browser.setMapScope("mine");
       void queryClient.invalidateQueries({ queryKey: ["maps"] });
+      void queryClient.invalidateQueries({ queryKey: ["map-upload-quota"] });
       void Router.push({ pathname: "/maps", query: { scope: "mine" } });
     },
     onError: (error) => setMapUploadError(error instanceof Error ? error.message : "Map upload failed"),
@@ -199,10 +201,10 @@ export function MapRouteSurface({
   const hasMapSearch = browser.debouncedMapSearch.length > 0;
   const selectMapForParty = (item: CustomMap) => {
     if (mapPickerFlow) {
-      saveLobbyConfig({ mapId: item.id, mapName: item.displayName });
+      savePartyConfig({ mapId: item.id, mapName: item.displayName });
       return;
     }
-    void createInviteLobby("duel", {
+    void createParty("duel", {
       mapId: item.id,
       mapName: item.displayName,
       ruleset: "moving",
@@ -221,6 +223,7 @@ export function MapRouteSurface({
   };
   const createCommentMutation = mapComments.createComment;
   const deleteCommentMutation = mapComments.deleteComment;
+  const likeCommentMutation = mapComments.likeComment;
   const postMapComment = () => {
     if (!canInteractWithMaps) return;
     createCommentMutation.mutate(
@@ -255,10 +258,6 @@ export function MapRouteSurface({
       },
     });
   };
-  const toggleCommentLike = (commentId: string) => {
-    if (!canInteractWithMaps) return;
-    setLikedCommentIds((current) => ({ ...current, [commentId]: !current[commentId] }));
-  };
   const toggleCommentReplies = (commentId: string) => {
     setExpandedCommentIds((current) => ({ ...current, [commentId]: !current[commentId] }));
   };
@@ -286,6 +285,7 @@ export function MapRouteSurface({
               mapFile={mapFile}
               setMapFile={setMapFile}
               mapUploadError={mapUploadError}
+              quota={mapQuotaQuery.data}
               setMapUploadError={setMapUploadError}
               uploadPending={createMapMutation.isPending}
               onUpload={() => createMapMutation.mutate()}
@@ -311,7 +311,6 @@ export function MapRouteSurface({
           favoriteMap={(input) => favoriteMapMutation.mutate(input)}
           isAdmin={isAdmin}
           isModerator={isModerator}
-          likedCommentIds={likedCommentIds}
           mapPickerFlow={mapPickerFlow}
           onCancelComment={() => {
             setCommentBody("");
@@ -330,7 +329,7 @@ export function MapRouteSurface({
           onSetOpenCommentMenuId={setOpenCommentMenuId}
           onSetReplyBody={setReplyBody}
           onSetReplyToCommentId={setReplyToCommentId}
-          onToggleCommentLike={toggleCommentLike}
+          onToggleCommentLike={(commentId, liked) => likeCommentMutation.mutate({ commentId, liked })}
           onToggleCommentReplies={toggleCommentReplies}
           openCommentMenuId={openCommentMenuId}
           playMapSingleplayer={playMapSingleplayer}
@@ -360,7 +359,7 @@ export function MapRouteSurface({
         mapSearchInput={browser.mapSearchInput}
         mapSort={browser.mapSort}
         mapsLoading={mapsQuery.isLoading}
-        privateLobbyActive={privateLobbyActive}
+        partyActive={partyActive}
         readyMaps={readyMaps}
         setMapScope={browser.setMapScope}
         setMapSearchInput={browser.setMapSearchInput}
@@ -375,18 +374,18 @@ export function MapRouteSurface({
 type MapPickerControllerProps = {
   accessToken: string;
   canUploadCustomMaps: boolean;
-  lobbyConfig: MatchConfig;
+  partyConfig: MatchConfig;
   onClose: () => void;
-  saveLobbyConfig: (patch: MatchConfig) => void;
+  savePartyConfig: (patch: MatchConfig) => void;
   userId: string;
 };
 
 export function MapPickerController({
   accessToken,
   canUploadCustomMaps,
-  lobbyConfig,
+  partyConfig,
   onClose,
-  saveLobbyConfig,
+  savePartyConfig,
   userId,
 }: MapPickerControllerProps) {
   const runtimeConfig = getRuntimeConfig();
@@ -406,7 +405,7 @@ export function MapPickerController({
     <MapPickerModal
       canUploadCustomMaps={canUploadCustomMaps}
       hasMapSearch={browser.debouncedMapSearch.length > 0}
-      lobbyConfig={lobbyConfig}
+      partyConfig={partyConfig}
       mapScope={browser.mapScope}
       mapScopeLabels={mapScopeLabels}
       mapSearchInput={browser.mapSearchInput}
@@ -415,7 +414,7 @@ export function MapPickerController({
       onClose={onClose}
       readyMaps={readyMaps}
       selectMapForParty={(item) => {
-        saveLobbyConfig({ mapId: item.id, mapName: item.displayName });
+        savePartyConfig({ mapId: item.id, mapName: item.displayName });
         onClose();
       }}
       setMapScope={browser.setMapScope}

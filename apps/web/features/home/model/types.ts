@@ -1,7 +1,7 @@
 import type { LeaderboardSummary } from "../../auth/controllers/session-controller";
 import type { UserNotification } from "../../auth/lib/auth-client";
-import type { LobbyRuntimeStatus } from "../../lobby/controllers/lobby-controller";
-import type { LobbySnapshot, LobbyTeamId, PartyMode } from "../../lobby/lib/lobby-client";
+import type { PartyRuntimeStatus } from "../../lobby/controllers/party-controller";
+import type { PartySnapshot, PartyTeamId, PartyMode } from "../../lobby/lib/party-client";
 import type { MaintenanceStatus } from "../../matchmaking/lib/queue-client";
 import type {
   GameRuleset,
@@ -66,9 +66,9 @@ export type HomeLobbyView = {
   changelogMarkdown: string;
   changelogSlug: string;
   changelogUpdatedAt: string;
-  privateLobby: {
-    status: LobbyRuntimeStatus;
-    snapshot: LobbySnapshot | null;
+  party: {
+    status: PartyRuntimeStatus;
+    snapshot: PartySnapshot | null;
     inviteCode: string;
     isMember: boolean;
     isOwner: boolean;
@@ -177,14 +177,14 @@ export type HomeActions = {
   joinQueue: (rulesets?: GameRuleset[]) => void;
   startSingleplayer: (config?: MatchConfig) => Promise<string>;
   cancelQueue: () => void;
-  createInviteLobby: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
-  joinInviteLobby: (inviteCode?: string) => Promise<boolean>;
-  leavePrivateLobby: () => Promise<void>;
-  kickLobbyMember: (userId: string) => Promise<void>;
-  transferLobbyOwner: (userId: string) => Promise<void>;
-  startPrivateLobby: () => Promise<void>;
-  updatePrivateLobbySettings: (config: MatchConfig, mode?: PartyMode) => Promise<void>;
-  switchPrivateLobbyTeam: (teamId: LobbyTeamId) => Promise<void>;
+  createParty: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
+  joinParty: (inviteCode?: string) => Promise<boolean>;
+  leaveParty: () => Promise<void>;
+  kickPartyMember: (userId: string) => Promise<void>;
+  transferPartyOwner: (userId: string) => Promise<void>;
+  startParty: () => Promise<void>;
+  updatePartySettings: (config: MatchConfig, mode?: PartyMode) => Promise<void>;
+  switchPartyTeam: (teamId: PartyTeamId) => Promise<void>;
   placeGuess: (lat: number, lng: number) => void;
   finalizeGuess: () => void;
   advanceRound: () => boolean;

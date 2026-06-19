@@ -14,21 +14,18 @@ import (
 )
 
 const (
-	maxCustomMapsPerAccount      = 10
-	maxCustomLocationsPerAccount = 250_000
-	maxRevisionsPerMap           = 10
-	maxInactiveRevisionsKept     = 5
-	maxMapLocations              = 100_000
-	minMapLocations              = 5
-	maxUploadsPerHour            = 3
-	maxUploadsPerDay             = 10
-	plannedRoundCount            = 20
-	mapTrendingWindowDays        = 7
+	maxRevisionsPerMap       = 10
+	maxInactiveRevisionsKept = 0
+	absoluteMaxMapLocations  = 1_000_000
+	minMapLocations          = 5
+	plannedRoundCount        = 20
+	mapTrendingWindowDays    = 7
 )
 
 type MapCatalog interface {
 	ListMaps(userID string, opts contracts.MapListOptions) ([]contracts.CustomMap, error)
 	GetMap(userID, mapID string) (contracts.MapDetails, bool, error)
+	GetMapUploadQuota(userID string) (contracts.MapUploadQuota, error)
 	CreateCustomMap(userID, displayName, description, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error)
 	UploadCustomMapRevision(userID, mapID string, source io.Reader) (contracts.CustomMap, error)
 	UpdateCustomMap(userID, mapID string, update contracts.CustomMapUpdate) (contracts.CustomMap, error)
@@ -39,7 +36,8 @@ type MapCatalog interface {
 	ListMapComments(userID, mapID string) ([]contracts.MapComment, error)
 	CreateMapComment(userID, mapID string, input contracts.MapCommentCreate) (contracts.MapComment, error)
 	DeleteMapComment(userID, mapID, commentID string, moderator bool) error
-	ArchiveCustomMap(userID, mapID string) error
+	SetMapCommentLike(userID, mapID, commentID string, liked bool) (contracts.MapComment, error)
+	ArchiveCustomMap(userID, mapID string, allowAnyOwner bool) error
 	PrepareMatchPlan(ctx context.Context, found *contracts.MatchFound) error
 }
 
@@ -50,7 +48,7 @@ func (s *pgStore) ListMaps(userID string, opts contracts.MapListOptions) ([]cont
 	sortMode := normalizeMapSort(opts.Sort)
 	searchPattern := mapSearchPattern(opts.Search)
 	query := `
-		select m.map_key, coalesce(m.owner_user_id, ''), coalesce(u.display_name, 'GeoDuels'), m.display_name, m.description, m.visibility, m.status,
+		select m.map_key, coalesce(m.owner_user_id, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
 		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, coalesce(m.active_revision_id, ''), (m.owner_user_id is null or m.official_at is not null),
 		       m.official_at is not null,
 		       coalesce(m.published_at, '0001-01-01'::timestamptz), m.play_count, m.favorite_count, m.comment_count, m.trending_score,
@@ -118,7 +116,7 @@ func (s *pgStore) GetMap(userID, mapID string) (contracts.MapDetails, bool, erro
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	row := s.pool.QueryRow(ctx, `
-		select m.map_key, coalesce(m.owner_user_id, ''), coalesce(u.display_name, 'GeoDuels'), m.display_name, m.description, m.visibility, m.status,
+		select m.map_key, coalesce(m.owner_user_id, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
 		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, coalesce(m.active_revision_id, ''), (m.owner_user_id is null or m.official_at is not null),
 		       m.official_at is not null,
 		       coalesce(m.published_at, '0001-01-01'::timestamptz), m.play_count, m.favorite_count, m.comment_count, m.trending_score,

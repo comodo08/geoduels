@@ -2,8 +2,8 @@ import { forwardRef } from "react";
 import { Copy, Crown, Loader2, LogOut, Map as MapIcon, Play, UserMinus, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MatchConfig, GameRuleset } from "../../matchmaking/lib/queue-client";
-import type { LobbyRuntimeStatus } from "../controllers/lobby-controller";
-import type { LobbySnapshot, LobbyTeamId, PartyMode } from "../lib/lobby-client";
+import type { PartyRuntimeStatus } from "../controllers/party-controller";
+import type { PartySnapshot, PartyTeamId, PartyMode } from "../lib/party-client";
 import {
   CLOCK_OPTIONS,
   PRESSURE_OPTIONS,
@@ -23,9 +23,9 @@ import {
   LobbySelect,
 } from "./lobby-primitives";
 
-type PrivateLobbyView = {
-  status: LobbyRuntimeStatus;
-  snapshot: LobbySnapshot | null;
+type PartyView = {
+  status: PartyRuntimeStatus;
+  snapshot: PartySnapshot | null;
   inviteCode: string;
   isMember: boolean;
   isOwner: boolean;
@@ -37,16 +37,16 @@ type PartyPanelProps = {
   authError: string;
   authLoading: boolean;
   inviteCopied: boolean;
-  privateLobby: PrivateLobbyView;
+  party: PartyView;
   setMapPickerOpen: (open: boolean) => void;
   state: PartyPanelState;
   userId: string;
-  joinInviteLobby: (inviteCode?: string) => Promise<boolean>;
-  leavePrivateLobby: () => Promise<void>;
-  kickLobbyMember: (userId: string) => Promise<void>;
-  transferLobbyOwner: (userId: string) => Promise<void>;
-  startPrivateLobby: () => Promise<void>;
-  switchPrivateLobbyTeam: (teamId: LobbyTeamId) => Promise<void>;
+  joinParty: (inviteCode?: string) => Promise<boolean>;
+  leaveParty: () => Promise<void>;
+  kickPartyMember: (userId: string) => Promise<void>;
+  transferPartyOwner: (userId: string) => Promise<void>;
+  startParty: () => Promise<void>;
+  switchPartyTeam: (teamId: PartyTeamId) => Promise<void>;
 };
 
 const panelMotion = {
@@ -60,15 +60,15 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
   authError,
   authLoading,
   inviteCopied,
-  joinInviteLobby,
-  kickLobbyMember,
-  leavePrivateLobby,
-  privateLobby,
+  joinParty,
+  kickPartyMember,
+  leaveParty,
+  party,
   setMapPickerOpen,
-  startPrivateLobby,
+  startParty,
   state,
-  switchPrivateLobbyTeam,
-  transferLobbyOwner,
+  switchPartyTeam,
+  transferPartyOwner,
   userId,
 }, ref) {
   const {
@@ -92,7 +92,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
   return (
     <motion.div
       ref={ref}
-      key="private-lobby"
+      key="party"
       {...panelMotion}
       className="w-full max-w-[980px] pointer-events-auto"
     >
@@ -104,17 +104,17 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
               inviteCopied={inviteCopied}
               matchInProgress={matchInProgress}
               onCopyInvite={copyInvite}
-              onLeave={() => void leavePrivateLobby()}
-              privateLobby={privateLobby}
+              onLeave={() => void leaveParty()}
+              party={party}
             />
 
-            {privateLobby.inviteCode ? (
+            {party.inviteCode ? (
               <LobbyInset>
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6b8b80]">
                   Invite Code
                 </p>
                 <p className="mt-1 font-mono text-[26px] font-black tracking-[0.18em] text-white">
-                  {privateLobby.inviteCode}
+                  {party.inviteCode}
                 </p>
               </LobbyInset>
             ) : null}
@@ -125,7 +125,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                   Game In Progress
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[#d8f7e9]">
-                  {!privateLobby.isMember
+                  {!party.isMember
                     ? "Join the party now and you will be ready for the next game."
                     : currentMember?.inActiveMatch
                       ? "You are part of this game and can reconnect whenever you are ready."
@@ -144,12 +144,12 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
               </LobbyInset>
             ) : null}
 
-            {privateLobby.snapshot ? (
+            {party.snapshot ? (
               <PartySettings
-                busy={privateLobby.busy}
+                busy={party.busy}
                 clockOn={clockOn}
                 config={config}
-                isOwner={privateLobby.isOwner}
+                isOwner={party.isOwner}
                 mode={mode}
                 pressureOn={pressureOn}
                 pressureSeconds={pressureSeconds}
@@ -157,7 +157,7 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                 saveConfig={saveConfig}
                 saveMode={saveMode}
                 setMapPickerOpen={setMapPickerOpen}
-                snapshot={privateLobby.snapshot}
+                snapshot={party.snapshot}
               />
             ) : null}
 
@@ -168,16 +168,16 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
                   Connecting to party
                 </LobbyLoadingState>
               </LobbyInset>
-            ) : !privateLobby.isMember ? (
+            ) : !party.isMember ? (
               <LobbyInset>
                 <LobbyActionButton
                   type="button"
-                  onClick={() => void joinInviteLobby()}
-                  disabled={privateLobby.busy || authLoading}
+                  onClick={() => void joinParty()}
+                  disabled={party.busy || authLoading}
                   size="lg"
                   className="w-full"
                 >
-                  {privateLobby.busy ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
+                  {party.busy ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
                   Join Party
                 </LobbyActionButton>
                 {authError ? (
@@ -186,32 +186,32 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
               </LobbyInset>
             ) : null}
 
-            {privateLobby.snapshot ? (
+            {party.snapshot ? (
               <PartyMemberList
-                busy={privateLobby.busy}
-                isOwner={privateLobby.isOwner}
+                busy={party.busy}
+                isOwner={party.isOwner}
                 members={members}
                 mode={mode}
-                snapshot={privateLobby.snapshot}
-                switchPrivateLobbyTeam={switchPrivateLobbyTeam}
-                transferLobbyOwner={transferLobbyOwner}
-                kickLobbyMember={kickLobbyMember}
+                snapshot={party.snapshot}
+                switchPartyTeam={switchPartyTeam}
+                transferPartyOwner={transferPartyOwner}
+                kickPartyMember={kickPartyMember}
                 userId={userId}
               />
             ) : null}
 
-            {privateLobby.isOwner && privateLobby.snapshot?.state === "open" ? (
+            {party.isOwner && party.snapshot?.state === "open" ? (
               <LobbyActionButton
                 type="button"
-                onClick={() => void startPrivateLobby()}
-                disabled={!canStart || privateLobby.busy}
+                onClick={() => void startParty()}
+                disabled={!canStart || party.busy}
                 size="lg"
                 className="w-full"
               >
-                {privateLobby.busy ? <Loader2 className="animate-spin" size={18} /> : <Play size={18} fill="currentColor" />}
+                {party.busy ? <Loader2 className="animate-spin" size={18} /> : <Play size={18} fill="currentColor" />}
                 {mode === "team_duel" ? "Start Team Duel" : mode === "free_for_all" ? "Start FFA" : "Start Duel"}
               </LobbyActionButton>
-            ) : privateLobby.isMember && privateLobby.snapshot?.state === "open" ? (
+            ) : party.isMember && party.snapshot?.state === "open" ? (
               <LobbyInset className="text-center text-sm font-semibold text-[#a9bfd4]">
                 Waiting for the leader to start.
               </LobbyInset>
@@ -228,13 +228,13 @@ function PartyHeader({
   matchInProgress,
   onCopyInvite,
   onLeave,
-  privateLobby,
+  party,
 }: {
   inviteCopied: boolean;
   matchInProgress: boolean;
   onCopyInvite: () => void;
   onLeave: () => void;
-  privateLobby: PrivateLobbyView;
+  party: PartyView;
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -252,18 +252,18 @@ function PartyHeader({
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {privateLobby.inviteCode ? (
+        {party.inviteCode ? (
           <LobbyActionButton type="button" variant="secondary" onClick={onCopyInvite}>
             <Copy className="text-[#77f0be]" size={16} />
             {inviteCopied ? "Copied" : "Copy Invite"}
           </LobbyActionButton>
         ) : null}
-        {privateLobby.isMember && !(privateLobby.isOwner && matchInProgress) ? (
+        {party.isMember && !(party.isOwner && matchInProgress) ? (
           <LobbyActionButton
             type="button"
             variant="secondary"
             onClick={onLeave}
-            disabled={privateLobby.busy}
+            disabled={party.busy}
           >
             <LogOut size={16} />
             Leave
@@ -299,7 +299,7 @@ function PartySettings({
   saveConfig: (patch: MatchConfig) => void;
   saveMode: (mode: PartyMode) => void;
   setMapPickerOpen: (open: boolean) => void;
-  snapshot: LobbySnapshot;
+  snapshot: PartySnapshot;
 }) {
   if (!(isOwner && snapshot.state === "open")) {
     return (
@@ -402,22 +402,22 @@ function PartySettings({
 function PartyMemberList({
   busy,
   isOwner,
-  kickLobbyMember,
+  kickPartyMember,
   members,
   mode,
   snapshot,
-  switchPrivateLobbyTeam,
-  transferLobbyOwner,
+  switchPartyTeam,
+  transferPartyOwner,
   userId,
 }: {
   busy: boolean;
   isOwner: boolean;
-  kickLobbyMember: (userId: string) => Promise<void>;
-  members: LobbySnapshot["members"];
+  kickPartyMember: (userId: string) => Promise<void>;
+  members: PartySnapshot["members"];
   mode: PartyMode;
-  snapshot: LobbySnapshot;
-  switchPrivateLobbyTeam: (teamId: LobbyTeamId) => Promise<void>;
-  transferLobbyOwner: (userId: string) => Promise<void>;
+  snapshot: PartySnapshot;
+  switchPartyTeam: (teamId: PartyTeamId) => Promise<void>;
+  transferPartyOwner: (userId: string) => Promise<void>;
   userId: string;
 }) {
   return (
@@ -462,7 +462,7 @@ function PartyMemberList({
                   <button
                     key={teamId}
                     type="button"
-                    onClick={() => void switchPrivateLobbyTeam(teamId)}
+                    onClick={() => void switchPartyTeam(teamId)}
                     disabled={busy || (member.teamId || "a") === teamId}
                     className={`inline-flex min-h-[36px] items-center rounded-[10px] px-3 text-[11px] font-extrabold uppercase tracking-[0.08em] transition disabled:opacity-50 ${lobbyTeamPillClass(
                       teamId,
@@ -480,7 +480,7 @@ function PartyMemberList({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => void transferLobbyOwner(member.userId)}
+                  onClick={() => void transferPartyOwner(member.userId)}
                   disabled={busy}
                 >
                   <Crown size={14} />
@@ -490,7 +490,7 @@ function PartyMemberList({
                   type="button"
                   variant="danger"
                   size="sm"
-                  onClick={() => void kickLobbyMember(member.userId)}
+                  onClick={() => void kickPartyMember(member.userId)}
                   disabled={busy}
                 >
                   <UserMinus size={14} />

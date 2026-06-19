@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -26,13 +27,17 @@ func getenvInt(name string, fallback int) int {
 }
 
 type mapRow struct {
-	Lat     float64
-	Lng     float64
-	Country string
-	PanoID  *string
-	Heading *float64
-	Pitch   *float64
-	RandKey float64
+	Lat         float64
+	Lng         float64
+	Country     string
+	PanoID      *string
+	Heading     *float64
+	Pitch       *float64
+	LatE7       int32
+	LngE7       int32
+	HeadingCDeg *int16
+	PitchCDeg   *int16
+	RandKey     int32
 }
 
 func parseMapRows(b []byte) ([]mapRow, error) {
@@ -59,7 +64,7 @@ func parseMapRows(b []byte) ([]mapRow, error) {
 		if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
 			continue
 		}
-		row := mapRow{Lat: lat, Lng: lng, RandKey: stableRand(lat, lng)}
+		row := compactMapRow(lat, lng)
 		if country, ok := it["country"].(string); ok {
 			row.Country = country
 		} else if country, ok := it["countryCode"].(string); ok {
@@ -76,19 +81,46 @@ func parseMapRows(b []byte) ([]mapRow, error) {
 		}
 		if heading, ok := asFloat(it["heading"]); ok {
 			row.Heading = &heading
+			value := compactAngle(heading, false)
+			row.HeadingCDeg = &value
 		}
 		if pitch, ok := asFloat(it["pitch"]); ok {
 			row.Pitch = &pitch
+			value := compactAngle(pitch, true)
+			row.PitchCDeg = &value
 		}
 		out = append(out, row)
 	}
 	return out, nil
 }
 
-func stableRand(lat, lng float64) float64 {
+func stableRand(lat, lng float64) int32 {
 	h := sha1.Sum([]byte(fmt.Sprintf("%.8f:%.8f", lat, lng)))
 	v := int(h[0])<<16 | int(h[1])<<8 | int(h[2])
-	return float64(v) / float64(1<<24)
+	return int32(v)
+}
+
+func compactMapRow(lat, lng float64) mapRow {
+	return mapRow{
+		Lat:     lat,
+		Lng:     lng,
+		LatE7:   int32(math.Round(lat * 10_000_000)),
+		LngE7:   int32(math.Round(lng * 10_000_000)),
+		RandKey: stableRand(lat, lng),
+	}
+}
+
+func compactAngle(value float64, pitch bool) int16 {
+	if pitch {
+		value = math.Max(-90, math.Min(90, value))
+	} else {
+		value = math.Mod(value+180, 360)
+		if value < 0 {
+			value += 360
+		}
+		value -= 180
+	}
+	return int16(math.Round(value * 100))
 }
 
 func asFloat(v any) (float64, bool) {

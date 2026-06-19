@@ -38,11 +38,11 @@ func (s *pgStore) recordChatMessage(ctx context.Context, conversationID, scopeKi
 	}
 	_, err = s.pool.Exec(ctx, `
 		insert into chat_messages (
-			id, conversation_id, match_id, sender_user_id, sender_display_name, kind, body, emote, created_at
+			id, conversation_id, sender_user_id, sender_display_name, kind, body, emote, created_at
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (id) do nothing
-	`, message.ID, conversationID, nullable(message.MatchID), message.SenderUserID, message.SenderDisplayName, string(message.Kind), body, emote, createdAt)
+	`, message.ID, conversationID, message.SenderUserID, message.SenderDisplayName, string(message.Kind), body, emote, createdAt)
 	return err
 }
 
@@ -57,7 +57,7 @@ func (s *pgStore) ListChatMessages(conversationID string, limit int) ([]ChatMess
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		select id, conversation_id, coalesce(match_id, ''), sender_user_id, sender_display_name, kind, coalesce(body, ''), coalesce(emote, ''), created_at
+		select id, conversation_id, sender_user_id, sender_display_name, kind, coalesce(body, ''), coalesce(emote, ''), created_at
 		from chat_messages
 		where conversation_id = $1
 		order by created_at asc
@@ -72,7 +72,7 @@ func (s *pgStore) ListChatMessages(conversationID string, limit int) ([]ChatMess
 		var message ChatMessage
 		var kind string
 		var emote string
-		if err := rows.Scan(&message.ID, &message.ConversationID, &message.MatchID, &message.SenderUserID, &message.SenderDisplayName, &kind, &message.Body, &emote, &message.CreatedAt); err != nil {
+		if err := rows.Scan(&message.ID, &message.ConversationID, &message.SenderUserID, &message.SenderDisplayName, &kind, &message.Body, &emote, &message.CreatedAt); err != nil {
 			return nil, err
 		}
 		message.Kind = contracts.ChatMessageKind(kind)

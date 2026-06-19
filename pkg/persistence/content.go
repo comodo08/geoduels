@@ -228,3 +228,94 @@ func (s *pgStore) SetModerationSettings(settings ModerationSettings) error {
 	`, string(payload))
 	return err
 }
+
+func (s *pgStore) GetDiscordIntegrationSettings() (DiscordIntegrationSettings, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	var raw string
+	err := s.pool.QueryRow(ctx, `
+		select value_json::text
+		from site_settings
+		where key = 'discord_integration'
+	`).Scan(&raw)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return normalizeDiscordIntegrationSettings(DiscordIntegrationSettings{}), nil
+		}
+		return DiscordIntegrationSettings{}, err
+	}
+	var settings DiscordIntegrationSettings
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return normalizeDiscordIntegrationSettings(DiscordIntegrationSettings{}), nil
+	}
+	return normalizeDiscordIntegrationSettings(settings), nil
+}
+
+func (s *pgStore) SetDiscordIntegrationSettings(settings DiscordIntegrationSettings) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	current, err := s.GetDiscordIntegrationSettings()
+	if err != nil {
+		return err
+	}
+	settings.ManagedRoleIDs = append(settings.ManagedRoleIDs, current.ManagedRoleIDs...)
+	settings.ManagedRoleIDs = append(settings.ManagedRoleIDs,
+		current.Elo1000RoleID,
+		current.Elo1500RoleID,
+		current.Elo2000RoleID,
+	)
+	settings = normalizeDiscordIntegrationSettings(settings)
+	payload, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `
+		insert into site_settings(key, value_json, updated_at)
+		values('discord_integration', $1::jsonb, now())
+		on conflict (key) do update set
+			value_json = excluded.value_json,
+			updated_at = now()
+	`, string(payload)); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `
+		insert into discord_sync_outbox(action, discord_user_id)
+		select $1, provider_user_id
+		from user_identities
+		where provider = $2
+		on conflict (action, discord_user_id) where processed_at is null do update set
+			next_attempt_at = least(discord_sync_outbox.next_attempt_at, excluded.next_attempt_at),
+			last_error = null
+	`, DiscordSyncActionSync, IdentityProviderDiscord); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func normalizeDiscordIntegrationSettings(settings DiscordIntegrationSettings) DiscordIntegrationSettings {
+	settings.GuildID = strings.TrimSpace(settings.GuildID)
+	settings.JoinsChannelID = strings.TrimSpace(settings.JoinsChannelID)
+	settings.Elo1000RoleID = strings.TrimSpace(settings.Elo1000RoleID)
+	settings.Elo1500RoleID = strings.TrimSpace(settings.Elo1500RoleID)
+	settings.Elo2000RoleID = strings.TrimSpace(settings.Elo2000RoleID)
+	seenRoleIDs := map[string]bool{}
+	managedRoleIDs := make([]string, 0, len(settings.ManagedRoleIDs))
+	for _, roleID := range settings.ManagedRoleIDs {
+		roleID = strings.TrimSpace(roleID)
+		if roleID == "" || seenRoleIDs[roleID] {
+			continue
+		}
+		seenRoleIDs[roleID] = true
+		managedRoleIDs = append(managedRoleIDs, roleID)
+	}
+	settings.ManagedRoleIDs = managedRoleIDs
+	if settings.ReconcileIntervalMinutes <= 0 {
+		settings.ReconcileIntervalMinutes = 15
+	}
+	return settings
+}

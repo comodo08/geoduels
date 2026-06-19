@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"time"
 
@@ -15,19 +16,50 @@ func (s *pgStore) GetFinalMatchSnapshot(matchID string) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	row := s.pool.QueryRow(ctx, `
-		select coalesce(replay_json, snapshot_json)::text
+		select replay_zstd, coalesce(replay_codec, 0), coalesce(replay_uncompressed_bytes, 0),
+		       replay_sha256, replay_json::text
 		from match_history
 		where match_id = $1
+		  and (replay_expires_at is null or replay_expires_at > now())
 		limit 1
 	`, matchID)
-	var raw string
-	if err := row.Scan(&raw); err != nil {
+	var compressed, expectedHash []byte
+	var codec, uncompressedBytes int
+	var legacy *string
+	if err := row.Scan(&compressed, &codec, &uncompressedBytes, &expectedHash, &legacy); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
-	return []byte(raw), true, nil
+	if len(compressed) == 0 {
+		if legacy == nil {
+			return nil, false, nil
+		}
+		return []byte(*legacy), true, nil
+	}
+	raw, err := decompressReplay(compressed, codec, uncompressedBytes)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(expectedHash) == sha256.Size {
+		sum := sha256.Sum256(raw)
+		if !equalBytes(sum[:], expectedHash) {
+			return nil, false, errors.New("replay checksum mismatch")
+		}
+	}
+	return raw, true, nil
+}
+
+func equalBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	var diff byte
+	for i := range a {
+		diff |= a[i] ^ b[i]
+	}
+	return diff == 0
 }
 
 func (s *pgStore) ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error) {

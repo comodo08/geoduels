@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"time"
 
@@ -20,13 +21,13 @@ const defaultMapKey = "a-source-world"
 const defaultPostgresURL = "postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable"
 
 type row struct {
-	Lat     float64
-	Lng     float64
-	Country string
-	PanoID  *string
-	Heading *float64
-	Pitch   *float64
-	RandKey float64
+	LatE7       int32
+	LngE7       int32
+	Country     string
+	PanoID      *string
+	HeadingCDeg *int16
+	PitchCDeg   *int16
+	RandKey     int32
 }
 
 func main() {
@@ -96,6 +97,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		);
 		create table if not exists map_revisions (
 			id text primary key,
+			storage_id integer generated always as identity unique,
 			map_key text not null references maps(map_key) on delete cascade,
 			content_hash text not null,
 			status text not null default 'validated',
@@ -104,19 +106,19 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			unique(map_key, content_hash)
 		);
 		create table if not exists locations (
-			id bigserial primary key,
-			map_revision_id text references map_revisions(id) on delete cascade,
-			lat double precision not null,
-			lng double precision not null,
+			revision_storage_id integer not null references map_revisions(storage_id) on delete cascade,
+			lat_e7 integer not null,
+			lng_e7 integer not null,
+			rand_key_i integer not null,
+			heading_cdeg smallint,
+			pitch_cdeg smallint,
 			country text,
-			pano_id text,
-			heading double precision,
-			pitch double precision,
-			rand_key double precision not null
+			pano_id text
 		);
-		alter table locations add column if not exists map_revision_id text references map_revisions(id) on delete cascade;
-		create index if not exists idx_locations_revision_rand on locations(map_revision_id, rand_key);
-		create index if not exists idx_locations_revision_id on locations(map_revision_id, id);
+		alter table map_revisions add column if not exists storage_id integer generated always as identity;
+		create unique index if not exists map_revisions_storage_id_key on map_revisions(storage_id);
+		alter table locations add column if not exists revision_storage_id integer references map_revisions(storage_id) on delete cascade;
+		create index if not exists idx_locations_revision_rand on locations(revision_storage_id, rand_key_i);
 	`)
 	return err
 }
@@ -133,7 +135,7 @@ func upsertRevision(ctx context.Context, pool *pgxpool.Pool, mapKey, sourceHash 
 	err = pool.QueryRow(ctx, `select id from map_revisions where map_key=$1 and content_hash=$2 limit 1`, mapKey, sourceHash).Scan(&existing)
 	if err == nil {
 		var count int64
-		if err := pool.QueryRow(ctx, `select count(*) from locations where map_revision_id=$1`, existing).Scan(&count); err != nil {
+		if err := pool.QueryRow(ctx, `select count(*) from locations where revision_storage_id=(select storage_id from map_revisions where id=$1)`, existing).Scan(&count); err != nil {
 			return "", false, err
 		}
 		return existing, count == 0, nil
@@ -157,6 +159,10 @@ func ingestRows(ctx context.Context, pool *pgxpool.Pool, revisionID string, rows
 		return err
 	}
 	defer tx.Rollback(ctx)
+	var revisionStorageID int32
+	if err := tx.QueryRow(ctx, `select storage_id from map_revisions where id=$1`, revisionID).Scan(&revisionStorageID); err != nil {
+		return err
+	}
 
 	batchSize := 2000
 	for i := 0; i < len(rows); i += batchSize {
@@ -167,20 +173,20 @@ func ingestRows(ctx context.Context, pool *pgxpool.Pool, revisionID string, rows
 		block := make([][]any, 0, end-i)
 		for _, r := range rows[i:end] {
 			block = append(block, []any{
-				revisionID,
-				r.Lat,
-				r.Lng,
+				revisionStorageID,
+				r.LatE7,
+				r.LngE7,
 				r.Country,
 				r.PanoID,
-				r.Heading,
-				r.Pitch,
+				r.HeadingCDeg,
+				r.PitchCDeg,
 				r.RandKey,
 			})
 		}
 		if _, err := tx.CopyFrom(
 			ctx,
 			pgx.Identifier{"locations"},
-			[]string{"map_revision_id", "lat", "lng", "country", "pano_id", "heading", "pitch", "rand_key"},
+			[]string{"revision_storage_id", "lat_e7", "lng_e7", "country", "pano_id", "heading_cdeg", "pitch_cdeg", "rand_key_i"},
 			pgx.CopyFromRows(block),
 		); err != nil {
 			return err
@@ -194,11 +200,11 @@ func ingestRows(ctx context.Context, pool *pgxpool.Pool, revisionID string, rows
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into map_revision_country_stats(map_revision_id, country, location_count)
-		select map_revision_id, coalesce(nullif(country,''), 'Unknown'), count(*)::int
+		select $1, coalesce(nullif(country,''), 'Unknown'), count(*)::int
 		from locations
-		where map_revision_id=$1
-		group by map_revision_id, coalesce(nullif(country,''), 'Unknown')
-	`, revisionID); err != nil {
+		where revision_storage_id=$2
+		group by coalesce(nullif(country,''), 'Unknown')
+	`, revisionID, revisionStorageID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -241,7 +247,11 @@ func parseRows(b []byte) ([]row, error) {
 		if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
 			continue
 		}
-		r := row{Lat: lat, Lng: lng, RandKey: stableRand(lat, lng)}
+		r := row{
+			LatE7:   int32(math.Round(lat * 10_000_000)),
+			LngE7:   int32(math.Round(lng * 10_000_000)),
+			RandKey: stableRand(lat, lng),
+		}
 		if c, ok := it["country"].(string); ok {
 			r.Country = c
 		}
@@ -249,20 +259,35 @@ func parseRows(b []byte) ([]row, error) {
 			r.PanoID = &pano
 		}
 		if h, ok := asFloat(it["heading"]); ok {
-			r.Heading = &h
+			value := compactAngle(h, false)
+			r.HeadingCDeg = &value
 		}
 		if p, ok := asFloat(it["pitch"]); ok {
-			r.Pitch = &p
+			value := compactAngle(p, true)
+			r.PitchCDeg = &value
 		}
 		out = append(out, r)
 	}
 	return out, nil
 }
 
-func stableRand(lat, lng float64) float64 {
+func stableRand(lat, lng float64) int32 {
 	h := sha1.Sum([]byte(fmt.Sprintf("%.8f:%.8f", lat, lng)))
 	v := int(h[0])<<16 | int(h[1])<<8 | int(h[2])
-	return float64(v) / float64(1<<24)
+	return int32(v)
+}
+
+func compactAngle(value float64, pitch bool) int16 {
+	if pitch {
+		value = math.Max(-90, math.Min(90, value))
+	} else {
+		value = math.Mod(value+180, 360)
+		if value < 0 {
+			value += 360
+		}
+		value -= 180
+	}
+	return int16(math.Round(value * 100))
 }
 
 func asFloat(v any) (float64, bool) {

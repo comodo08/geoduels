@@ -15,7 +15,7 @@ func TestDecodeMapRowsRejectsDuplicatesAndInvalidLocations(t *testing.T) {
 		{"lat":13,"lng":23},
 		{"lat":14,"lng":24},
 		{"lat":15,"lng":25}
-	]`))
+	]`), absoluteMaxMapLocations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestDecodeMapRowsAcceptsMapMakingExport(t *testing.T) {
 			{"lat":6.2225031210101065,"lng":-1.383655971662562,"heading":268.6127,"pitch":0,"zoom":0,"panoId":null,"countryCode":null,"stateCode":null,"extra":{"panoId":"cQ5UcYcmtkqA3oVIvOR8jA","panoDate":"2016-04"}},
 			{"lat":8.555462932718319,"lng":-2.2134015863200154,"heading":151.81796,"pitch":0,"zoom":0,"panoId":null,"countryCode":null,"stateCode":null,"extra":{"panoId":"exGCRe5MBhjvC1PBBUzWLg","panoDate":"2025-02"}}
 		]
-	}`))
+	}`), absoluteMaxMapLocations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,15 +80,24 @@ func TestParseMapRowsAcceptsMapMakingExport(t *testing.T) {
 }
 
 func TestDecodeMapRowsRequiresArray(t *testing.T) {
-	if _, _, _, err := decodeMapRows(strings.NewReader(`{"lat":10,"lng":20}`)); err == nil {
+	if _, _, _, err := decodeMapRows(strings.NewReader(`{"lat":10,"lng":20}`), absoluteMaxMapLocations); err == nil {
 		t.Fatal("expected non-array map to fail")
+	}
+}
+
+func TestDecodeMapRowsEnforcesDynamicTierLimit(t *testing.T) {
+	if _, _, _, err := decodeMapRows(strings.NewReader(`[
+		{"lat":10,"lng":20},
+		{"lat":11,"lng":21}
+	]`), 1); err == nil || !strings.Contains(err.Error(), "map limit is 1 locations") {
+		t.Fatalf("expected dynamic location limit error, got %v", err)
 	}
 }
 
 func TestDeterministicPivotIsStable(t *testing.T) {
 	a := deterministicPivot("match", "revision")
 	b := deterministicPivot("match", "revision")
-	if a != b || a < 0 || a > 1 {
+	if a != b || a < 0 || a > 16_777_215 {
 		t.Fatalf("invalid pivot %v %v", a, b)
 	}
 }

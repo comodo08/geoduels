@@ -208,7 +208,7 @@ export function MapsPanel({
   mapSearchInput,
   mapSort,
   mapsLoading,
-  privateLobbyActive,
+  partyActive,
   readyMaps,
   setMapScope,
   setMapSearchInput,
@@ -223,7 +223,7 @@ export function MapsPanel({
   mapSearchInput: string;
   mapSort: MapSort;
   mapsLoading: boolean;
-  privateLobbyActive: boolean;
+  partyActive: boolean;
   readyMaps: CustomMap[];
   setMapScope: (scope: MapScope) => void;
   setMapSearchInput: (value: string) => void;
@@ -244,7 +244,7 @@ export function MapsPanel({
         <section className="p-5 sm:p-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <LobbySectionHeader
-              eyebrow={privateLobbyActive ? "Party Map Select" : "Map Browser"}
+              eyebrow={partyActive ? "Party Map Select" : "Map Browser"}
               title={mapScopeLabels.find((item) => item.scope === mapScope)?.label}
             />
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
@@ -269,7 +269,7 @@ export function MapsPanel({
                 <div key={item.id} className="overflow-hidden rounded-2xl">
                   <MapCard
                     item={item}
-                    mode={privateLobbyActive ? "select" : "link"}
+                    mode={partyActive ? "select" : "link"}
                     thumbnailURL={thumbnailURL}
                     onSelect={selectMapForParty}
                   />
@@ -336,10 +336,12 @@ function BackToMapsLink() {
 
 function AdminMapOperations({
   map,
+  onDeleteMap,
   onSetOfficial,
   onSetRole,
 }: {
   map: CustomMap;
+  onDeleteMap: (map: CustomMap) => void;
   onSetOfficial: (mapId: string, official: boolean) => void;
   onSetRole: (mapId: string, role: GameplayMapRole) => void;
 }) {
@@ -392,6 +394,16 @@ function AdminMapOperations({
               {item.active ? `${item.label} Active` : item.label}
             </button>
           ))}
+          {map.ownerUserId ? (
+            <button
+              type="button"
+              onClick={() => onDeleteMap(map)}
+              className="inline-flex min-h-[40px] items-center rounded-[12px] border border-red-400/20 bg-red-400/[0.08] px-3 text-xs font-black uppercase tracking-[0.08em] text-red-200 transition hover:bg-red-400/15"
+            >
+              <Trash2 className="mr-1.5" size={15} />
+              Delete Map
+            </button>
+          ) : null}
         </div>
       </div>
       {!ready ? <p className="mt-3 text-xs font-semibold text-amber-200">Map must be ready with an active revision before it can be promoted.</p> : null}
@@ -411,7 +423,6 @@ export function MapDetailsPanel({
   favoriteMap,
   isAdmin,
   isModerator,
-  likedCommentIds,
   mapPickerFlow,
   onCancelComment,
   onDeleteComment,
@@ -454,7 +465,6 @@ export function MapDetailsPanel({
   favoriteMap: (input: { mapId: string; favorite: boolean }) => void;
   isAdmin: boolean;
   isModerator: boolean;
-  likedCommentIds: Record<string, boolean>;
   mapPickerFlow: boolean;
   onCancelComment: () => void;
   onDeleteComment: (commentId: string) => void;
@@ -470,7 +480,7 @@ export function MapDetailsPanel({
   onSetOpenCommentMenuId: (commentId: string) => void;
   onSetReplyBody: (body: string) => void;
   onSetReplyToCommentId: (commentId: string) => void;
-  onToggleCommentLike: (commentId: string) => void;
+  onToggleCommentLike: (commentId: string, liked: boolean) => void;
   onToggleCommentReplies: (commentId: string) => void;
   openCommentMenuId: string;
   playMapSingleplayer: (item: CustomMap) => void;
@@ -606,6 +616,7 @@ export function MapDetailsPanel({
         {isAdmin ? (
           <AdminMapOperations
             map={map}
+            onDeleteMap={onDeleteMap}
             onSetOfficial={onSetMapOfficial}
             onSetRole={onSetMapRole}
           />
@@ -622,7 +633,6 @@ export function MapDetailsPanel({
           expandedCommentIds={expandedCommentIds}
           isAdmin={isAdmin}
           isModerator={isModerator}
-          likedCommentIds={likedCommentIds}
           onCancelComment={onCancelComment}
           onDeleteComment={onDeleteComment}
           onPostComment={onPostComment}
@@ -657,7 +667,6 @@ function MapComments(props: {
   expandedCommentIds: Record<string, boolean>;
   isAdmin: boolean;
   isModerator: boolean;
-  likedCommentIds: Record<string, boolean>;
   onCancelComment: () => void;
   onDeleteComment: (commentId: string) => void;
   onPostComment: () => void;
@@ -667,7 +676,7 @@ function MapComments(props: {
   onSetOpenCommentMenuId: (commentId: string) => void;
   onSetReplyBody: (body: string) => void;
   onSetReplyToCommentId: (commentId: string) => void;
-  onToggleCommentLike: (commentId: string) => void;
+  onToggleCommentLike: (commentId: string, liked: boolean) => void;
   onToggleCommentReplies: (commentId: string) => void;
   openCommentMenuId: string;
   replyBody: string;
@@ -753,10 +762,16 @@ function CommentThread({ comment, depth, ...props }: Parameters<typeof MapCommen
           ) : null}
         </div>
         <div className="mt-3 flex items-center gap-4">
-          {props.canInteractWithMaps ? (
-            <button type="button" onClick={() => props.onToggleCommentLike(comment.id)} className={`inline-flex items-center gap-2 rounded-full text-[13px] font-bold transition ${props.likedCommentIds[comment.id] ? "text-[#77f0be]" : "text-[#d6e4ed] hover:text-white"}`}>
-              <Heart size={depth === "root" ? 18 : 16} fill={props.likedCommentIds[comment.id] ? "currentColor" : "none"} />
-              {props.likedCommentIds[comment.id] ? 1 : 0}
+          {props.canInteractWithMaps && comment.status === "visible" ? (
+            <button
+              type="button"
+              onClick={() => props.onToggleCommentLike(comment.id, !comment.liked)}
+              aria-label={comment.liked ? "Unlike comment" : "Like comment"}
+              aria-pressed={comment.liked}
+              className={`inline-flex items-center gap-2 rounded-full text-[13px] font-bold transition ${comment.liked ? "text-[#77f0be]" : "text-[#d6e4ed] hover:text-white"}`}
+            >
+              <Heart size={depth === "root" ? 18 : 16} fill={comment.liked ? "currentColor" : "none"} />
+              {comment.likeCount.toLocaleString()}
             </button>
           ) : null}
           {depth === "root" && props.canInteractWithMaps && comment.status === "visible" ? (
@@ -796,7 +811,7 @@ function CommentThread({ comment, depth, ...props }: Parameters<typeof MapCommen
 export function MapPickerModal({
   canUploadCustomMaps,
   hasMapSearch,
-  lobbyConfig,
+  partyConfig,
   mapScope,
   mapScopeLabels,
   mapSearchInput,
@@ -812,7 +827,7 @@ export function MapPickerModal({
 }: {
   canUploadCustomMaps: boolean;
   hasMapSearch: boolean;
-  lobbyConfig: MatchConfig;
+  partyConfig: MatchConfig;
   mapScope: MapScope;
   mapScopeLabels: MapScopeLabel[];
   mapSearchInput: string;
@@ -851,7 +866,7 @@ export function MapPickerModal({
             <div className="mt-5 grid max-h-[56vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
               {readyMaps.map((item) => (
                 <div key={item.id} className="overflow-hidden rounded-2xl">
-                  <MapCard item={item} mode="select" selected={item.id === lobbyConfig.mapId} thumbnailURL={thumbnailURL} onSelect={selectMapForParty} />
+                  <MapCard item={item} mode="select" selected={item.id === partyConfig.mapId} thumbnailURL={thumbnailURL} onSelect={selectMapForParty} />
                 </div>
               ))}
             </div>

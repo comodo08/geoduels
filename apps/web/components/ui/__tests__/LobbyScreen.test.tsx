@@ -182,10 +182,10 @@ describe('LobbyScreen', () => {
 
   it('replaces the tabbed lobby content when an invite lobby is active', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'ready',
         snapshot: {
-          id: 'lobby-1',
+          id: 'party-1',
           inviteCode: 'ABCD12',
           ownerUserId: 'self',
           state: 'open',
@@ -217,7 +217,7 @@ describe('LobbyScreen', () => {
 
   it('keeps lobby route intent on a lobby loading surface before the snapshot arrives', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'connecting',
         snapshot: null,
         inviteCode: 'ABCD12',
@@ -235,12 +235,12 @@ describe('LobbyScreen', () => {
     expect(screen.queryByRole('button', { name: 'TOP' })).not.toBeInTheDocument();
   });
 
-  it('disables private lobby start and marks players outside the lobby', () => {
+  it('disables party start and marks players outside the party', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'ready',
         snapshot: {
-          id: 'lobby-1',
+          id: 'party-1',
           inviteCode: 'ABCD12',
           ownerUserId: 'self',
           state: 'open',
@@ -276,10 +276,10 @@ describe('LobbyScreen', () => {
 
   it('offers reconnect only to players in the active match roster', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'ready',
         snapshot: {
-          id: 'lobby-1',
+          id: 'party-1',
           inviteCode: 'ABCD12',
           ownerUserId: 'opponent',
           state: 'in_match',
@@ -305,10 +305,10 @@ describe('LobbyScreen', () => {
 
   it('keeps late lobby members out of the active game', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'ready',
         snapshot: {
-          id: 'lobby-1',
+          id: 'party-1',
           inviteCode: 'ABCD12',
           ownerUserId: 'opponent',
           state: 'in_match',
@@ -333,13 +333,13 @@ describe('LobbyScreen', () => {
   });
 
   it('opens invite lobby choices and joins with a typed code', () => {
-    const joinInviteLobby = vi.fn(async () => true);
-    renderLobbyScreen({ joinInviteLobby });
+    const joinParty = vi.fn(async () => true);
+    renderLobbyScreen({ joinParty });
 
     expect(screen.queryByRole('button', { name: /Private Party/i })).not.toBeInTheDocument();
 
     cleanup();
-    renderLobbyScreen({ contentRoute: 'friends', joinInviteLobby });
+    renderLobbyScreen({ contentRoute: 'friends', joinParty });
 
     expect(screen.getByText('CUSTOM')).toBeInTheDocument();
     expect(screen.getByText('Create a party or join your friend')).toBeInTheDocument();
@@ -353,12 +353,12 @@ describe('LobbyScreen', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Join' }));
 
-    expect(joinInviteLobby).toHaveBeenCalledWith('ABCD12');
+    expect(joinParty).toHaveBeenCalledWith('ABCD12');
   });
 
-  it('shows private lobby lookup errors outside the active lobby panel', () => {
+  it('shows party lookup errors outside the active party panel', () => {
     renderLobbyScreen({
-      privateLobby: {
+      party: {
         status: 'idle',
         snapshot: null,
         inviteCode: 'BAD123',

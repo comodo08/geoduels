@@ -10,18 +10,18 @@ import (
 	"strings"
 )
 
-func decodeMapRows(source io.Reader) ([]mapRow, string, int, error) {
-	b, err := io.ReadAll(source)
+func decodeMapRows(source io.Reader, maxLocations int) ([]mapRow, string, int, error) {
+	hasher := sha256.New()
+	decoder := json.NewDecoder(io.TeeReader(source, hasher))
+	raw, err := decodeRawMapLocations(decoder, maxLocations)
 	if err != nil {
 		return nil, "", 0, err
 	}
-	sum := sha256.Sum256(b)
-	raw, err := parseRawMapLocations(b)
-	if err != nil {
+	var trailing any
+	if err := decoder.Decode(&trailing); err != nil && !errors.Is(err, io.EOF) {
 		return nil, "", 0, err
-	}
-	if len(raw) > maxMapLocations {
-		return nil, "", 0, fmt.Errorf("map limit is %d locations", maxMapLocations)
+	} else if err == nil {
+		return nil, "", 0, errors.New("map JSON must contain one top-level value")
 	}
 
 	out := make([]mapRow, 0, len(raw))
@@ -65,9 +65,22 @@ func decodeMapRows(source io.Reader) ([]mapRow, string, int, error) {
 			}
 			pano = &panoID
 		}
-		out = append(out, mapRow{Lat: *row.Lat, Lng: *row.Lng, Country: country, PanoID: pano, Heading: row.Heading, Pitch: row.Pitch, RandKey: stableRand(*row.Lat, *row.Lng)})
+		parsed := compactMapRow(*row.Lat, *row.Lng)
+		parsed.Country = country
+		parsed.PanoID = pano
+		parsed.Heading = row.Heading
+		parsed.Pitch = row.Pitch
+		if row.Heading != nil {
+			value := compactAngle(*row.Heading, false)
+			parsed.HeadingCDeg = &value
+		}
+		if row.Pitch != nil {
+			value := compactAngle(*row.Pitch, true)
+			parsed.PitchCDeg = &value
+		}
+		out = append(out, parsed)
 	}
-	return out, hex.EncodeToString(sum[:]), rejected, nil
+	return out, hex.EncodeToString(hasher.Sum(nil)), rejected, nil
 }
 
 type rawMapLocation struct {
@@ -83,22 +96,85 @@ type rawMapLocation struct {
 	} `json:"extra"`
 }
 
-func parseRawMapLocations(b []byte) ([]rawMapLocation, error) {
-	var rows []rawMapLocation
-	if err := json.Unmarshal(b, &rows); err == nil {
-		return rows, nil
-	}
-
-	var envelope struct {
-		CustomCoordinates []rawMapLocation `json:"customCoordinates"`
-	}
-	if err := json.Unmarshal(b, &envelope); err != nil {
+func decodeRawMapLocations(decoder *json.Decoder, maxLocations int) ([]rawMapLocation, error) {
+	token, err := decoder.Token()
+	if err != nil {
 		return nil, err
 	}
-	if envelope.CustomCoordinates == nil {
+	delim, ok := token.(json.Delim)
+	if !ok {
 		return nil, errors.New("map JSON must be an array or include customCoordinates")
 	}
-	return envelope.CustomCoordinates, nil
+	switch delim {
+	case '[':
+		return decodeRawMapArray(decoder, maxLocations)
+	case '{':
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return nil, err
+			}
+			key, _ := keyToken.(string)
+			if key != "customCoordinates" {
+				var discard json.RawMessage
+				if err := decoder.Decode(&discard); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			arrayToken, err := decoder.Token()
+			if err != nil {
+				return nil, err
+			}
+			if arrayToken != json.Delim('[') {
+				return nil, errors.New("customCoordinates must be an array")
+			}
+			rows, err := decodeRawMapArray(decoder, maxLocations)
+			if err != nil {
+				return nil, err
+			}
+			for decoder.More() {
+				if _, err := decoder.Token(); err != nil {
+					return nil, err
+				}
+				var discard json.RawMessage
+				if err := decoder.Decode(&discard); err != nil {
+					return nil, err
+				}
+			}
+			if _, err := decoder.Token(); err != nil {
+				return nil, err
+			}
+			return rows, nil
+		}
+		if _, err := decoder.Token(); err != nil {
+			return nil, err
+		}
+		return nil, errors.New("map JSON must include customCoordinates")
+	default:
+		return nil, errors.New("map JSON must be an array or include customCoordinates")
+	}
+}
+
+func decodeRawMapArray(decoder *json.Decoder, maxLocations int) ([]rawMapLocation, error) {
+	if maxLocations <= 0 || maxLocations > absoluteMaxMapLocations {
+		maxLocations = absoluteMaxMapLocations
+	}
+	rows := make([]rawMapLocation, 0, 4096)
+	for decoder.More() {
+		if len(rows) >= maxLocations {
+			return nil, fmt.Errorf("map limit is %d locations", maxLocations)
+		}
+		var row rawMapLocation
+		if err := decoder.Decode(&row); err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func normalizeMapVisibility(v string) string {

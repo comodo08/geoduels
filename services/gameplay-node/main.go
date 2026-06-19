@@ -504,20 +504,23 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 	}
 	g.mu.Unlock()
 
-	if snap.Mode == contracts.ModeDuel {
-		if err := g.persist.RecordMatchResult(*snap); err != nil {
-			log.Printf("record match result failed: %v", err)
-		}
-	}
 	if err := g.persist.RecordRuntimeMatch(matchID, string(contracts.MatchEnded), g.nodeEpoch, true); err != nil {
 		log.Printf("record runtime match failed: %v", err)
 	}
 	if err := g.persist.CompleteMatchSession(matchID); err != nil {
 		log.Printf("complete match session failed: %v", err)
 	}
+	matchPersisted := false
 	if b, err := json.Marshal(snap); err == nil {
 		if err := g.persist.RecordFinalMatchSnapshot(matchID, b); err != nil {
 			log.Printf("record final snapshot failed: %v", err)
+		} else {
+			matchPersisted = true
+		}
+	}
+	if snap.Mode == contracts.ModeDuel && matchPersisted {
+		if err := g.persist.RecordMatchResult(*snap); err != nil {
+			log.Printf("record match result failed: %v", err)
 		}
 	}
 	g.clearQueuedMatchArtifacts(players)

@@ -130,13 +130,14 @@ export default function EndMatchOverlay({
     if (!playerId) return <span className="text-white/35">-</span>;
     const player = round.players[playerId];
     if (!player) return <span className="text-white/35">-</span>;
+    const guessTime = formatGuessTime(player.guessMs);
     return (
-      <div className={highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}>
-        <p>{player.score.toLocaleString()}</p>
-        {formatGuessTime(player.guessMs) ? (
-          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[#8caab0]">
-            {formatGuessTime(player.guessMs)}
-          </p>
+      <div className={`flex items-baseline gap-2 ${highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}`}>
+        <span>{player.score.toLocaleString()}</span>
+        {guessTime ? (
+          <span className="text-[11px] font-bold tracking-[0.1em] text-[#8caab0]">
+            {guessTime}
+          </span>
         ) : null}
       </div>
     );
@@ -152,10 +153,22 @@ export default function EndMatchOverlay({
         ? round.teams?.[side.id]?.hpAfterRound
         : round.players[side.id]?.hpAfterRound;
     if (hp === undefined) return <span className="text-white/35">-</span>;
+    const guessPlayerId =
+      side.participant.kind === "team"
+        ? round.teams?.[side.id]?.representativeUserId
+        : side.id;
+    const guessTime = formatGuessTime(
+      guessPlayerId ? round.players[guessPlayerId]?.guessMs : undefined,
+    );
     return (
-      <span className={highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}>
-        {hp.toLocaleString()} HP
-      </span>
+      <div className={`flex items-baseline gap-2 ${highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}`}>
+        <span>{hp.toLocaleString()} HP</span>
+        {guessTime ? (
+          <span className="text-[11px] font-bold tracking-[0.1em] text-[#8caab0]">
+            {guessTime}
+          </span>
+        ) : null}
+      </div>
     );
   }
 

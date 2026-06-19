@@ -183,7 +183,7 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 			return Identity{}, err
 		}
 	}
-	if err := recordUserIdentityHistory(ctx, tx, userID, provider, providerUserID, email, providerName, avatarURL); err != nil {
+	if err := recordUserIdentityHistory(ctx, tx, userID, provider, providerUserID, email, providerName); err != nil {
 		return Identity{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -341,7 +341,7 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 	`, linkUserID, provider, providerUserID, email, providerName, nullable(avatarURL)); err != nil {
 		return Identity{}, err
 	}
-	if err := recordUserIdentityHistory(ctx, tx, linkUserID, provider, providerUserID, email, providerName, avatarURL); err != nil {
+	if err := recordUserIdentityHistory(ctx, tx, linkUserID, provider, providerUserID, email, providerName); err != nil {
 		return Identity{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -423,21 +423,16 @@ func (s *pgStore) IsProviderIdentityBanned(provider, providerUserID string) (boo
 	return true, reason, nil
 }
 
-func recordUserIdentityHistory(ctx context.Context, tx pgx.Tx, userID, provider, providerUserID, email, providerName, avatarURL string) error {
+func recordUserIdentityHistory(ctx context.Context, tx pgx.Tx, userID, provider, providerUserID, email, providerName string) error {
 	_, err := tx.Exec(ctx, `
-		insert into user_identity_history(user_id, provider, provider_user_id, email, provider_name, avatar_url, first_seen_at, last_seen_at, deleted_at)
-		values($1, $2, $3, $4, $5, $6, now(), now(), null)
+		insert into user_identity_history(user_id, provider, provider_user_id, email, provider_name, first_seen_at, last_seen_at, deleted_at)
+		values($1, $2, $3, $4, $5, now(), now(), null)
 		on conflict (user_id, provider, provider_user_id) do update set
 			email = excluded.email,
 			provider_name = excluded.provider_name,
-			avatar_url = case
-				when excluded.avatar_url is null then user_identity_history.avatar_url
-				when excluded.avatar_url = '' then user_identity_history.avatar_url
-				else excluded.avatar_url
-			end,
 			last_seen_at = now(),
 			deleted_at = null
-	`, userID, provider, providerUserID, email, providerName, nullable(avatarURL))
+	`, userID, provider, providerUserID, email, providerName)
 	return err
 }
 

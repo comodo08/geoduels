@@ -211,6 +211,16 @@ type ModerationSettings struct {
 	DiscordWebhookURL string `json:"discordWebhookUrl"`
 }
 
+type DiscordIntegrationSettings struct {
+	GuildID                  string   `json:"guildId"`
+	JoinsChannelID           string   `json:"joinsChannelId"`
+	Elo1000RoleID            string   `json:"elo1000RoleId"`
+	Elo1500RoleID            string   `json:"elo1500RoleId"`
+	Elo2000RoleID            string   `json:"elo2000RoleId"`
+	ManagedRoleIDs           []string `json:"managedRoleIds,omitempty"`
+	ReconcileIntervalMinutes int      `json:"reconcileIntervalMinutes"`
+}
+
 type RankedSeasonSettings struct {
 	ActiveSeasonID  string     `json:"activeSeasonId"`
 	MonthlyResetDay int        `json:"monthlyResetDay"`

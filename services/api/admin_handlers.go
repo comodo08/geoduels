@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -468,6 +469,51 @@ func (a *api) adminDemoteModerator(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *api) adminSetMapCreatorTier(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Tier string `json:"tier"`
+	}
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	var tier *int
+	switch strings.ToLower(strings.TrimSpace(req.Tier)) {
+	case "auto":
+	case "base":
+		value := 0
+		tier = &value
+	case "trusted":
+		value := 1
+		tier = &value
+	case "established":
+		value := 2
+		tier = &value
+	default:
+		http.Error(w, "tier must be auto, base, trusted, or established", http.StatusBadRequest)
+		return
+	}
+	repository, ok := a.store.(persistence.MapCreatorAdminRepository)
+	if !ok {
+		http.Error(w, "map creator administration unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	quota, err := repository.SetMapCreatorTierOverride(strings.TrimSpace(mux.Vars(r)["id"]), tier)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to update map creator tier", http.StatusInternalServerError)
+		return
+	}
+	writeJSONResponse(w, quota)
+}
+
 func (a *api) adminListRoles(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.adminIdentity(r); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -684,6 +730,78 @@ func (a *api) adminPutModerationSettings(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func (a *api) adminGetDiscordIntegrationSettings(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	settings, err := a.store.GetDiscordIntegrationSettings()
+	if err != nil {
+		http.Error(w, "discord integration settings unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func (a *api) adminPutDiscordIntegrationSettings(w http.ResponseWriter, r *http.Request) {
+	if _, err := a.adminIdentity(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var settings persistence.DiscordIntegrationSettings
+	if err := decodeJSONBody(r, &settings); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	for label, value := range map[string]string{
+		"guild id":         settings.GuildID,
+		"joins channel id": settings.JoinsChannelID,
+		"1k role id":       settings.Elo1000RoleID,
+		"1.5k role id":     settings.Elo1500RoleID,
+		"2k role id":       settings.Elo2000RoleID,
+	} {
+		if err := validateOptionalDiscordSnowflake(label, value); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if settings.ReconcileIntervalMinutes < 1 || settings.ReconcileIntervalMinutes > 1440 {
+		http.Error(w, "reconcile interval must be between 1 and 1440 minutes", http.StatusBadRequest)
+		return
+	}
+	// Managed role history is server-owned so old configured roles can be
+	// removed safely after an administrator changes a role ID.
+	settings.ManagedRoleIDs = nil
+	if err := a.store.SetDiscordIntegrationSettings(settings); err != nil {
+		http.Error(w, "failed to save discord integration settings", http.StatusInternalServerError)
+		return
+	}
+	saved, err := a.store.GetDiscordIntegrationSettings()
+	if err != nil {
+		http.Error(w, "discord integration settings unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(saved)
+}
+
+func validateOptionalDiscordSnowflake(label, raw string) error {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil
+	}
+	if len(value) < 17 || len(value) > 20 {
+		return fmt.Errorf("%s must be a Discord ID", label)
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return fmt.Errorf("%s must be a Discord ID", label)
+		}
+	}
+	return nil
 }
 
 func (a *api) adminGetRankedSeason(w http.ResponseWriter, r *http.Request) {

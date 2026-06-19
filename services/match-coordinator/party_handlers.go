@@ -21,6 +21,7 @@ import (
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/partyevents"
+	"geoduels/pkg/persistence"
 	"geoduels/pkg/sessionpolicy"
 )
 
@@ -253,6 +254,11 @@ func (q *matchCoordinator) updatePartySettings(w http.ResponseWriter, r *http.Re
 	}
 	snap, err = configStore.SetPartyConfig(snap.ID, req.Config)
 	if err != nil {
+		if errors.Is(err, persistence.ErrPartyMapUnavailable) {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		observability.Log("error", "update party settings save failed", map[string]any{"userId": userID, "partyId": snap.ID, "mapId": req.Config.MapID, "error": err.Error()})
 		http.Error(w, "party settings unavailable", http.StatusBadGateway)
 		return
 	}

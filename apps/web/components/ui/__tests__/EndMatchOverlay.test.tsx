@@ -53,6 +53,7 @@ function createProps(overrides: Partial<Props> = {}): Props {
             distanceKm: 10,
             score: 4500,
             hpAfterRound: 5000,
+            guessMs: 2500,
           },
           opponent: {
             userId: "opponent",
@@ -61,6 +62,7 @@ function createProps(overrides: Partial<Props> = {}): Props {
             distanceKm: 500,
             score: 1000,
             hpAfterRound: 0,
+            guessMs: 7000,
           },
         },
       },
@@ -85,6 +87,8 @@ describe("EndMatchOverlay breakdown", () => {
 
     expect(screen.getByText("5,000 HP")).toBeInTheDocument();
     expect(screen.getByText("0 HP")).toBeInTheDocument();
+    expect(screen.getByText("2.5s")).toHaveClass("text-[#8caab0]");
+    expect(screen.getByText("7.0s")).toHaveClass("text-[#8caab0]");
     expect(screen.queryByText("4,500")).not.toBeInTheDocument();
     expect(screen.queryByText("Total")).not.toBeInTheDocument();
   });
@@ -136,6 +140,7 @@ describe("EndMatchOverlay breakdown", () => {
             teams: {
               a: {
                 teamId: "a",
+                representativeUserId: "self",
                 lat: 1,
                 lng: 1,
                 distanceKm: 10,
@@ -144,6 +149,7 @@ describe("EndMatchOverlay breakdown", () => {
               },
               b: {
                 teamId: "b",
+                representativeUserId: "opponent",
                 lat: 2,
                 lng: 2,
                 distanceKm: 500,
@@ -159,6 +165,8 @@ describe("EndMatchOverlay breakdown", () => {
 
     expect(screen.getByText("6,000 HP")).toBeInTheDocument();
     expect(screen.getByText("3,200 HP")).toBeInTheDocument();
+    expect(screen.getByText("2.5s")).toHaveClass("text-[#8caab0]");
+    expect(screen.getByText("7.0s")).toHaveClass("text-[#8caab0]");
     expect(screen.queryByText("1,111 HP")).not.toBeInTheDocument();
     expect(screen.queryByText("2,222 HP")).not.toBeInTheDocument();
   });
@@ -198,6 +206,7 @@ describe("EndMatchOverlay breakdown", () => {
     openBreakdown();
 
     expect(screen.getAllByText("4,500").length).toBeGreaterThan(0);
+    expect(screen.getByText("2.5s")).toHaveClass("text-[#8caab0]");
     expect(screen.getByText("Total")).toBeInTheDocument();
     expect(screen.queryByText("5,000 HP")).not.toBeInTheDocument();
   });

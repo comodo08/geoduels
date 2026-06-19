@@ -5,16 +5,16 @@ import type { MatchConfig } from "../../matchmaking/lib/queue-client";
 import type { PlayerBadgeInfo } from "../../../components/ui/PlayerBadge";
 
 export type PartyMode = "duel" | "team_duel" | "free_for_all";
-export type LobbyTeamId = "a" | "b";
+export type PartyTeamId = "a" | "b";
 
-export type LobbyMember = {
+export type PartyMember = {
   userId: string;
   displayName: string;
   avatarUrl?: string;
   isGuest?: boolean;
   isAdmin?: boolean;
   selectedBadge?: PlayerBadgeInfo | null;
-  teamId?: LobbyTeamId | "";
+  teamId?: PartyTeamId | "";
   role: string;
   ready?: boolean;
   connected?: boolean;
@@ -22,7 +22,7 @@ export type LobbyMember = {
   inActiveMatch?: boolean;
 };
 
-export type LobbySnapshot = {
+export type PartySnapshot = {
   id: string;
   inviteCode: string;
   ownerUserId: string;
@@ -35,23 +35,23 @@ export type LobbySnapshot = {
   activeMatchId?: string;
   lastMatchId?: string;
   startedMatchId?: string;
-  members: LobbyMember[];
+  members: PartyMember[];
 };
 
-export type LobbyPatch = {
+export type PartyPatch = {
   revision: number;
-  state?: LobbySnapshot["state"];
+  state?: PartySnapshot["state"];
   ownerUserId?: string;
   mode?: PartyMode;
   config?: MatchConfig;
   activeMatchId?: string;
   lastMatchId?: string;
   startedMatchId?: string;
-  upsertMembers?: LobbyMember[];
+  upsertMembers?: PartyMember[];
   removeMemberIds?: string[];
 };
 
-export type LobbyAssignment = {
+export type PartyAssignment = {
   matchId: string;
   mode?: string;
   config?: MatchConfig;
@@ -62,26 +62,26 @@ export type LobbyAssignment = {
   sourcePartyInviteCode?: string;
 };
 
-export type LobbyEvent =
-  | { type: "party_snapshot"; lobby: LobbySnapshot }
-  | { type: "party_patch"; patch: LobbyPatch }
-  | { type: "match_assigned"; assignment: LobbyAssignment }
+export type PartyEvent =
+  | { type: "party_snapshot"; party: PartySnapshot }
+  | { type: "party_patch"; patch: PartyPatch }
+  | { type: "match_assigned"; assignment: PartyAssignment }
   | { type: "party_error"; message: string };
 
 function authHeaders(accessToken: string) {
   return { Authorization: `Bearer ${accessToken}` };
 }
 
-function lobbyHTTPBase(config: RuntimeConfig) {
+function partyHTTPBase(config: RuntimeConfig) {
   return normalizeHTTPBase(config.queueURL).replace(/\/$/, "");
 }
 
-function lobbyWSTarget(config: RuntimeConfig, lobbyId: string, accessToken: string) {
-  return `${normalizeWSBase(config.queueURL).replace(/\/$/, "")}/parties/${encodeURIComponent(lobbyId)}/ws?accessToken=${encodeURIComponent(accessToken)}`;
+function partyWSTarget(config: RuntimeConfig, partyId: string, accessToken: string) {
+  return `${normalizeWSBase(config.queueURL).replace(/\/$/, "")}/parties/${encodeURIComponent(partyId)}/ws?accessToken=${encodeURIComponent(accessToken)}`;
 }
 
-export async function createLobby(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel", matchConfig?: MatchConfig): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties`, {
+export async function createParty(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel", matchConfig?: MatchConfig): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ mode, config: matchConfig }),
@@ -90,8 +90,8 @@ export async function createLobby(config: RuntimeConfig, accessToken: string, mo
   return resp.json();
 }
 
-export async function updateLobbySettings(config: RuntimeConfig, lobbyId: string, accessToken: string, matchConfig: MatchConfig, mode?: PartyMode): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/settings`, {
+export async function updatePartySettings(config: RuntimeConfig, partyId: string, accessToken: string, matchConfig: MatchConfig, mode?: PartyMode): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/settings`, {
     method: "PATCH",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ config: matchConfig, mode }),
@@ -100,8 +100,8 @@ export async function updateLobbySettings(config: RuntimeConfig, lobbyId: string
   return resp.json();
 }
 
-export async function updateLobbyTeam(config: RuntimeConfig, lobbyId: string, accessToken: string, teamId: LobbyTeamId): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/team`, {
+export async function updatePartyTeam(config: RuntimeConfig, partyId: string, accessToken: string, teamId: PartyTeamId): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/team`, {
     method: "PATCH",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ teamId }),
@@ -110,40 +110,40 @@ export async function updateLobbyTeam(config: RuntimeConfig, lobbyId: string, ac
   return resp.json();
 }
 
-export function applyLobbyPatch(lobby: LobbySnapshot | null, patch: LobbyPatch): LobbySnapshot | null {
-  if (!lobby) return lobby;
-  const next: LobbySnapshot = {
-    ...lobby,
-    state: patch.state ?? lobby.state,
-    ownerUserId: patch.ownerUserId ?? lobby.ownerUserId,
-    mode: patch.mode ?? lobby.mode,
-    config: patch.config ?? lobby.config,
-    activeMatchId: patch.activeMatchId ?? lobby.activeMatchId,
-    lastMatchId: patch.lastMatchId ?? lobby.lastMatchId,
-    startedMatchId: patch.startedMatchId ?? lobby.startedMatchId,
-    members: lobby.members,
+export function applyPartyPatch(party: PartySnapshot | null, patch: PartyPatch): PartySnapshot | null {
+  if (!party) return party;
+  const next: PartySnapshot = {
+    ...party,
+    state: patch.state ?? party.state,
+    ownerUserId: patch.ownerUserId ?? party.ownerUserId,
+    mode: patch.mode ?? party.mode,
+    config: patch.config ?? party.config,
+    activeMatchId: patch.activeMatchId ?? party.activeMatchId,
+    lastMatchId: patch.lastMatchId ?? party.lastMatchId,
+    startedMatchId: patch.startedMatchId ?? party.startedMatchId,
+    members: party.members,
   };
   if (patch.upsertMembers?.length || patch.removeMemberIds?.length) {
     const removed = new Set(patch.removeMemberIds || []);
     const members = new Map(next.members.filter((member) => !removed.has(member.userId)).map((member) => [member.userId, member]));
     for (const member of patch.upsertMembers || []) {
-      members.set(member.userId, { ...(members.get(member.userId) || {} as LobbyMember), ...member });
+      members.set(member.userId, { ...(members.get(member.userId) || {} as PartyMember), ...member });
     }
     next.members = Array.from(members.values());
   }
   return next;
 }
 
-export async function fetchLobby(config: RuntimeConfig, code: string, signal?: AbortSignal): Promise<LobbySnapshot | null> {
-  const target = `${lobbyHTTPBase(config)}/parties/${encodeURIComponent(code)}`;
+export async function fetchParty(config: RuntimeConfig, code: string, signal?: AbortSignal): Promise<PartySnapshot | null> {
+  const target = `${partyHTTPBase(config)}/parties/${encodeURIComponent(code)}`;
   const resp = signal ? await fetch(target, { signal }) : await fetch(target);
   if (resp.status === 404) return null;
   if (!resp.ok) throw new Error("Party unavailable");
   return resp.json();
 }
 
-export async function touchLobbyPresence(config: RuntimeConfig, lobbyId: string, accessToken: string, signal?: AbortSignal): Promise<void> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/presence`, {
+export async function touchPartyPresence(config: RuntimeConfig, partyId: string, accessToken: string, signal?: AbortSignal): Promise<void> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/presence`, {
     method: "POST",
     headers: authHeaders(accessToken),
     signal,
@@ -151,8 +151,8 @@ export async function touchLobbyPresence(config: RuntimeConfig, lobbyId: string,
   if (!resp.ok) throw new Error("Party presence unavailable");
 }
 
-export async function joinLobby(config: RuntimeConfig, code: string, accessToken: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(code)}/join`, {
+export async function joinParty(config: RuntimeConfig, code: string, accessToken: string): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(code)}/join`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
@@ -160,8 +160,8 @@ export async function joinLobby(config: RuntimeConfig, code: string, accessToken
   return resp.json();
 }
 
-export async function leaveLobby(config: RuntimeConfig, lobbyId: string, accessToken: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/leave`, {
+export async function leaveParty(config: RuntimeConfig, partyId: string, accessToken: string): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/leave`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
@@ -169,8 +169,8 @@ export async function leaveLobby(config: RuntimeConfig, lobbyId: string, accessT
   return resp.json();
 }
 
-export async function kickLobbyMember(config: RuntimeConfig, lobbyId: string, accessToken: string, userId: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/kick`, {
+export async function kickPartyMember(config: RuntimeConfig, partyId: string, accessToken: string, userId: string): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/kick`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ userId }),
@@ -179,8 +179,8 @@ export async function kickLobbyMember(config: RuntimeConfig, lobbyId: string, ac
   return resp.json();
 }
 
-export async function transferLobbyOwner(config: RuntimeConfig, lobbyId: string, accessToken: string, userId: string): Promise<LobbySnapshot> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/transfer-owner`, {
+export async function transferPartyOwner(config: RuntimeConfig, partyId: string, accessToken: string, userId: string): Promise<PartySnapshot> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/transfer-owner`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ userId }),
@@ -189,8 +189,8 @@ export async function transferLobbyOwner(config: RuntimeConfig, lobbyId: string,
   return resp.json();
 }
 
-export async function startLobby(config: RuntimeConfig, lobbyId: string, accessToken: string): Promise<LobbyAssignment> {
-  const resp = await fetch(`${lobbyHTTPBase(config)}/parties/${encodeURIComponent(lobbyId)}/start`, {
+export async function startParty(config: RuntimeConfig, partyId: string, accessToken: string): Promise<PartyAssignment> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/start`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
@@ -199,14 +199,14 @@ export async function startLobby(config: RuntimeConfig, lobbyId: string, accessT
   return data.assignment;
 }
 
-export async function streamLobby(
+export async function streamParty(
   config: RuntimeConfig,
   session: AuthSessionSnapshot,
-  lobbyId: string,
+  partyId: string,
   signal: AbortSignal,
-  onEvent: (event: LobbyEvent) => void,
+  onEvent: (event: PartyEvent) => void,
 ) {
-  const target = lobbyWSTarget(config, lobbyId, session.accessToken);
+  const target = partyWSTarget(config, partyId, session.accessToken);
   await new Promise<void>((resolve, reject) => {
     let settled = false;
     const ws = new WebSocket(target);
@@ -236,9 +236,9 @@ export async function streamLobby(
         return;
       }
       const payload = msg?.payload ?? {};
-      if (msg?.type === "party_snapshot") onEvent({ type: "party_snapshot", lobby: payload as LobbySnapshot });
-      if (msg?.type === "party_patch") onEvent({ type: "party_patch", patch: payload as LobbyPatch });
-      if (msg?.type === "match_assigned") onEvent({ type: "match_assigned", assignment: payload as LobbyAssignment });
+      if (msg?.type === "party_snapshot") onEvent({ type: "party_snapshot", party: payload as PartySnapshot });
+      if (msg?.type === "party_patch") onEvent({ type: "party_patch", patch: payload as PartyPatch });
+      if (msg?.type === "match_assigned") onEvent({ type: "match_assigned", assignment: payload as PartyAssignment });
       if (msg?.type === "party_error") onEvent({ type: "party_error", message: payload?.message || "Party unavailable" });
     };
   });

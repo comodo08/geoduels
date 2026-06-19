@@ -206,10 +206,10 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 				h.match_id,
 				h.ended_at,
 				h.winner_user_id,
-				h.snapshot_json,
 				opponent.user_id as opponent_user_id,
 				cheater.mmr as cheater_mmr,
-				coalesce(cheater.rating_rd, $3) as cheater_rd
+				coalesce(cheater.rating_rd, $3) as cheater_rd,
+				opponent.final_ranked_delta as original_delta
 			from match_history h
 			join match_players cheater on cheater.match_id = h.match_id and cheater.user_id = $1
 			join match_players opponent on opponent.match_id = h.match_id and opponent.user_id <> $1
@@ -219,7 +219,7 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 			where h.mode = $2
 				and h.winner_user_id = $1
 				and ($4::timestamptz is null or h.ended_at >= $4)
-				and coalesce((h.snapshot_json->>'unranked')::boolean, false) = false
+				and h.ranked
 				and l.id is null
 		)
 		select
@@ -227,12 +227,9 @@ func issueCurrentMMRRefundsForCheater(ctx context.Context, tx pgx.Tx, cheaterUse
 			opponent_user_id,
 			cheater_mmr,
 			cheater_rd,
-			case
-				when winner_user_id = $1 then nullif(snapshot_json->'ratingPreview'->(opponent_user_id::text)->>'lose', '')::int
-				else 0
-			end as original_delta
+			coalesce(original_delta, 0)
 		from candidate_matches
-		where snapshot_json->'ratingPreview' ? opponent_user_id
+		where original_delta is not null
 		order by ended_at asc, match_id asc
 	`, cheaterUserID, modeDuel, initialRatingRD, sinceArg)
 	if err != nil {
@@ -520,7 +517,7 @@ func (s *pgStore) autoCheatBanReason(ctx context.Context, userID string) (string
 		select score, guess_ms, evidence
 		from ranked_guess_events
 		where user_id = $1
-		order by occurred_at desc, id desc
+		order by occurred_at desc, round_number desc
 		limit 20
 	`, userID)
 	if err != nil {

@@ -467,10 +467,10 @@ func (s *pgStore) listModerationCaseMatches(ctx context.Context, caseID int64, t
 			h.started_at,
 			h.ended_at,
 			coalesce(h.winner_user_id, ''),
-			coalesce(jsonb_array_length(coalesce(h.snapshot_json->'roundResults', '[]'::jsonb)), 0),
+			coalesce(h.round_count, 0),
 			coalesce(p.user_id, ''),
 			coalesce(nullif(p.display_name, ''), p.user_id, ''),
-			coalesce(nullif(h.snapshot_json #>> array['players', p.user_id, 'totalScore'], '')::int, 0),
+			coalesce(p.total_score, 0),
 			coalesce(p.hp, 0)
 		from case_matches cm
 		left join match_history h on h.match_id = cm.match_id

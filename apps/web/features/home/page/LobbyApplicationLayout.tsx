@@ -42,7 +42,7 @@ export function LobbyApplicationLayout({ children }: { children: ReactNode }) {
       : "";
   const prevMatchIdRef = useRef("");
 
-  const handlePrivateLobbyEntered = useCallback(
+  const handlePartyEntered = useCallback(
     (inviteCode: string) => {
       const nextPath = `/party/${encodeURIComponent(inviteCode)}`;
       if (router.asPath.split("?")[0] !== nextPath) {
@@ -51,15 +51,15 @@ export function LobbyApplicationLayout({ children }: { children: ReactNode }) {
     },
     [router],
   );
-  const handlePrivateLobbyLeft = useCallback(() => {
+  const handlePartyLeft = useCallback(() => {
     void router.push("/");
   }, [router]);
 
   const model = useHomeModel({
     routeContext: "home",
-    lobbyInviteCode: routedPartyCode,
-    onPrivateLobbyEntered: handlePrivateLobbyEntered,
-    onPrivateLobbyLeft: handlePrivateLobbyLeft,
+    partyInviteCode: routedPartyCode,
+    onPartyEntered: handlePartyEntered,
+    onPartyLeft: handlePartyLeft,
   });
 
   useEffect(

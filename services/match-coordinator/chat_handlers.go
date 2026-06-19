@@ -101,6 +101,13 @@ func (q *matchCoordinator) chatWS(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if err := q.persist.RecordChatMessage(scope.ConversationID, scope.Kind, scope.ID, message); err != nil {
+				observability.Log("error", "chat message persistence failed", map[string]any{
+					"conversationId": scope.ConversationID,
+					"scopeKind":      scope.Kind,
+					"scopeId":        scope.ID,
+					"userId":         claims.Sub,
+					"error":          err.Error(),
+				})
 				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "chat unavailable"})
 				continue
 			}

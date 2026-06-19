@@ -63,6 +63,14 @@ func (s *pgStore) CreateModerationReport(params CreateModerationReportParams) (M
 		}
 		return ModerationReportCreated{}, err
 	}
+	if _, err := tx.Exec(ctx, `
+		update match_history
+		set replay_expires_at = null
+		where match_id = $1
+		  and (replay_zstd is not null or replay_json is not null)
+	`, params.MatchID); err != nil {
+		return ModerationReportCreated{}, err
+	}
 	volume, err := moderationReporterVolume(ctx, tx, params.ReporterUserID)
 	if err != nil {
 		return ModerationReportCreated{}, err
@@ -233,25 +241,11 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 	createdReporterIDs := []string{}
 	for i, reporter := range reporters {
 		matchID := newDebugMatchID(i + 1)
-		snapshot := map[string]any{
-			"matchId": matchID,
-			"mode":    "duel",
-			"state":   "ended",
-			"debug":   true,
-			"players": map[string]any{
-				params.ReportedUserID: map[string]any{"userId": params.ReportedUserID, "displayName": reportedName},
-				reporter.id:           map[string]any{"userId": reporter.id, "displayName": reporter.name},
-			},
-		}
-		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil {
-			return DebugModerationReportsResult{}, err
-		}
 		if _, err := tx.Exec(ctx, `
-			insert into match_history(match_id, mode, state, started_at, ended_at, snapshot_json)
-			values($1, 'duel', 'ended', now(), now(), $2::jsonb)
+			insert into match_history(match_id, mode, started_at, ended_at, ranked, source_kind, round_count)
+			values($1, 'duel', now(), now(), false, 'debug', 0)
 			on conflict (match_id) do nothing
-		`, matchID, string(rawSnapshot)); err != nil {
+		`, matchID); err != nil {
 			return DebugModerationReportsResult{}, err
 		}
 		for _, player := range []struct {

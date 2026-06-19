@@ -135,3 +135,17 @@ func TestNormalizeDiscordWebhookURL(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateOptionalDiscordSnowflake(t *testing.T) {
+	if err := validateOptionalDiscordSnowflake("guild id", "123456789012345678"); err != nil {
+		t.Fatalf("valid Discord ID rejected: %v", err)
+	}
+	if err := validateOptionalDiscordSnowflake("guild id", ""); err != nil {
+		t.Fatalf("empty optional Discord ID rejected: %v", err)
+	}
+	for _, value := range []string{"123", "12345678901234567x", "123456789012345678901"} {
+		if err := validateOptionalDiscordSnowflake("guild id", value); err == nil {
+			t.Fatalf("invalid Discord ID %q accepted", value)
+		}
+	}
+}

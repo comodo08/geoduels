@@ -15,6 +15,13 @@ import (
 	"geoduels/pkg/contracts"
 )
 
+var ErrPartyMapUnavailable = errors.New("selected map is not accessible or ready")
+
+const partyMapAccessiblePredicate = `map_key=$1
+	and archived_at is null
+	and status='ready'
+	and (owner_user_id is null or owner_user_id=$2 or published_at is not null or visibility='unlisted')`
+
 func (s *pgStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapScope string, ttl time.Duration) (contracts.PartySnapshot, error) {
 	ownerUserID = strings.TrimSpace(ownerUserID)
 	if ownerUserID == "" {
@@ -123,11 +130,11 @@ func (s *pgStore) SetPartyConfig(partyID string, cfg contracts.MatchConfig) (con
 		return contracts.PartySnapshot{}, err
 	}
 	var accessible bool
-	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where map_key=$1 and archived_at is null and status='ready' and (owner_user_id is null or owner_user_id=$2 or visibility='unlisted'))`, cfg.MapID, owner).Scan(&accessible); err != nil {
+	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where `+partyMapAccessiblePredicate+`)`, cfg.MapID, owner).Scan(&accessible); err != nil {
 		return contracts.PartySnapshot{}, err
 	}
 	if !accessible {
-		return contracts.PartySnapshot{}, errors.New("selected map is not accessible or ready")
+		return contracts.PartySnapshot{}, ErrPartyMapUnavailable
 	}
 	body, _ := json.Marshal(cfg)
 	if _, err := tx.Exec(ctx, `update parties set config_json=$2::jsonb, map_id=$3, updated_at=now() where id=$1`, partyID, string(body), cfg.MapID); err != nil {

@@ -325,10 +325,10 @@ func moderationGameplayEvidence(ctx context.Context, tx pgx.Tx, targetUserID str
 	var evidence10, evidence20 float64
 	if err := tx.QueryRow(ctx, `
 		with recent as (
-			select evidence, row_number() over (order by occurred_at desc, id desc) as rn
+			select evidence, row_number() over (order by occurred_at desc, round_number desc) as rn
 			from ranked_guess_events
 			where user_id = $1
-			order by occurred_at desc, id desc
+			order by occurred_at desc, round_number desc
 			limit 20
 		)
 		select

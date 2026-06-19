@@ -425,7 +425,7 @@ export function deriveHomeModel({
       changelogMarkdown,
       changelogSlug,
       changelogUpdatedAt,
-      privateLobby: {
+      party: {
         status: "idle",
         snapshot: null,
         inviteCode: "",

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { LeaderboardSummary } from "../../features/auth/controllers/session-controller";
-import type { LobbySnapshot as PartySnapshot, LobbyTeamId as PartyTeamId, PartyMode } from "../../features/lobby/lib/lobby-client";
-import type { LobbyRuntimeStatus as PartyRuntimeStatus } from "../../features/lobby/controllers/lobby-controller";
+import type { PartySnapshot, PartyTeamId, PartyMode } from "../../features/lobby/lib/party-client";
+import type { PartyRuntimeStatus } from "../../features/lobby/controllers/party-controller";
 import type { GameRuleset, MaintenanceStatus, MatchConfig } from "../../features/matchmaking/lib/queue-client";
 import {
   NAV_ITEMS,
@@ -24,11 +24,11 @@ import { PartyPanel } from "../../features/lobby/components/PartyPanel";
 import { LeaderboardPanel } from "../../features/lobby/components/LeaderboardPanel";
 import {
   DonateCard,
-  InviteLobbyCard,
+  InvitePartyCard,
   LegalFooter,
   NewsPanel,
   OnlineStatusCard,
-  PrivateLobbyErrorNotice,
+  PartyErrorNotice,
   SocialLinksCard,
 } from "../../features/lobby/components/LobbyShellPieces";
 import { MaintenanceBanner, MaintenanceOverlay } from "../../features/lobby/components/MaintenanceNotice";
@@ -43,7 +43,7 @@ export type { LobbyContentRoute } from "../../features/lobby/lib/lobby-ui";
 
 type PartyModal = "help" | "profile" | "invite" | "signin" | null;
 
-type PrivateLobbyView = {
+type PartyView = {
   status: PartyRuntimeStatus;
   snapshot: PartySnapshot | null;
   inviteCode: string;
@@ -77,15 +77,15 @@ type Props = {
   joinQueue: (rulesets?: GameRuleset[]) => void;
   startSingleplayer: (config?: MatchConfig) => void | Promise<string>;
   cancelQueue: () => void;
-  privateLobby?: PrivateLobbyView;
-  createInviteLobby?: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
-  joinInviteLobby?: (inviteCode?: string) => Promise<boolean>;
-  leavePrivateLobby?: () => Promise<void>;
-  kickLobbyMember?: (userId: string) => Promise<void>;
-  transferLobbyOwner?: (userId: string) => Promise<void>;
-  startPrivateLobby?: () => Promise<void>;
-  updatePrivateLobbySettings?: (config: MatchConfig, mode?: PartyMode) => Promise<void>;
-  switchPrivateLobbyTeam?: (teamId: PartyTeamId) => Promise<void>;
+  party?: PartyView;
+  createParty?: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;
+  joinParty?: (inviteCode?: string) => Promise<boolean>;
+  leaveParty?: () => Promise<void>;
+  kickPartyMember?: (userId: string) => Promise<void>;
+  transferPartyOwner?: (userId: string) => Promise<void>;
+  startParty?: () => Promise<void>;
+  updatePartySettings?: (config: MatchConfig, mode?: PartyMode) => Promise<void>;
+  switchPartyTeam?: (teamId: PartyTeamId) => Promise<void>;
   queueError: string;
   onlinePlayers: number;
   maintenance: MaintenanceStatus | null;
@@ -119,7 +119,7 @@ type Props = {
   onDeleteAccount?: () => Promise<void>;
 };
 
-const defaultPrivateLobby: PrivateLobbyView = {
+const defaultParty: PartyView = {
   status: "idle",
   snapshot: null,
   inviteCode: "",
@@ -208,15 +208,15 @@ export default function LobbyScreen({
   joinQueue,
   startSingleplayer,
   cancelQueue,
-  privateLobby = defaultPrivateLobby,
-  createInviteLobby = async () => false,
-  joinInviteLobby = async () => false,
-  leavePrivateLobby = async () => {},
-  kickLobbyMember = async () => { },
-  transferLobbyOwner = async () => { },
-  startPrivateLobby = async () => {},
-  updatePrivateLobbySettings = async () => {},
-  switchPrivateLobbyTeam = async () => {},
+  party = defaultParty,
+  createParty = async () => false,
+  joinParty = async () => false,
+  leaveParty = async () => {},
+  kickPartyMember = async () => { },
+  transferPartyOwner = async () => { },
+  startParty = async () => {},
+  updatePartySettings = async () => {},
+  switchPartyTeam = async () => {},
   queueError,
   googleClientId,
   discordClientId,
@@ -407,30 +407,30 @@ export default function LobbyScreen({
   const onlineStatusCard = <OnlineStatusCard onlinePlayers={onlinePlayers} />;
 
   const partyPanelState = usePartyPanelState({
-    privateLobby,
+    party,
     userId,
-    updateSettings: updatePrivateLobbySettings,
+    updateSettings: updatePartySettings,
     setInviteCopied,
   });
-  const privateLobbyActive = partyPanelState.active;
-  const lobbyConfig = partyPanelState.config;
-  const saveLobbyConfig = partyPanelState.saveConfig;
+  const partyActive = partyPanelState.active;
+  const partyConfig = partyPanelState.config;
+  const savePartyConfig = partyPanelState.saveConfig;
 
-  const mapPickerFlow = privateLobbyActive && privateLobby.isOwner && privateLobby.snapshot?.state === "open";
+  const mapPickerFlow = partyActive && party.isOwner && party.snapshot?.state === "open";
   const mapRouteSurface =
     contentRoute === "maps" || contentRoute === "map-details" || contentRoute === "map-upload" ? (
       <MapRouteSurface
         accessToken={accessToken}
         canUploadCustomMaps={canUploadCustomMaps}
         contentRoute={contentRoute}
-        createInviteLobby={createInviteLobby}
+        createParty={createParty}
         displayName={displayName}
         isAdmin={isAdmin}
         isModerator={isModerator}
         mapId={mapId}
         mapPickerFlow={!!mapPickerFlow}
-        privateLobbyActive={privateLobbyActive}
-        saveLobbyConfig={saveLobbyConfig}
+        partyActive={partyActive}
+        savePartyConfig={savePartyConfig}
         singleplayerDisabled={singleplayerDisabled}
         startSingleplayer={startSingleplayer}
         userAvatar={userAvatar}
@@ -440,20 +440,20 @@ export default function LobbyScreen({
       />
     ) : null;
 
-  const privateLobbyPanel = privateLobbyActive ? (
+  const partyPanel = partyActive ? (
     <PartyPanel
       authError={authError}
       authLoading={authLoading}
       inviteCopied={inviteCopied}
-      joinInviteLobby={joinInviteLobby}
-      kickLobbyMember={kickLobbyMember}
-      leavePrivateLobby={leavePrivateLobby}
-      privateLobby={privateLobby}
+      joinParty={joinParty}
+      kickPartyMember={kickPartyMember}
+      leaveParty={leaveParty}
+      party={party}
       setMapPickerOpen={setMapPickerOpen}
-      startPrivateLobby={startPrivateLobby}
+      startParty={startParty}
       state={partyPanelState}
-      switchPrivateLobbyTeam={switchPrivateLobbyTeam}
-      transferLobbyOwner={transferLobbyOwner}
+      switchPartyTeam={switchPartyTeam}
+      transferPartyOwner={transferPartyOwner}
       userId={userId}
     />
   ) : null;
@@ -492,17 +492,17 @@ export default function LobbyScreen({
 
   const renderHelpModal = () => <HelpModal onClose={() => setOpenModal(null)} />;
 
-  const renderInviteLobbyModal = () => (
+  const renderInvitePartyModal = () => (
     <InviteModal
       inviteCodeInput={inviteCodeInput}
       setInviteCodeInput={setInviteCodeInput}
-      busy={privateLobby.busy}
+      busy={party.busy}
       authLoading={authLoading}
       maintenanceIsActive={maintenanceIsActive}
       playPaused={playPaused}
       authError={authError}
-      createInviteLobby={createInviteLobby}
-      joinInviteLobby={joinInviteLobby}
+      createParty={createParty}
+      joinParty={joinParty}
       onClose={() => setOpenModal(null)}
     />
   );
@@ -552,25 +552,25 @@ export default function LobbyScreen({
     />
   );
 
-  const inviteLobbyCard = (
-    <InviteLobbyCard
+  const invitePartyCard = (
+    <InvitePartyCard
       disabled={authLoading || nicknameSaving || playPaused || maintenanceIsActive}
       onClick={() => setOpenModal("invite")}
     />
   );
 
-  const privateLobbyErrorNotice = <PrivateLobbyErrorNotice message={privateLobby.error} />;
+  const partyErrorNotice = <PartyErrorNotice message={party.error} />;
   const mapPickerModal = mapPickerOpen ? (
     <MapPickerController
       accessToken={accessToken}
       canUploadCustomMaps={canUploadCustomMaps}
-      lobbyConfig={lobbyConfig}
+      partyConfig={partyConfig}
       onClose={() => setMapPickerOpen(false)}
-      saveLobbyConfig={saveLobbyConfig}
+      savePartyConfig={savePartyConfig}
       userId={userId}
     />
   ) : null;
-  const showPartyPanel = privateLobbyActive && contentRoute !== "maps" && contentRoute !== "map-details" && contentRoute !== "map-upload";
+  const showPartyPanel = partyActive && contentRoute !== "maps" && contentRoute !== "map-details" && contentRoute !== "map-upload";
   const visualNavIndex = Math.max(0, NAV_ITEMS.findIndex((item) => item.route === visualNavRoute));
 
   return (
@@ -604,7 +604,7 @@ export default function LobbyScreen({
       <AnimatePresence>
         {openModal === "help" && renderHelpModal()}
         {openModal === "profile" && renderProfileModal()}
-        {openModal === "invite" && renderInviteLobbyModal()}
+        {openModal === "invite" && renderInvitePartyModal()}
         {openModal === "signin" && renderSignInModal()}
         {mapPickerModal}
       </AnimatePresence>
@@ -631,10 +631,10 @@ export default function LobbyScreen({
 
       {/* Main Content Area */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-start px-4 pb-10 pt-4 pointer-events-none sm:px-6 sm:pb-12 sm:pt-8">
-        {privateLobbyErrorNotice}
+        {partyErrorNotice}
 
         <AnimatePresence mode="popLayout">
-          {showPartyPanel ? privateLobbyPanel : null}
+          {showPartyPanel ? partyPanel : null}
 
           {!showPartyPanel && contentRoute === "play" && (
             <PlayPanel
@@ -683,7 +683,7 @@ export default function LobbyScreen({
               {...tabPanelMotion}
               className="flex w-full max-w-[480px] flex-col gap-5 pointer-events-auto"
             >
-              {inviteLobbyCard}
+              {invitePartyCard}
             </motion.div>
           )}
         </AnimatePresence>

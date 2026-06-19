@@ -23,9 +23,9 @@ import {
   type UserNotification,
 } from "../../auth/lib/auth-client";
 import {
-  type LobbyTeamId,
+  type PartyTeamId,
   type PartyMode,
-} from "../../lobby/lib/lobby-client";
+} from "../../lobby/lib/party-client";
 import { getHomeRuntime, startHomeRuntime } from "../state/home-runtime";
 import { deriveHomeModel } from "./derive-home-model";
 import type { HomeModel } from "./types";
@@ -62,13 +62,13 @@ function nicknameValidationError(nickname: string) {
 export function useHomeModel(options?: {
   routeMatchId?: string | null;
   routeContext?: "home" | "match";
-  lobbyInviteCode?: string | null;
-  onPrivateLobbyEntered?: (inviteCode: string) => void;
-  onPrivateLobbyLeft?: () => void;
+  partyInviteCode?: string | null;
+  onPartyEntered?: (inviteCode: string) => void;
+  onPartyLeft?: () => void;
 }): HomeModel {
   const config = getRuntimeConfig();
   const runtimeRef = useRef(getHomeRuntime(config));
-  const { sessionController, matchController, matchRouteController, gameController, lobbyController, chatController, sfxController } =
+  const { sessionController, matchController, matchRouteController, gameController, partyController, chatController, sfxController } =
     runtimeRef.current;
   const [guestVerification, setGuestVerification] =
     useState<GuestVerificationView>({
@@ -84,9 +84,9 @@ export function useHomeModel(options?: {
   } | null>(null);
   const routeMatchId = options?.routeMatchId ?? null;
   const routeContext = options?.routeContext ?? "home";
-  const lobbyInviteCode = options?.lobbyInviteCode?.trim().toUpperCase() ?? "";
-  const onPrivateLobbyEntered = options?.onPrivateLobbyEntered;
-  const onPrivateLobbyLeft = options?.onPrivateLobbyLeft;
+  const partyInviteCode = options?.partyInviteCode?.trim().toUpperCase() ?? "";
+  const onPartyEntered = options?.onPartyEntered;
+  const onPartyLeft = options?.onPartyLeft;
   const isMatchRoute = routeContext === "match";
   const queryClient = useQueryClient();
 
@@ -110,10 +110,10 @@ export function useHomeModel(options?: {
     gameController.getState.bind(gameController),
     gameController.getState.bind(gameController),
   );
-  const lobbyState = useSyncExternalStore(
-    lobbyController.subscribe,
-    lobbyController.getState.bind(lobbyController),
-    lobbyController.getState.bind(lobbyController),
+  const partyState = useSyncExternalStore(
+    partyController.subscribe,
+    partyController.getState.bind(partyController),
+    partyController.getState.bind(partyController),
   );
   const chatState = useSyncExternalStore(
     chatController.subscribe,
@@ -146,7 +146,7 @@ export function useHomeModel(options?: {
 
   const resumableSessionQuery = useQuery({
     queryKey: ["session-resumable", auth.userId || "anonymous"],
-    enabled: !isMatchRoute && !lobbyInviteCode && !!auth.userId && !auth.nicknameRequired,
+    enabled: !isMatchRoute && !partyInviteCode && !!auth.userId && !auth.nicknameRequired,
     queryFn: async ({ signal }) => {
       const session = await sessionController.ensureFreshSession(60_000, {
         allowNicknameRequired: false,
@@ -436,7 +436,7 @@ export function useHomeModel(options?: {
   }
 
   const prevEndedMatchRef = useRef("");
-  const hadLobbyRuntimeRef = useRef(false);
+  const hadPartyRuntimeRef = useRef(false);
 
   useEffect(() => {
     startHomeRuntime(runtimeRef.current);
@@ -514,37 +514,37 @@ export function useHomeModel(options?: {
   }, [isMatchRoute, sessionController]);
 
   useEffect(() => {
-    if (isMatchRoute || !lobbyInviteCode) {
+    if (isMatchRoute || !partyInviteCode) {
       return;
     }
-    void lobbyController.ensureLobby(lobbyInviteCode);
+    void partyController.ensureParty(partyInviteCode);
   }, [
     auth.accessToken,
     auth.userId,
     isMatchRoute,
-    lobbyController,
-    lobbyInviteCode,
+    partyController,
+    partyInviteCode,
   ]);
 
   useEffect(() => {
-    const hasLobbyRuntime =
-      !!lobbyState.lobbyId || !!lobbyState.inviteCode || !!lobbyState.snapshot;
+    const hasPartyRuntime =
+      !!partyState.partyId || !!partyState.inviteCode || !!partyState.snapshot;
     if (
-      lobbyInviteCode &&
-      hadLobbyRuntimeRef.current &&
-      !hasLobbyRuntime &&
-      lobbyState.status === "idle"
+      partyInviteCode &&
+      hadPartyRuntimeRef.current &&
+      !hasPartyRuntime &&
+      partyState.status === "idle"
     ) {
-      onPrivateLobbyLeft?.();
+      onPartyLeft?.();
     }
-    hadLobbyRuntimeRef.current = hasLobbyRuntime;
+    hadPartyRuntimeRef.current = hasPartyRuntime;
   }, [
-    lobbyInviteCode,
-    lobbyState.inviteCode,
-    lobbyState.lobbyId,
-    lobbyState.snapshot,
-    lobbyState.status,
-    onPrivateLobbyLeft,
+    partyInviteCode,
+    partyState.inviteCode,
+    partyState.partyId,
+    partyState.snapshot,
+    partyState.status,
+    onPartyLeft,
   ]);
 
   useEffect(() => {
@@ -602,7 +602,7 @@ export function useHomeModel(options?: {
         : "";
   const activeChatConversationId = selectActiveChatConversationId({
     userId: auth.userId,
-    lobby: lobbyState,
+    party: partyState,
     match,
   }) || routeFallbackChatConversationId;
 
@@ -645,20 +645,20 @@ export function useHomeModel(options?: {
     changelogSlug: lobbyData.changelogSlug,
     changelogUpdatedAt: lobbyData.changelogUpdatedAt,
   });
-  const privateLobbyMember = lobbyState.snapshot?.members.find(
+  const partyMember = partyState.snapshot?.members.find(
     (member) => member.userId === auth.userId,
   );
-  const lobbyBusy = [
+  const partyBusy = [
     "creating",
     "joining",
     "connecting",
     "reconnecting",
     "leaving",
-  ].includes(lobbyState.status);
-  const privateLobbyStatus =
-    lobbyInviteCode && !isMatchRoute && lobbyState.status === "idle"
+  ].includes(partyState.status);
+  const partyStatus =
+    partyInviteCode && !isMatchRoute && partyState.status === "idle"
       ? "connecting"
-      : lobbyState.status;
+      : partyState.status;
   const view = {
     ...baseView,
     overlays: {
@@ -668,18 +668,18 @@ export function useHomeModel(options?: {
     },
     lobby: {
       ...baseView.lobby,
-      privateLobby: {
-        status: privateLobbyStatus,
-        snapshot: lobbyState.snapshot,
+      party: {
+        status: partyStatus,
+        snapshot: partyState.snapshot,
         inviteCode:
-          lobbyState.inviteCode ||
-          lobbyState.snapshot?.inviteCode ||
-          lobbyInviteCode ||
+          partyState.inviteCode ||
+          partyState.snapshot?.inviteCode ||
+          partyInviteCode ||
           "",
-        isMember: !!privateLobbyMember,
-        isOwner: !!lobbyState.snapshot && lobbyState.snapshot.ownerUserId === auth.userId,
-        busy: lobbyBusy,
-        error: lobbyState.error,
+        isMember: !!partyMember,
+        isOwner: !!partyState.snapshot && partyState.snapshot.ownerUserId === auth.userId,
+        busy: partyBusy,
+        error: partyState.error,
       },
     },
     chat: {
@@ -1047,50 +1047,50 @@ export function useHomeModel(options?: {
     }
   };
 
-  const createInviteLobby = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
-    const ok = await lobbyController.createLobby(mode, matchConfig);
-    const inviteCode = lobbyController.getState().inviteCode;
+  const createParty = async (mode: PartyMode = "duel", matchConfig?: MatchConfig) => {
+    const ok = await partyController.createParty(mode, matchConfig);
+    const inviteCode = partyController.getState().inviteCode;
     if (ok && inviteCode) {
-      onPrivateLobbyEntered?.(inviteCode);
+      onPartyEntered?.(inviteCode);
     }
     return ok;
   };
 
-  const joinInviteLobby = async (requestedInviteCode?: string) => {
-    const ok = await lobbyController.joinLobby(requestedInviteCode);
-    const inviteCode = lobbyController.getState().inviteCode;
+  const joinParty = async (requestedInviteCode?: string) => {
+    const ok = await partyController.joinParty(requestedInviteCode);
+    const inviteCode = partyController.getState().inviteCode;
     if (ok && inviteCode) {
-      onPrivateLobbyEntered?.(inviteCode);
+      onPartyEntered?.(inviteCode);
     }
     return ok;
   };
 
-  const leavePrivateLobby = async () => {
-    const hadLobby = !!lobbyController.getState().lobbyId;
-    await lobbyController.leaveLobby();
-    if (hadLobby && lobbyController.getState().status === "idle") {
-      onPrivateLobbyLeft?.();
+  const leaveParty = async () => {
+    const hadParty = !!partyController.getState().partyId;
+    await partyController.leaveParty();
+    if (hadParty && partyController.getState().status === "idle") {
+      onPartyLeft?.();
     }
   };
 
-  const kickLobbyMember = async (userId: string) => {
-    await lobbyController.kickMember(userId);
+  const kickPartyMember = async (userId: string) => {
+    await partyController.kickMember(userId);
   };
 
-  const transferLobbyOwner = async (userId: string) => {
-    await lobbyController.transferOwner(userId);
+  const transferPartyOwner = async (userId: string) => {
+    await partyController.transferOwner(userId);
   };
 
-  const startPrivateLobby = async () => {
-    await lobbyController.startLobby();
+  const startParty = async () => {
+    await partyController.startParty();
   };
 
-  const updatePrivateLobbySettings = async (matchConfig: MatchConfig, mode?: PartyMode) => {
-    await lobbyController.updateSettings(matchConfig, mode);
+  const updatePartySettings = async (matchConfig: MatchConfig, mode?: PartyMode) => {
+    await partyController.updateSettings(matchConfig, mode);
   };
 
-  const switchPrivateLobbyTeam = async (teamId: LobbyTeamId) => {
-    await lobbyController.switchTeam(teamId);
+  const switchPartyTeam = async (teamId: PartyTeamId) => {
+    await partyController.switchTeam(teamId);
   };
 
   const reportPlayer = async (
@@ -1177,14 +1177,14 @@ export function useHomeModel(options?: {
       joinQueue: matchController.joinQueue,
       startSingleplayer: matchController.startSingleplayer,
       cancelQueue: matchController.cancelQueue,
-      createInviteLobby,
-      joinInviteLobby,
-      leavePrivateLobby,
-      kickLobbyMember,
-      transferLobbyOwner,
-      startPrivateLobby,
-      updatePrivateLobbySettings,
-      switchPrivateLobbyTeam,
+      createParty,
+      joinParty,
+      leaveParty,
+      kickPartyMember,
+      transferPartyOwner,
+      startParty,
+      updatePartySettings,
+      switchPartyTeam,
       placeGuess: gameController.placeGuess,
       finalizeGuess: gameController.finalizeGuess,
       advanceRound: gameController.advanceRound,

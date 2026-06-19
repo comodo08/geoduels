@@ -20,46 +20,48 @@ import (
 )
 
 type api struct {
-	matchCoordinator       string
-	store                  persistence.Store
-	coord                  *coordinator.Store
-	redis                  *redis.Client
-	httpClient             *http.Client
-	googleVerifier         *auth.GoogleVerifier
-	googleClientID         string
-	googleSecret           string
-	discordClientID        string
-	discordSecret          string
-	stripeMode             string
-	stripeTestPaymentLink  string
-	stripeLivePaymentLink  string
-	stripeLegacyPaymentURL string
-	stripeTestWebhook      string
-	stripeLiveWebhook      string
-	stripeLegacyWebhook    string
-	appAuthSecret          []byte
-	ticketAuth             []byte
-	internalSecret         string
-	accessTokenTTL         time.Duration
-	refreshTokenTTL        time.Duration
-	refreshCookieName      string
-	refreshCookieDomain    string
-	refreshCookieSameSite  http.SameSite
-	guestSignupIPLimit     int
-	guestSignupIPWindow    time.Duration
-	guestSignupDailyLimit  int
-	guestSignupDailyWindow time.Duration
-	guestAccountTTL        time.Duration
-	guestCleanupInterval   time.Duration
-	guestCleanupBatchSize  int
-	turnstileSecret        string
-	turnstileVerifyURL     string
-	turnstileHostname      string
-	guestTurnstileRequired bool
-	trustedProxyCIDRs      []*net.IPNet
-	adminBootstrapEmails   map[string]struct{}
-	metrics                *observability.APIMetrics
-	draining               atomic.Bool
+	matchCoordinator        string
+	store                   persistence.Store
+	coord                   *coordinator.Store
+	redis                   *redis.Client
+	httpClient              *http.Client
+	googleVerifier          *auth.GoogleVerifier
+	googleClientID          string
+	googleSecret            string
+	discordClientID         string
+	discordSecret           string
+	stripeMode              string
+	stripeTestPaymentLink   string
+	stripeLivePaymentLink   string
+	stripeLegacyPaymentURL  string
+	stripeTestWebhook       string
+	stripeLiveWebhook       string
+	stripeLegacyWebhook     string
+	appAuthSecret           []byte
+	ticketAuth              []byte
+	internalSecret          string
+	accessTokenTTL          time.Duration
+	refreshTokenTTL         time.Duration
+	refreshCookieName       string
+	refreshCookieDomain     string
+	refreshCookieSameSite   http.SameSite
+	guestSignupIPLimit      int
+	guestSignupIPWindow     time.Duration
+	guestSignupDailyLimit   int
+	guestSignupDailyWindow  time.Duration
+	guestAccountTTL         time.Duration
+	guestCleanupInterval    time.Duration
+	guestCleanupBatchSize   int
+	storageCleanupInterval  time.Duration
+	storageCleanupBatchSize int
+	turnstileSecret         string
+	turnstileVerifyURL      string
+	turnstileHostname       string
+	guestTurnstileRequired  bool
+	trustedProxyCIDRs       []*net.IPNet
+	adminBootstrapEmails    map[string]struct{}
+	metrics                 *observability.APIMetrics
+	draining                atomic.Bool
 }
 
 func newAPI() (*api, error) {
@@ -127,45 +129,47 @@ func newAPI() (*api, error) {
 		return nil, err
 	}
 	return &api{
-		matchCoordinator:       getenv("MATCH_COORDINATOR_URL", getenv("QUEUE_COORDINATOR_URL", "http://localhost:8090")),
-		store:                  store,
-		coord:                  coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
-		redis:                  rdb,
-		httpClient:             &http.Client{Timeout: 3 * time.Second},
-		googleVerifier:         googleVerifier,
-		googleClientID:         googleClientID,
-		googleSecret:           googleSecret,
-		discordClientID:        discordClientID,
-		discordSecret:          discordSecret,
-		stripeMode:             stripeMode,
-		stripeTestPaymentLink:  stripeTestPaymentLink,
-		stripeLivePaymentLink:  stripeLivePaymentLink,
-		stripeLegacyPaymentURL: stripeLegacyPaymentURL,
-		stripeTestWebhook:      stripeTestWebhook,
-		stripeLiveWebhook:      stripeLiveWebhook,
-		stripeLegacyWebhook:    stripeLegacyWebhook,
-		appAuthSecret:          appAuthSecret,
-		ticketAuth:             ticketAuth,
-		internalSecret:         internalSecret,
-		accessTokenTTL:         getenvDuration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
-		refreshTokenTTL:        getenvDuration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
-		refreshCookieName:      getenv("APP_REFRESH_COOKIE_NAME", "geoduels_refresh"),
-		refreshCookieDomain:    strings.TrimSpace(os.Getenv("APP_REFRESH_COOKIE_DOMAIN")),
-		refreshCookieSameSite:  getenvSameSite("APP_REFRESH_COOKIE_SAMESITE", http.SameSiteLaxMode),
-		guestSignupIPLimit:     getenvInt("GUEST_SIGNUP_IP_LIMIT", 5),
-		guestSignupIPWindow:    getenvDuration("GUEST_SIGNUP_IP_WINDOW", 10*time.Minute),
-		guestSignupDailyLimit:  getenvInt("GUEST_SIGNUP_IP_DAILY_LIMIT", 10),
-		guestSignupDailyWindow: getenvDuration("GUEST_SIGNUP_IP_DAILY_WINDOW", 24*time.Hour),
-		guestAccountTTL:        getenvDuration("GUEST_ACCOUNT_TTL", 24*time.Hour),
-		guestCleanupInterval:   getenvDuration("GUEST_ACCOUNT_CLEANUP_INTERVAL", time.Hour),
-		guestCleanupBatchSize:  getenvInt("GUEST_ACCOUNT_CLEANUP_BATCH_SIZE", 1000),
-		turnstileSecret:        turnstileSecret,
-		turnstileVerifyURL:     getenv("TURNSTILE_VERIFY_URL", turnstileSiteverifyURL),
-		turnstileHostname:      strings.TrimSpace(os.Getenv("TURNSTILE_EXPECTED_HOSTNAME")),
-		guestTurnstileRequired: guestTurnstileRequired,
-		trustedProxyCIDRs:      trustedProxyCIDRs,
-		adminBootstrapEmails:   parseEmailAllowlist(os.Getenv("ADMIN_BOOTSTRAP_EMAILS")),
-		metrics:                observability.NewAPIMetrics(),
+		matchCoordinator:        getenv("MATCH_COORDINATOR_URL", getenv("QUEUE_COORDINATOR_URL", "http://localhost:8090")),
+		store:                   store,
+		coord:                   coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		redis:                   rdb,
+		httpClient:              &http.Client{Timeout: 3 * time.Second},
+		googleVerifier:          googleVerifier,
+		googleClientID:          googleClientID,
+		googleSecret:            googleSecret,
+		discordClientID:         discordClientID,
+		discordSecret:           discordSecret,
+		stripeMode:              stripeMode,
+		stripeTestPaymentLink:   stripeTestPaymentLink,
+		stripeLivePaymentLink:   stripeLivePaymentLink,
+		stripeLegacyPaymentURL:  stripeLegacyPaymentURL,
+		stripeTestWebhook:       stripeTestWebhook,
+		stripeLiveWebhook:       stripeLiveWebhook,
+		stripeLegacyWebhook:     stripeLegacyWebhook,
+		appAuthSecret:           appAuthSecret,
+		ticketAuth:              ticketAuth,
+		internalSecret:          internalSecret,
+		accessTokenTTL:          getenvDuration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
+		refreshTokenTTL:         getenvDuration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		refreshCookieName:       getenv("APP_REFRESH_COOKIE_NAME", "geoduels_refresh"),
+		refreshCookieDomain:     strings.TrimSpace(os.Getenv("APP_REFRESH_COOKIE_DOMAIN")),
+		refreshCookieSameSite:   getenvSameSite("APP_REFRESH_COOKIE_SAMESITE", http.SameSiteLaxMode),
+		guestSignupIPLimit:      getenvInt("GUEST_SIGNUP_IP_LIMIT", 5),
+		guestSignupIPWindow:     getenvDuration("GUEST_SIGNUP_IP_WINDOW", 10*time.Minute),
+		guestSignupDailyLimit:   getenvInt("GUEST_SIGNUP_IP_DAILY_LIMIT", 10),
+		guestSignupDailyWindow:  getenvDuration("GUEST_SIGNUP_IP_DAILY_WINDOW", 24*time.Hour),
+		guestAccountTTL:         getenvDuration("GUEST_ACCOUNT_TTL", 24*time.Hour),
+		guestCleanupInterval:    getenvDuration("GUEST_ACCOUNT_CLEANUP_INTERVAL", time.Hour),
+		guestCleanupBatchSize:   getenvInt("GUEST_ACCOUNT_CLEANUP_BATCH_SIZE", 1000),
+		storageCleanupInterval:  getenvDuration("STORAGE_CLEANUP_INTERVAL", time.Minute),
+		storageCleanupBatchSize: getenvInt("STORAGE_CLEANUP_BATCH_SIZE", 1000),
+		turnstileSecret:         turnstileSecret,
+		turnstileVerifyURL:      getenv("TURNSTILE_VERIFY_URL", turnstileSiteverifyURL),
+		turnstileHostname:       strings.TrimSpace(os.Getenv("TURNSTILE_EXPECTED_HOSTNAME")),
+		guestTurnstileRequired:  guestTurnstileRequired,
+		trustedProxyCIDRs:       trustedProxyCIDRs,
+		adminBootstrapEmails:    parseEmailAllowlist(os.Getenv("ADMIN_BOOTSTRAP_EMAILS")),
+		metrics:                 observability.NewAPIMetrics(),
 	}, nil
 }
 
@@ -208,6 +212,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/singleplayer/session", a.startSingleplayerSession).Methods(http.MethodPost)
 	r.HandleFunc("/v1/maps", a.listMaps).Methods(http.MethodGet)
 	r.HandleFunc("/v1/maps", a.createMap).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/quota", a.mapUploadQuota).Methods(http.MethodGet)
 	r.HandleFunc("/v1/maps/{id}", a.getMap).Methods(http.MethodGet)
 	r.HandleFunc("/v1/maps/{id}", a.updateMap).Methods(http.MethodPatch)
 	r.HandleFunc("/v1/maps/{id}", a.archiveMap).Methods(http.MethodDelete)
@@ -220,6 +225,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/maps/{id}/comments", a.listMapComments).Methods(http.MethodGet)
 	r.HandleFunc("/v1/maps/{id}/comments", a.createMapComment).Methods(http.MethodPost)
 	r.HandleFunc("/v1/maps/{id}/comments/{commentId}", a.deleteMapComment).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/maps/{id}/comments/{commentId}/like", a.likeMapComment).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}/comments/{commentId}/like", a.unlikeMapComment).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/maps/{id}/revisions", a.uploadMapRevision).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/players", a.adminPlayers).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/players/{id}", a.adminPlayerDetail).Methods(http.MethodGet)
@@ -229,6 +236,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/admin/players/{id}/report-mute", a.adminClearReporterMute).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/admin/players/{id}/moderator", a.adminPromoteModerator).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/players/{id}/moderator", a.adminDemoteModerator).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/admin/players/{id}/map-tier", a.adminSetMapCreatorTier).Methods(http.MethodPut)
 	r.HandleFunc("/v1/admin/roles", a.adminListRoles).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/roles", a.adminGrantRole).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/roles/{id}/{role}", a.adminRevokeRole).Methods(http.MethodDelete)
@@ -248,6 +256,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/admin/maintenance", a.adminClearMaintenance).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/admin/moderation/settings", a.adminGetModerationSettings).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/moderation/settings", a.adminPutModerationSettings).Methods(http.MethodPut)
+	r.HandleFunc("/v1/admin/integrations/discord", a.adminGetDiscordIntegrationSettings).Methods(http.MethodGet)
+	r.HandleFunc("/v1/admin/integrations/discord", a.adminPutDiscordIntegrationSettings).Methods(http.MethodPut)
 	r.HandleFunc("/v1/admin/seasons", a.adminGetRankedSeason).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/seasons/reset-rule", a.adminPutRankedSeasonResetRule).Methods(http.MethodPut)
 	r.HandleFunc("/v1/admin/changelog", a.adminGetChangelog).Methods(http.MethodGet)

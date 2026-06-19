@@ -1,6 +1,8 @@
 import { Loader2, Upload } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import type { MapUploadQuota } from "../../maps/lib/maps-client";
 import { mapThumbnailOptions, mapThumbnailURL } from "../../maps/lib/map-thumbnails";
+import { MapUploadLimitsModal } from "./MapUploadLimitsModal";
 import {
   LobbyActionButton,
   LobbyInput,
@@ -29,6 +31,7 @@ type MapUploadFormProps = {
   mapFile: File | null;
   setMapFile: Dispatch<SetStateAction<File | null>>;
   mapUploadError: string;
+  quota?: MapUploadQuota;
   setMapUploadError: Dispatch<SetStateAction<string>>;
   uploadPending: boolean;
   onUpload: () => void;
@@ -51,10 +54,12 @@ export function MapUploadForm({
   mapFile,
   setMapFile,
   mapUploadError,
+  quota,
   setMapUploadError,
   uploadPending,
   onUpload,
 }: MapUploadFormProps) {
+  const [limitsOpen, setLimitsOpen] = useState(false);
   const selectedThumbnail =
     mapThumbnailOptions.find((item) => item.key === mapThumbnailKey) ||
     mapThumbnailOptions[0];
@@ -68,9 +73,19 @@ export function MapUploadForm({
         item.key.includes(q))
     );
   });
+  const moderationNote = quota?.restrictedByModeration ? " An active moderation restriction currently forces Base limits." : "";
+  const quotaBlockedReason = quota && quota.currentMaps >= quota.maxMaps
+    ? `You have reached the ${quota.maxMaps.toLocaleString()} map limit for the ${quota.tier} tier.${moderationNote}`
+    : quota && quota.currentActiveLocations >= quota.maxActiveLocations
+      ? `You have reached the ${quota.maxActiveLocations.toLocaleString()} active-location limit for the ${quota.tier} tier.${moderationNote}`
+      : "";
+  const limitError = /limit|rate|throughput|too many/i.test(mapUploadError) ? mapUploadError : "";
+  const blockedReason = quotaBlockedReason || limitError;
+  const uploadDisabled = isGuest || !!quotaBlockedReason || !mapName.trim() || !mapFile || uploadPending;
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid gap-3">
         <LobbyInput value={mapName} onChange={(event) => setMapName(event.target.value)} maxLength={80} placeholder="Map name" disabled={isGuest} className="h-11 rounded-xl font-semibold" />
         <LobbyTextarea value={mapDescription} onChange={(event) => setMapDescription(event.target.value)} maxLength={500} placeholder="Description (optional)" disabled={isGuest} className="min-h-20 resize-none rounded-xl" />
@@ -109,12 +124,18 @@ export function MapUploadForm({
         <img src={mapThumbnailURL(mapThumbnailKey)} alt="" className="aspect-[16/9] w-full rounded-xl object-cover" />
         <p className="text-xs font-bold text-[#a9bfd4]">Selected: <span className="text-white">{selectedThumbnail.label}</span></p>
         {mapUploadError ? <p className="text-xs font-semibold text-red-300">{mapUploadError}</p> : null}
-        <LobbyActionButton type="button" disabled={isGuest || !mapName.trim() || !mapFile || uploadPending} onClick={onUpload} className="h-11 rounded-xl">
+        <LobbyActionButton type="button" disabled={uploadDisabled} onClick={onUpload} className="h-11 rounded-xl">
           {uploadPending ? <Loader2 className="mr-2 animate-spin" size={17} /> : <Upload className="mr-2" size={17} />}
           Upload
         </LobbyActionButton>
-        <p className="text-[11px] leading-5 text-[#6f8998]">Limits: 10 maps, 100,000 locations per map, 250,000 active locations per account, 3 uploads/hour.</p>
+        {!isGuest ? (
+          <button type="button" onClick={() => setLimitsOpen(true)} className={`text-xs font-bold transition hover:text-white ${blockedReason ? "text-amber-200" : "text-[#6f8998]"}`}>
+            {blockedReason ? "Why?" : "Limits & tiers"}
+          </button>
+        ) : null}
       </div>
-    </div>
+      </div>
+      {limitsOpen ? <MapUploadLimitsModal quota={quota} blockedReason={blockedReason} onClose={() => setLimitsOpen(false)} /> : null}
+    </>
   );
 }

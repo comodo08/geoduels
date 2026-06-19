@@ -1,10 +1,10 @@
 import type { MatchConfig } from "../../matchmaking/lib/queue-client";
-import type { LobbyRuntimeStatus } from "../controllers/lobby-controller";
-import type { LobbySnapshot, PartyMode } from "../lib/lobby-client";
+import type { PartyRuntimeStatus } from "../controllers/party-controller";
+import type { PartySnapshot, PartyMode } from "../lib/party-client";
 
-type PrivateLobbyView = {
-  status: LobbyRuntimeStatus;
-  snapshot: LobbySnapshot | null;
+type PartyView = {
+  status: PartyRuntimeStatus;
+  snapshot: PartySnapshot | null;
   inviteCode: string;
   isMember: boolean;
   isOwner: boolean;
@@ -13,39 +13,39 @@ type PrivateLobbyView = {
 };
 
 type UsePartyPanelStateInput = {
-  privateLobby: PrivateLobbyView;
+  party: PartyView;
   userId: string;
   updateSettings: (config: MatchConfig, mode?: PartyMode) => Promise<void>;
   setInviteCopied: (copied: boolean) => void;
 };
 
-const defaultLobbyConfig: MatchConfig = {
+const defaultPartyConfig: MatchConfig = {
   ruleset: "moving",
   roundTimerMode: "none",
   pressureTimeLimitMs: 15000,
 };
 
 export function usePartyPanelState({
-  privateLobby,
+  party,
   userId,
   updateSettings,
   setInviteCopied,
 }: UsePartyPanelStateInput) {
   const inviteURL =
-    typeof window !== "undefined" && privateLobby.inviteCode
-      ? `${window.location.origin}/party/${privateLobby.inviteCode}`
+    typeof window !== "undefined" && party.inviteCode
+      ? `${window.location.origin}/party/${party.inviteCode}`
       : "";
   const loading =
-    !privateLobby.snapshot &&
-    ["creating", "joining", "connecting", "reconnecting"].includes(privateLobby.status);
-  const active = !!privateLobby.snapshot || privateLobby.status !== "idle";
-  const members = privateLobby.snapshot?.members || [];
-  const activeMatchId = privateLobby.snapshot?.activeMatchId || privateLobby.snapshot?.startedMatchId || "";
+    !party.snapshot &&
+    ["creating", "joining", "connecting", "reconnecting"].includes(party.status);
+  const active = !!party.snapshot || party.status !== "idle";
+  const members = party.snapshot?.members || [];
+  const activeMatchId = party.snapshot?.activeMatchId || party.snapshot?.startedMatchId || "";
   const matchInProgress =
-    privateLobby.snapshot?.state === "in_match" || privateLobby.snapshot?.state === "started";
+    party.snapshot?.state === "in_match" || party.snapshot?.state === "started";
   const currentMember = members.find((member) => member.userId === userId);
-  const config = privateLobby.snapshot?.config || defaultLobbyConfig;
-  const mode = privateLobby.snapshot?.mode || "duel";
+  const config = party.snapshot?.config || defaultPartyConfig;
+  const mode = party.snapshot?.mode || "duel";
   const clockOn = config.roundTimerMode === "fixed";
   const pressureOn =
     (typeof config.pressureTimeLimitMs === "number" && config.pressureTimeLimitMs > 0) ||
@@ -58,8 +58,8 @@ export function usePartyPanelState({
   const teamACount = members.filter((member) => (member.teamId || "a") === "a").length;
   const teamBCount = members.filter((member) => member.teamId === "b").length;
   const canStart =
-    privateLobby.isOwner &&
-    privateLobby.snapshot?.state === "open" &&
+    party.isOwner &&
+    party.snapshot?.state === "open" &&
     ((mode === "duel" && members.length === 2) ||
       (mode === "team_duel" &&
         members.length >= 2 &&

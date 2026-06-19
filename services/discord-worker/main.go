@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -25,20 +26,13 @@ const (
 	discordSyncBatch      = 10
 )
 
-type rankRoleConfig struct {
-	Elo1000 string
-	Elo1500 string
-	Elo2000 string
-}
-
 type worker struct {
-	store          persistence.Store
-	guildID        string
-	joinsChannelID string
-	rankRoles      rankRoleConfig
-	session        *discordgo.Session
-	draining       atomic.Bool
-	ready          atomic.Bool
+	store    persistence.Store
+	session  *discordgo.Session
+	configMu sync.RWMutex
+	config   persistence.DiscordIntegrationSettings
+	draining atomic.Bool
+	ready    atomic.Bool
 }
 
 func main() {
@@ -54,7 +48,8 @@ func main() {
 	if err := w.openDiscord(); err != nil {
 		log.Fatal(err)
 	}
-	w.startReconciliation(ctx, getenvDuration("DISCORD_RECONCILE_INTERVAL", 15*time.Minute))
+	w.startConfigRefresh(ctx)
+	w.startReconciliation(ctx)
 	w.startDiscordSyncWorker(ctx)
 
 	r := http.NewServeMux()
@@ -83,16 +78,6 @@ func newWorker() (*worker, error) {
 	if token == "" {
 		return nil, errors.New("DISCORD_BOT_TOKEN is required")
 	}
-	guildID := strings.TrimSpace(os.Getenv("DISCORD_GUILD_ID"))
-	if guildID == "" {
-		return nil, errors.New("DISCORD_GUILD_ID is required")
-	}
-	joinsChannelID := strings.TrimSpace(os.Getenv("DISCORD_JOINS_CHANNEL_ID"))
-	rankRoles := rankRoleConfig{
-		Elo1000: strings.TrimSpace(os.Getenv("DISCORD_ROLE_ELO_1000_ID")),
-		Elo1500: strings.TrimSpace(os.Getenv("DISCORD_ROLE_ELO_1500_ID")),
-		Elo2000: strings.TrimSpace(os.Getenv("DISCORD_ROLE_ELO_2000_ID")),
-	}
 	store, err := persistence.NewFromEnv()
 	if err != nil {
 		return nil, err
@@ -102,7 +87,12 @@ func newWorker() (*worker, error) {
 		store.Close()
 		return nil, err
 	}
-	w := &worker{store: store, guildID: guildID, joinsChannelID: joinsChannelID, rankRoles: rankRoles, session: session}
+	settings, err := store.GetDiscordIntegrationSettings()
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	w := &worker{store: store, config: settings, session: session}
 	session.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages
 	session.AddHandler(w.onGuildMemberAdd)
 	session.AddHandler(w.onMessageCreate)
@@ -112,9 +102,6 @@ func newWorker() (*worker, error) {
 func (w *worker) openDiscord() error {
 	if err := w.session.Open(); err != nil {
 		return err
-	}
-	if err := w.ensureRankRoles(); err != nil {
-		observability.Log("warn", "discord rank role bootstrap failed", map[string]any{"error": err.Error()})
 	}
 	w.ready.Store(true)
 	return nil
@@ -130,7 +117,8 @@ func (w *worker) close() {
 }
 
 func (w *worker) onGuildMemberAdd(_ *discordgo.Session, event *discordgo.GuildMemberAdd) {
-	if event == nil || event.User == nil || event.GuildID != w.guildID {
+	config := w.currentConfig()
+	if event == nil || event.User == nil || config.GuildID == "" || event.GuildID != config.GuildID {
 		return
 	}
 	w.awardDiscordMemberBadge(event.User.ID, "member_add")
@@ -140,10 +128,11 @@ func (w *worker) onGuildMemberAdd(_ *discordgo.Session, event *discordgo.GuildMe
 }
 
 func (w *worker) onMessageCreate(_ *discordgo.Session, event *discordgo.MessageCreate) {
+	config := w.currentConfig()
 	if event == nil || event.Message == nil || event.Author == nil {
 		return
 	}
-	if w.joinsChannelID == "" || event.GuildID != w.guildID || event.ChannelID != w.joinsChannelID {
+	if config.JoinsChannelID == "" || event.GuildID != config.GuildID || event.ChannelID != config.JoinsChannelID {
 		return
 	}
 	if event.Type != discordgo.MessageTypeGuildMemberJoin {
@@ -163,26 +152,57 @@ func (w *worker) awardDiscordMemberBadge(discordUserID, source string) {
 	}
 }
 
-func (w *worker) startReconciliation(ctx context.Context, interval time.Duration) {
-	if interval <= 0 {
-		interval = 15 * time.Minute
-	}
+func (w *worker) startConfigRefresh(ctx context.Context) {
 	go func() {
-		w.reconcileMembers(ctx)
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				settings, err := w.store.GetDiscordIntegrationSettings()
+				if err != nil {
+					observability.Log("warn", "discord settings refresh failed", map[string]any{"error": err.Error()})
+					continue
+				}
+				w.configMu.Lock()
+				w.config = settings
+				w.configMu.Unlock()
+			}
+		}
+	}()
+}
+
+func (w *worker) startReconciliation(ctx context.Context) {
+	go func() {
+		var lastRun time.Time
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			config := w.currentConfig()
+			interval := time.Duration(config.ReconcileIntervalMinutes) * time.Minute
+			if interval <= 0 {
+				interval = 15 * time.Minute
+			}
+			if config.GuildID != "" && (lastRun.IsZero() || time.Since(lastRun) >= interval) {
 				w.reconcileMembers(ctx)
+				lastRun = time.Now()
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
 			}
 		}
 	}()
 }
 
 func (w *worker) reconcileMembers(ctx context.Context) {
+	config := w.currentConfig()
+	if config.GuildID == "" {
+		return
+	}
 	after := ""
 	for {
 		select {
@@ -190,7 +210,7 @@ func (w *worker) reconcileMembers(ctx context.Context) {
 			return
 		default:
 		}
-		members, err := w.session.GuildMembers(w.guildID, after, 1000)
+		members, err := w.session.GuildMembers(config.GuildID, after, 1000)
 		if err != nil {
 			log.Printf("discord member reconcile failed: %v", err)
 			return
@@ -253,7 +273,16 @@ func (w *worker) processOneDiscordSync() (bool, error) {
 	var processErr error
 	switch item.Action {
 	case persistence.DiscordSyncActionCleanupRoles:
-		processErr = w.cleanupRankRoles(item.DiscordUserID)
+		// Cleanup jobs can outlive an unlink/relink sequence. Re-resolve the
+		// identity so a stale cleanup cannot remove a newly valid role.
+		_, linked, lookupErr := w.store.GetDiscordLinkedUser(item.DiscordUserID)
+		if lookupErr != nil {
+			processErr = lookupErr
+		} else if discordSyncActionForLinkState(item.Action, linked) == persistence.DiscordSyncActionSync {
+			processErr = w.syncRankRoles(item.DiscordUserID)
+		} else {
+			processErr = w.cleanupRankRoles(item.DiscordUserID)
+		}
 	case persistence.DiscordSyncActionSync:
 		processErr = w.syncDiscordUser(item.DiscordUserID)
 	default:
@@ -266,6 +295,13 @@ func (w *worker) processOneDiscordSync() (bool, error) {
 		return true, err
 	}
 	return true, nil
+}
+
+func discordSyncActionForLinkState(requested string, linked bool) string {
+	if requested == persistence.DiscordSyncActionCleanupRoles && linked {
+		return persistence.DiscordSyncActionSync
+	}
+	return requested
 }
 
 func nextDiscordSyncAttempt(attempts int) time.Time {
@@ -288,7 +324,11 @@ func nextDiscordSyncAttempt(attempts int) time.Time {
 }
 
 func (w *worker) syncDiscordUser(discordUserID string) error {
-	member, err := w.session.GuildMember(w.guildID, discordUserID)
+	config := w.currentConfig()
+	if config.GuildID == "" {
+		return errors.New("discord guild is not configured")
+	}
+	member, err := w.session.GuildMember(config.GuildID, discordUserID)
 	if err != nil {
 		if isDiscordNotFound(err) {
 			return nil
@@ -303,6 +343,10 @@ func (w *worker) syncDiscordUser(discordUserID string) error {
 }
 
 func (w *worker) syncRankRoles(discordUserID string) error {
+	config := w.currentConfig()
+	if config.GuildID == "" {
+		return errors.New("discord guild is not configured")
+	}
 	user, ok, err := w.store.GetDiscordLinkedUser(discordUserID)
 	if err != nil {
 		return err
@@ -310,7 +354,7 @@ func (w *worker) syncRankRoles(discordUserID string) error {
 	if !ok {
 		return w.cleanupRankRoles(discordUserID)
 	}
-	member, err := w.session.GuildMember(w.guildID, discordUserID)
+	member, err := w.session.GuildMember(config.GuildID, discordUserID)
 	if err != nil {
 		if isDiscordNotFound(err) {
 			return nil
@@ -320,12 +364,16 @@ func (w *worker) syncRankRoles(discordUserID string) error {
 	if member == nil {
 		return nil
 	}
-	targetRole := w.rankRoleForMMR(user.HighestEloBadgeMMR)
-	return w.applyExclusiveRankRole(discordUserID, member.Roles, targetRole)
+	targetRole := rankRoleForMMR(config, user.HighestEloBadgeMMR)
+	return w.applyExclusiveRankRole(config, discordUserID, member.Roles, targetRole)
 }
 
 func (w *worker) cleanupRankRoles(discordUserID string) error {
-	member, err := w.session.GuildMember(w.guildID, discordUserID)
+	config := w.currentConfig()
+	if config.GuildID == "" {
+		return errors.New("discord guild is not configured")
+	}
+	member, err := w.session.GuildMember(config.GuildID, discordUserID)
 	if err != nil {
 		if isDiscordNotFound(err) {
 			return nil
@@ -335,99 +383,59 @@ func (w *worker) cleanupRankRoles(discordUserID string) error {
 	if member == nil {
 		return nil
 	}
-	return w.applyExclusiveRankRole(discordUserID, member.Roles, "")
+	return w.applyExclusiveRankRole(config, discordUserID, member.Roles, "")
 }
 
-func (w *worker) rankRoleForMMR(mmr int) string {
+func rankRoleForMMR(config persistence.DiscordIntegrationSettings, mmr int) string {
 	switch {
 	case mmr >= 2000:
-		return w.rankRoles.Elo2000
+		return config.Elo2000RoleID
 	case mmr >= 1500:
-		return w.rankRoles.Elo1500
+		return config.Elo1500RoleID
 	case mmr >= 1000:
-		return w.rankRoles.Elo1000
+		return config.Elo1000RoleID
 	default:
 		return ""
 	}
 }
 
-func (w *worker) ensureRankRoles() error {
-	roles, err := w.session.GuildRoles(w.guildID)
-	if err != nil {
-		return err
-	}
-	if w.rankRoles.Elo1000 == "" {
-		roleID, err := w.ensureRankRole(roles, "1k", 0x4c9aff)
-		if err != nil {
-			return err
-		}
-		w.rankRoles.Elo1000 = roleID
-	}
-	if w.rankRoles.Elo1500 == "" {
-		roleID, err := w.ensureRankRole(roles, "1.5k", 0xffc857)
-		if err != nil {
-			return err
-		}
-		w.rankRoles.Elo1500 = roleID
-	}
-	if w.rankRoles.Elo2000 == "" {
-		roleID, err := w.ensureRankRole(roles, "2k", 0xff5c8a)
-		if err != nil {
-			return err
-		}
-		w.rankRoles.Elo2000 = roleID
-	}
-	return nil
-}
-
-func (w *worker) ensureRankRole(existing []*discordgo.Role, name string, color int) (string, error) {
-	for _, role := range existing {
-		if role != nil && role.Name == name {
-			return role.ID, nil
-		}
-	}
-	hoist := false
-	mentionable := false
-	role, err := w.session.GuildRoleCreate(w.guildID, &discordgo.RoleParams{
-		Name:        name,
-		Color:       &color,
-		Hoist:       &hoist,
-		Mentionable: &mentionable,
-	})
-	if err != nil {
-		return "", err
-	}
-	if role == nil {
-		return "", errors.New("discord role create returned no role")
-	}
-	observability.Log("info", "discord rank role created", map[string]any{"roleId": role.ID, "name": name})
-	return role.ID, nil
-}
-
-func (w *worker) applyExclusiveRankRole(discordUserID string, currentRoles []string, targetRole string) error {
+func (w *worker) applyExclusiveRankRole(config persistence.DiscordIntegrationSettings, discordUserID string, currentRoles []string, targetRole string) error {
 	current := map[string]bool{}
 	for _, roleID := range currentRoles {
 		current[roleID] = true
 	}
-	for _, roleID := range []string{w.rankRoles.Elo1000, w.rankRoles.Elo1500, w.rankRoles.Elo2000} {
+	managedRoleIDs := append([]string{}, config.ManagedRoleIDs...)
+	managedRoleIDs = append(managedRoleIDs, config.Elo1000RoleID, config.Elo1500RoleID, config.Elo2000RoleID)
+	seenRoleIDs := map[string]bool{}
+	for _, roleID := range managedRoleIDs {
 		if roleID == "" {
 			continue
 		}
+		if seenRoleIDs[roleID] {
+			continue
+		}
+		seenRoleIDs[roleID] = true
 		if roleID == targetRole {
 			if !current[roleID] {
-				if err := w.session.GuildMemberRoleAdd(w.guildID, discordUserID, roleID); err != nil {
+				if err := w.session.GuildMemberRoleAdd(config.GuildID, discordUserID, roleID); err != nil {
 					return err
 				}
 			}
 			continue
 		}
 		if current[roleID] {
-			if err := w.session.GuildMemberRoleRemove(w.guildID, discordUserID, roleID); err != nil {
+			if err := w.session.GuildMemberRoleRemove(config.GuildID, discordUserID, roleID); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (w *worker) currentConfig() persistence.DiscordIntegrationSettings {
+	w.configMu.RLock()
+	defer w.configMu.RUnlock()
+	return w.config
 }
 
 func isDiscordNotFound(err error) bool {
@@ -472,15 +480,6 @@ func handleWorkerShutdown(w *worker, srv *http.Server, cancel context.CancelFunc
 func getenv(k, fallback string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
-	}
-	return fallback
-}
-
-func getenvDuration(k string, fallback time.Duration) time.Duration {
-	if value := strings.TrimSpace(os.Getenv(k)); value != "" {
-		if parsed, err := time.ParseDuration(value); err == nil {
-			return parsed
-		}
 	}
 	return fallback
 }

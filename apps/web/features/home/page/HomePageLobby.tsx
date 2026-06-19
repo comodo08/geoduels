@@ -18,14 +18,14 @@ type HomePageLobbyProps = {
     | "joinQueue"
     | "startSingleplayer"
     | "cancelQueue"
-    | "createInviteLobby"
-    | "joinInviteLobby"
-    | "leavePrivateLobby"
-    | "kickLobbyMember"
-    | "transferLobbyOwner"
-    | "startPrivateLobby"
-    | "updatePrivateLobbySettings"
-    | "switchPrivateLobbyTeam"
+    | "createParty"
+    | "joinParty"
+    | "leaveParty"
+    | "kickPartyMember"
+    | "transferPartyOwner"
+    | "startParty"
+    | "updatePartySettings"
+    | "switchPartyTeam"
     | "devLogin"
     | "triggerGoogleSignIn"
     | "triggerDiscordSignIn"
@@ -85,15 +85,15 @@ export default function HomePageLobby({
       joinQueue={actions.joinQueue}
       startSingleplayer={actions.startSingleplayer}
       cancelQueue={actions.cancelQueue}
-      privateLobby={lobby.privateLobby}
-      createInviteLobby={actions.createInviteLobby}
-      joinInviteLobby={actions.joinInviteLobby}
-      leavePrivateLobby={actions.leavePrivateLobby}
-      kickLobbyMember={actions.kickLobbyMember}
-      transferLobbyOwner={actions.transferLobbyOwner}
-      startPrivateLobby={actions.startPrivateLobby}
-      updatePrivateLobbySettings={actions.updatePrivateLobbySettings}
-      switchPrivateLobbyTeam={actions.switchPrivateLobbyTeam}
+      party={lobby.party}
+      createParty={actions.createParty}
+      joinParty={actions.joinParty}
+      leaveParty={actions.leaveParty}
+      kickPartyMember={actions.kickPartyMember}
+      transferPartyOwner={actions.transferPartyOwner}
+      startParty={actions.startParty}
+      updatePartySettings={actions.updatePartySettings}
+      switchPartyTeam={actions.switchPartyTeam}
       queueError={lobby.queueError}
       onlinePlayers={lobby.onlinePlayers}
       maintenance={lobby.maintenance}

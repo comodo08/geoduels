@@ -20,16 +20,16 @@ func TestRecordMatchResultFinalRankedDeltaCastsParameters(t *testing.T) {
 	}
 }
 
-func TestCheatingBanRefundQueryCastsOpponentRatingPreviewKey(t *testing.T) {
+func TestCheatingBanRefundQueryUsesCompactRatingColumns(t *testing.T) {
 	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if strings.Contains(source, "->(::text)opponent_user_id") {
-		t.Fatal("cheating-ban refund query must cast opponent_user_id before JSONB key lookup")
+	if strings.Contains(source, "snapshot_json->'ratingPreview'") {
+		t.Fatal("cheating-ban refund query must not depend on retained replay JSON")
 	}
-	if !strings.Contains(source, "snapshot_json->'ratingPreview'->(opponent_user_id::text)->>'lose'") {
-		t.Fatal("cheating-ban refund query must read opponent rating preview using opponent_user_id as a JSONB key")
+	if !strings.Contains(source, "opponent.final_ranked_delta as original_delta") {
+		t.Fatal("cheating-ban refund query must use compact persisted rating deltas")
 	}
 }
