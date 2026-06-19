@@ -1,0 +1,8 @@
+{
+  "name": "geoduels",
+  "private": true,
+  "scripts": {
+    "maps:thumbnails": "npm --prefix apps/web run maps:thumbnails",
+    "maps:thumbnails:check": "npm --prefix apps/web run maps:thumbnails:check"
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "thumbnails": [
+    {
+      "key": "generic/variant-1",
+      "label": "Generic 1",
+      "category": "generic",
+      "search": "generic default stock variant 1"
+    },
+    {
+      "key": "generic/variant-2",
+      "label": "Generic 2",
+      "category": "generic",
+      "search": "generic default stock variant 2"
+    },
+    {
+      "key": "generic/variant-3",
+      "label": "Generic 3",
+      "category": "generic",
+      "search": "generic default stock variant 3"
+    },
+    {
+      "key": "generic/variant-4",
+      "label": "Generic 4",
+      "category": "generic",
+      "search": "generic default stock variant 4"
+    },
+    {
+      "key": "generic/variant-5",
+      "label": "Generic 5",
+      "category": "generic",
+      "search": "generic default stock variant 5"
+    },
+    {
+      "key": "continents/africa",
+      "label": "Africa",
+      "category": "continents",
+      "search": "Africa"
+    },
+    {
+      "key": "continents/antarctica",
+      "label": "Antarctica",
+      "category": "continents",
+      "search": "Antarctica"
+    },
+    {
+      "key": "continents/asia",
+      "label": "Asia",
+      "category": "continents",
+      "search": "Asia"
+    },
+    {
+      "key": "continents/europe",
+      "label": "Europe",
+      "category": "continents",
+      "search": "Europe"
+    },
+    {
+      "key": "continents/north-america",
+      "label": "North America",
+      "category": "continents",
+      "search": "North America"
+    },
+    {
+      "key": "continents/oceania",
+      "label": "Oceania",
+      "category": "continents",
+      "search": "Oceania"
+    },
+    {
+      "key": "continents/south-america",
+      "label": "South America",
+      "category": "continents",
+      "search": "South America"
+    },
+    {
+      "key": "countries/albania",
+      "label": "Albania",
+      "category": "countries",
+      "code": "AL",
+      "search": "Albania AL"
+    },
+    {
+      "key": "countries/andorra",
+      "label": "Andorra",
+      "category": "countries",
+      "code": "AD",
+      "search": "Andorra AD"
+    },
+    {
+      "key": "countries/argentina",
+      "label": "Argentina",
+      "category": "countries",
+      "code": "AR",
+      "search": "Argentina AR"
+    },
+    {
+      "key": "countries/australia",
+      "label": "Australia",
+      "category": "countries",
+      "code": "AU",
+      "search": "Australia AU"
+    },
+    {
+      "key": "countries/bangladesh",
+      "label": "Bangladesh",
+      "category": "countries",
+      "code": "BD",
+      "search": "Bangladesh BD"
+    },
+    {
+      "key": "countries/belgium",
+      "label": "Belgium",
+      "category": "countries",
+      "code": "BE",
+      "search": "Belgium BE"
+    },
+    {
+      "key": "countries/brazil",
+      "label": "Brazil",
+      "category": "countries",
+      "code": "BR",
+      "search": "Brazil BR"
+    },
+    {
+      "key": "countries/canada",
+      "label": "Canada",
+      "category": "countries",
+      "code": "CA",
+      "search": "Canada CA"
+    },
+    {
+      "key": "countries/chile",
+      "label": "Chile",
+      "category": "countries",
+      "code": "CL",
+      "search": "Chile CL"
+    },
+    {
+      "key": "countries/costa-rica",
+      "label": "Costa Rica",
+      "category": "countries",
+      "code": "CR",
+      "search": "Costa Rica CR"
+    },
+    {
+      "key": "countries/croatia",
+      "label": "Croatia",
+      "category": "countries",
+      "code": "HR",
+      "search": "Croatia HR"
+    },
+    {
+      "key": "countries/cyprus",
+      "label": "Cyprus",
+      "category": "countries",
+      "code": "CY",
+      "search": "Cyprus CY"
+    },
+    {
+      "key": "countries/czechia",
+      "label": "Czechia",
+      "category": "countries",
+      "code": "CZ",
+      "search": "Czechia CZ"
+    },
+    {
+      "key": "countries/denmark",
+      "label": "Denmark",
+      "category": "countries",
+      "code": "DK",
+      "search": "Denmark DK"
+    },
+    {
+      "key": "countries/dominican-republic",
+      "label": "Dominican Republic",
+      "category": "countries",
+      "code": "DO",
+      "search": "Dominican Republic DO"
+    },
+    {
+      "key": "countries/ecuador",
+      "label": "Ecuador",
+      "category": "countries",
+      "code": "EC",
+      "search": "Ecuador EC"
+    },
+    {
+      "key": "countries/estonia",
+      "label": "Estonia",
+      "category": "countries",
+      "code": "EE",
+      "search": "Estonia EE"
+    },
+    {
+      "key": "countries/eswatini",
+      "label": "Eswatini",
+      "category": "countries",
+      "code": "SZ",
+      "search": "Eswatini SZ"
+    },
+    {
+      "key": "countries/finland",
+      "label": "Finland",
+      "category": "countries",
+      "code": "FI",
+      "search": "Finland FI"
+    },
+    {
+      "key": "countries/france",
+      "label": "France",
+      "category": "countries",
+      "code": "FR",
+      "search": "France FR"
+    },
+    {
+      "key": "countries/germany",
+      "label": "Germany",
+      "category": "countries",
+      "code": "DE",
+      "search": "Germany DE"
+    },
+    {
+      "key": "countries/hong-kong-sar-china",
+      "label": "Hong Kong SAR China",
+      "category": "countries",
+      "code": "HK",
+      "search": "Hong Kong SAR China HK"
+    },
+    {
+      "key": "countries/switzerland",
+      "label": "Switzerland",
+      "category": "countries",
+      "code": "CH",
+      "search": "Switzerland CH"
+    }
+  ]
+}

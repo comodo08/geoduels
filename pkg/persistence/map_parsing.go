@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"geoduels/apps/web/shared/mapthumbnails"
 )
 
 func decodeMapRows(source io.Reader, maxLocations int) ([]mapRow, string, int, error) {
@@ -248,37 +250,8 @@ func normalizeThumbnailVariant(v int) int {
 func normalizeThumbnailKey(v string, fallbackVariant int) string {
 	v = strings.ToLower(strings.TrimSpace(v))
 	v = strings.Trim(v, "/")
-	if validMapThumbnailKey(v) {
+	if mapthumbnails.ValidKey(v) {
 		return v
 	}
 	return fmt.Sprintf("generic/variant-%d", normalizeThumbnailVariant(fallbackVariant))
-}
-
-func validMapThumbnailKey(v string) bool {
-	if strings.HasPrefix(v, "generic/variant-") {
-		switch strings.TrimPrefix(v, "generic/variant-") {
-		case "1", "2", "3", "4", "5":
-			return true
-		}
-	}
-	switch v {
-	case "continents/africa", "continents/antarctica", "continents/asia", "continents/europe", "continents/north-america", "continents/oceania", "continents/south-america":
-		return true
-	default:
-		return validCountryThumbnailKey(v)
-	}
-}
-
-func validCountryThumbnailKey(v string) bool {
-	slug, ok := strings.CutPrefix(v, "countries/")
-	if !ok || slug == "" || len(slug) > 80 {
-		return false
-	}
-	for _, r := range slug {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			continue
-		}
-		return false
-	}
-	return !strings.Contains(slug, "--") && slug[0] != '-' && slug[len(slug)-1] != '-'
 }
