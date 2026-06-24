@@ -16,6 +16,7 @@ function uploadFile(value: unknown) {
 }
 
 const config = { apiURL: "https://api.test" } as RuntimeConfig;
+const countryThumbnailRef = ["countries", "japan"].join("/");
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -117,7 +118,7 @@ describe("updateMap", () => {
       status: "ready",
       difficulty: "hard",
       thumbnailVariant: 1,
-      thumbnailKey: "countries/japan",
+      thumbnailKey: countryThumbnailRef,
       locationCount: 5,
       system: false,
       playCount: 0,
@@ -137,7 +138,7 @@ describe("updateMap", () => {
       description: "Updated route notes",
       visibility: "public",
       difficulty: "hard",
-      thumbnailKey: "countries/japan",
+      thumbnailKey: countryThumbnailRef,
       thumbnailVariant: 1,
     })).resolves.toEqual(map);
 
@@ -150,7 +151,7 @@ describe("updateMap", () => {
           description: "Updated route notes",
           visibility: "public",
           difficulty: "hard",
-          thumbnailKey: "countries/japan",
+          thumbnailKey: countryThumbnailRef,
           thumbnailVariant: 1,
         }),
       }),
