@@ -3,15 +3,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  Ban,
-  ChevronRight,
-  ExternalLink,
-  Gavel,
-  LineChart,
-  ShieldAlert,
-} from "lucide-react";
+import { ArrowLeft, Ban, ChevronRight, ExternalLink, Gavel, LineChart, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -19,6 +11,7 @@ import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { toPublicEntityId } from "../../lib/entity-id";
 import { AdminDetailRow as DetailRow, AdminMetric as Metric, AdminPanel as Panel } from "./components/admin-primitives";
+import { ModerationMatchReviewList } from "./components/ModerationMatchReviewList";
 import { formatAdminDate, fromLocalDateTime, localDateTime, slugify } from "./lib/admin-format";
 import {
   requestAdminAddIPSignupBan,
@@ -38,7 +31,6 @@ import {
   requestAdminModerationCases,
   requestAdminModerationSettings,
   requestAdminPlayerDetail,
-  requestAdminPlayerMatches,
   requestAdminPlayers,
   requestAdminPutMaintenance,
   requestAdminPutDiscordIntegrationSettings,
@@ -52,20 +44,9 @@ import {
   requestAdminUnbanPlayer,
   requestAdminUpdateChangelogPost,
 } from "./lib/admin-client";
+import { requestPlayerMatches } from "../players/lib/player-client";
 import { adminNav, moderationViews, pathFromRouter } from "./lib/admin-navigation";
-import type {
-  EnforcementAction,
-  IPBan,
-  MatchHistory,
-  ModerationCase,
-  ModerationEvidence,
-  ModerationMatch,
-  ModerationTimelineItem,
-  Player,
-  PlayerDetail,
-  PlayerReport,
-  UserRoleGrant,
-} from "./types";
+import type { EnforcementAction, IPBan, MatchHistory, ModerationCase, ModerationEvidence, ModerationMatch, ModerationTimelineItem, Player, PlayerDetail, PlayerReport, UserRoleGrant } from "./types";
 import type { ChangelogPost, ChangelogPostInput } from "../changelog/types";
 import { useHomeModel } from "../home/model/useHomeModel";
 import type { MaintenanceStatus } from "../matchmaking/lib/queue-client";
@@ -79,7 +60,7 @@ export default function AdminPage() {
   const config = getRuntimeConfig();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { view } = useHomeModel({ routeContext: "home" });
+  const { view } = useHomeModel({ routeContext: "home", backgroundDataEnabled: false });
   const path = pathFromRouter(router);
   const section = path[0] || "moderation";
   const leaf = path[1] || (section === "moderation" ? "active" : "");
@@ -95,18 +76,12 @@ export default function AdminPage() {
 
   const refreshAdminData = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["admin-players"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-moderation-cases"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-moderation-case"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-player-matches"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-player-detail"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-ip-signup-bans"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-changelog"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-maintenance"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-moderation-settings"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-discord-integration-settings"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-ranked-season"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-enforcement-actions"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-players"] }), queryClient.invalidateQueries({ queryKey: ["admin-moderation-cases"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-moderation-case"] }), queryClient.invalidateQueries({ queryKey: ["admin-player-matches"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-player-detail"] }), queryClient.invalidateQueries({ queryKey: ["admin-ip-signup-bans"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-changelog"] }), queryClient.invalidateQueries({ queryKey: ["admin-maintenance"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-moderation-settings"] }), queryClient.invalidateQueries({ queryKey: ["admin-discord-integration-settings"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-ranked-season"] }), queryClient.invalidateQueries({ queryKey: ["admin-enforcement-actions"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-roles"] }),
     ]);
   };
@@ -394,41 +369,7 @@ function ModerationRoute(props: {
                   <p className="font-bold text-white">Matches</p>
                   <span className="text-xs text-slate-500">{matches.length} referenced</span>
                 </div>
-                <div className="mt-3 space-y-1.5">
-                  {matches.map((match) => {
-                    const winner = match.players.find((player) => player.userId === match.winnerUserId);
-                    const outcome = match.winnerUserId
-                      ? `${winner?.displayName || match.winnerUserId} won`
-                      : match.mode === "singleplayer"
-                        ? "Completed"
-                        : match.mode
-                          ? "Draw"
-                          : "Result unavailable";
-                    return (
-                      <Link
-                        key={match.matchId}
-                        href={`/match/${encodeURIComponent(toPublicEntityId(match.matchId))}`}
-                        className="grid gap-2 rounded-md border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-sm hover:bg-slate-900 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="truncate font-semibold text-white">{match.matchId}</span>
-                            <span className={match.winnerUserId ? "font-semibold text-emerald-300" : "font-semibold text-amber-300"}>
-                              {outcome}
-                            </span>
-                          </div>
-                          <p className="mt-0.5 truncate text-xs text-slate-400">
-                            {match.players.map((player) => `${player.displayName} ${player.totalScore} pts / ${player.finalHp} HP`).join(" · ") || "Result details unavailable"}
-                          </p>
-                        </div>
-                        <p className="whitespace-nowrap text-xs text-slate-500">
-                          {match.mode || "unknown"} · {match.roundCount} rnd{match.roundCount === 1 ? "" : "s"} · {formatDate(match.endedAt)}
-                        </p>
-                      </Link>
-                    );
-                  })}
-                  {matches.length === 0 ? <p className="text-sm text-slate-400">No referenced matches.</p> : null}
-                </div>
+                <ModerationMatchReviewList config={props.config} accessToken={props.accessToken} matches={matches} />
               </Panel>
 
               <Panel className="p-4">
@@ -606,11 +547,15 @@ function PlayerDetailRoute(props: {
     queryKey: ["admin-player-detail", props.userId, props.accessToken],
     enabled: !!props.accessToken && !!props.userId,
     queryFn: () => requestAdminPlayerDetail(props.config, props.accessToken, props.userId),
+    refetchOnMount: false,
+    staleTime: 30_000,
   });
-  const legacyMatchesQuery = useQuery({
+  const matchesQuery = useQuery({
     queryKey: ["admin-player-matches", props.userId, props.accessToken],
-    enabled: !!props.accessToken && !!props.userId && !detailQuery.data?.matches,
-    queryFn: () => requestAdminPlayerMatches(props.config, props.accessToken, props.userId),
+    enabled: !!props.accessToken && !!props.userId,
+    queryFn: () => requestPlayerMatches(props.config, props.userId, 25),
+    refetchOnMount: false,
+    staleTime: 30_000,
   });
   const banMutation = useMutation({
     mutationFn: () => requestAdminBanPlayer(props.config, props.accessToken, props.userId, banReason),
@@ -622,7 +567,7 @@ function PlayerDetailRoute(props: {
   });
   const detail = detailQuery.data as PlayerDetail | undefined;
   const player = detail?.player;
-  const matches = detail?.matches || ((legacyMatchesQuery.data?.matches || []) as MatchHistory[]);
+  const matches = (matchesQuery.data?.matches || []) as MatchHistory[];
   const winRate = player?.gamesPlayed ? Math.round((player.wins / player.gamesPlayed) * 100) : 0;
 
   if (detailQuery.isLoading) {
@@ -652,6 +597,10 @@ function PlayerDetailRoute(props: {
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
+          <Link href={`/players/${encodeURIComponent(toPublicEntityId(player.userId))}`} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-700 px-4 py-2 text-sm font-semibold text-sky-300 hover:border-sky-400 hover:text-white">
+            Public profile
+            <ExternalLink className="h-4 w-4" />
+          </Link>
           <Input value={banReason} onChange={(event) => setBanReason(event.target.value)} placeholder="Enforcement reason" className="w-full sm:w-80" />
           {player.isBanned ? (
             <Button onClick={() => void unbanMutation.mutateAsync()}>Unban</Button>

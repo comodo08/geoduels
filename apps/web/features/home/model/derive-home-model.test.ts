@@ -81,7 +81,10 @@ function createSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   };
 }
 
-function createMatchState(snapshot: Snapshot | null): MatchState {
+function createMatchState(
+  snapshot: Snapshot | null,
+  overrides: Partial<MatchState> = {},
+): MatchState {
   return {
       matchmaking: {
         status: snapshot ? 'in_match' : 'ready',
@@ -96,7 +99,8 @@ function createMatchState(snapshot: Snapshot | null): MatchState {
     sourcePartyInviteCode: '',
     queueError: '',
     connectionIssue: '',
-    onlinePlayers: 42
+    onlinePlayers: 42,
+    ...overrides
   };
 }
 
@@ -489,6 +493,41 @@ describe('deriveHomeModel', () => {
       expect(model.overlays.endMatch.sides.opponent.participant.kind).toBe('player');
       expect(ratingDelta(model.overlays.endMatch.sides.self.participant)).toBeUndefined();
       expect(ratingDelta(model.overlays.endMatch.sides.opponent.participant)).toBeUndefined();
+    }
+  });
+
+  it('preserves the completed match config for replay and derives the return label from party provenance', () => {
+    const matchConfig = {
+      ruleset: 'nmpz' as const,
+      mapId: 'map-custom',
+      mapName: 'Custom World',
+      roundTimerMode: 'fixed' as const,
+      roundTimeLimitMs: 60_000,
+      pressureTimeLimitMs: 12_000
+    };
+    const snapshot = createSnapshot({
+      mode: 'singleplayer',
+      config: matchConfig,
+      state: 'ended',
+      phase: 'ended',
+      roundPhase: 'ended'
+    });
+    const model = deriveHomeModel({
+      auth: createAuthState(),
+      match: createMatchState(snapshot, {
+        sourcePartyId: 'party-1',
+        sourcePartyInviteCode: 'PARTY1'
+      }),
+      game: createGameState({ showMatchEndPage: true }),
+      config,
+      routeMatchId: 'match-1'
+    });
+
+    expect(model.game.backLabel).toBe('Back to party');
+    expect(model.overlays.endMatch.open).toBe(true);
+    if (model.overlays.endMatch.open) {
+      expect(model.overlays.endMatch.matchConfig).toEqual(matchConfig);
+      expect(model.overlays.endMatch.backLabel).toBe('Back to party');
     }
   });
 

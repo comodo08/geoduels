@@ -256,8 +256,8 @@ func (s *pgStore) CreateDebugModerationReports(params CreateDebugModerationRepor
 			{reporter.id, reporter.name},
 		} {
 			if _, err := tx.Exec(ctx, `
-				insert into match_players(match_id, user_id, display_name, mmr, hp)
-				values($1, $2, $3, $4, 0)
+				insert into match_players(match_id, user_id, display_name, mmr, hp, ended_at)
+				values($1, $2, $3, $4, 0, now())
 				on conflict (match_id, user_id) do nothing
 			`, matchID, player.id, player.name, initialMMR); err != nil {
 				return DebugModerationReportsResult{}, err

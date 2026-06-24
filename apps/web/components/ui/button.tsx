@@ -25,6 +25,13 @@ const sizeClass: Record<ButtonSize, string> = {
   icon: "h-10 min-h-10 w-10 rounded-full p-0",
 };
 
+export function circularIconButtonClassName(className?: string) {
+  return cn(
+    "inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] p-0 text-white/75 transition hover:bg-white/[0.12] hover:text-white disabled:cursor-not-allowed disabled:opacity-50",
+    className,
+  );
+}
+
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;

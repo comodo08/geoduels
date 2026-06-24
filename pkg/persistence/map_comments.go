@@ -16,7 +16,11 @@ import (
 func (s *pgStore) ListMapComments(userID, mapID string) ([]contracts.MapComment, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	return s.listMapComments(ctx, strings.TrimSpace(userID), strings.TrimSpace(mapID))
+	canonicalID, _, err := resolveMapIdentity(ctx, s.pool, mapID)
+	if err != nil {
+		return nil, err
+	}
+	return s.listMapComments(ctx, strings.TrimSpace(userID), canonicalID)
 }
 
 func (s *pgStore) CreateMapComment(userID, mapID string, input contracts.MapCommentCreate) (contracts.MapComment, error) {
@@ -32,8 +36,13 @@ func (s *pgStore) CreateMapComment(userID, mapID string, input contracts.MapComm
 		return contracts.MapComment{}, err
 	}
 	defer tx.Rollback(ctx)
+	canonicalID, _, err := resolveMapIdentity(ctx, tx, mapID)
+	if err != nil {
+		return contracts.MapComment{}, err
+	}
+	mapID = canonicalID
 	var visible bool
-	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where map_key=$1 and archived_at is null and (published_at is not null or owner_user_id is null or owner_user_id=$2))`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible); err != nil {
+	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where id=$1 and archived_at is null and (published_at is not null or owner_user_id is null or owner_user_id=$2))`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible); err != nil {
 		return contracts.MapComment{}, err
 	}
 	if !visible {
@@ -93,6 +102,11 @@ func (s *pgStore) DeleteMapComment(userID, mapID, commentID string, moderator bo
 		return err
 	}
 	defer tx.Rollback(ctx)
+	canonicalID, _, err := resolveMapIdentity(ctx, tx, mapID)
+	if err != nil {
+		return err
+	}
+	mapID = canonicalID
 	status := "deleted"
 	if moderator {
 		status = "moderated"
@@ -109,7 +123,7 @@ func (s *pgStore) DeleteMapComment(userID, mapID, commentID string, moderator bo
 	if _, err := tx.Exec(ctx, `delete from map_comment_likes where comment_id=$1`, strings.TrimSpace(commentID)); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `update maps set comment_count=greatest(comment_count-1,0), updated_at=now() where map_key=$1`, strings.TrimSpace(mapID)); err != nil {
+	if _, err := tx.Exec(ctx, `update maps set comment_count=greatest(comment_count-1,0), updated_at=now() where id=$1`, strings.TrimSpace(mapID)); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -124,12 +138,17 @@ func (s *pgStore) SetMapCommentLike(userID, mapID, commentID string, liked bool)
 		return contracts.MapComment{}, err
 	}
 	defer tx.Rollback(ctx)
+	canonicalID, _, err := resolveMapIdentity(ctx, tx, mapID)
+	if err != nil {
+		return contracts.MapComment{}, err
+	}
+	mapID = canonicalID
 	var visible bool
 	if err := tx.QueryRow(ctx, `
 		select exists(
 			select 1
 			from map_comments c
-			join maps m on m.map_key=c.map_id
+			join maps m on m.id=c.map_id
 			where c.id=$1 and c.map_id=$2 and c.status='visible'
 			  and m.archived_at is null
 			  and (m.published_at is not null or m.owner_user_id is null or m.owner_user_id=nullif($3,'')::uuid)

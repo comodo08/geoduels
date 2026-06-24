@@ -11,12 +11,11 @@ This document describes the current runtime implemented in this repository. Olde
 - `services/gameplay-node`: authoritative in-memory duel and singleplayer execution for assigned matches.
 - `services/moderation-worker`: background moderation projection and enforcement processing.
 - `services/discord-worker`: Discord membership/role reconciliation and badge synchronization.
-- `workers/location-ingest`: bootstraps official datasets; user uploads are handled by the API.
 - `workers/storage-maintenance`: bounded replay compression and retention cleanup.
 
 ## Data ownership
 
-- PostgreSQL is the durable source of truth for users, identities, sessions, profiles, stats, ranks, maps and immutable revisions, parties, chat, moderation, runtime match metadata, compact match summaries, and retained replays.
+- PostgreSQL is the durable source of truth for users, identities, sessions, profiles, stats, ranks, maps and their current location datasets, parties, chat, moderation, runtime match metadata, compact match summaries, and retained replays.
 - Redis is used for queue state, gameplay-node registration, route assignment, presence/pubsub, and maintenance status.
 - `pkg/persistence` owns Postgres persistence behavior.
 - `pkg/coordinator` owns Redis-backed node registration, assignment, and presence.
@@ -25,7 +24,7 @@ This document describes the current runtime implemented in this repository. Olde
 
 ## Entity identifiers
 
-- Durable users, auth sessions, matches, parties, map revisions, comments, chat conversations, and chat messages use PostgreSQL `uuid` keys.
+- Durable users, auth sessions, matches, maps, parties, comments, chat conversations, and chat messages use PostgreSQL `uuid` keys.
 - New keys are UUIDv7 for index locality. Deterministic UUIDs are used only for compatibility keys such as chat conversation scopes and migrated legacy identifiers.
 - Service contracts, JWT subjects, Redis values, and websocket payloads carry canonical UUID strings.
 - Browser routes render UUIDs as reversible 26-character Crockford Base32 values. Human map slugs and party invite codes remain text.
@@ -47,7 +46,7 @@ This document describes the current runtime implemented in this repository. Olde
 
 1. Browser opens websocket matchmaking to `services/match-coordinator` at `/queue`.
 2. `match-coordinator` authenticates the app JWT, manages queue state, and selects a gameplay node.
-3. `match-coordinator` pins the selected map revision, persists a deterministic round plan, and creates the match on the chosen `gameplay-node`.
+3. `match-coordinator` reads the selected map's current locations under a shared lock, persists a deterministic round plan, and creates the match on the chosen `gameplay-node`.
 4. `match-coordinator` returns match assignment plus a short-lived gameplay ticket.
 5. Browser connects to `/ws/{node}` through `services/realtime-gateway`.
 6. `realtime-gateway` resolves the registered gameplay pod for that route and proxies the websocket to the exact `gameplay-node`.
@@ -72,6 +71,7 @@ This document describes the current runtime implemented in this repository. Olde
 
 - `/match/[id]` is the canonical route for a specific match.
 - `/players/[id]` is the public profile route for public-safe rating, badge, and recent match-history data.
+- `/settings/account` owns private nickname, badge-selection, sign-in-provider, logout, and account-deletion controls.
 - Cold loads resolve through `GET /v1/matches/{id}/bootstrap`.
 - Already-authenticated refreshes can resolve through `GET /v1/matches/{id}/session`.
 - The route can resolve to:
@@ -122,14 +122,16 @@ This document describes the current runtime implemented in this repository. Olde
 
 ## Location pipeline
 
-- Custom-map JSON is streamed through the API, validated, normalized into immutable PostgreSQL revisions, and then discarded.
+- Custom-map JSON is streamed through the API, validated, and atomically replaces the map's current normalized PostgreSQL location dataset.
 - Map upload quotas are derived from the creator's base/trusted/established trust tier. Trust uses account age and qualified community favorites/maps; moderation restrictions lower the effective tier.
-- Match launch selects and persists the full bounded round plan before assigning a gameplay node.
+- Match launch locks the selected map while reading its current dataset, then persists the full bounded round plan before assigning a gameplay node. Existing matches therefore remain independent of later map uploads.
 - `gameplay-node` consumes the supplied in-memory plan and does not query or preload map catalogs.
 - Redis is not used for map contents, lobby map settings, or per-match location deduplication.
 
 ## Match persistence and retention
 
+- A terminal gameplay snapshot is not broadcast as `ended` until PostgreSQL atomically commits match history, participant projections, rating/stat updates, match-session completion, runtime completion, and party reopening.
+- The committed snapshot returned to the gameplay node contains authoritative post-match ratings. Redis assignment cleanup happens only after that snapshot is broadcast.
 - Compact match summaries and participant projections are retained durably for profiles, rankings, moderation, and match lists.
 - Full replay snapshots are Zstandard-compressed when written and retained for 30 days by default.
 - Replays referenced by moderation reports/evidence are pinned by clearing their expiration.

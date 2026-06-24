@@ -1,27 +1,40 @@
 import type React from "react";
-import { LobbyPanel } from "./lobby-primitives";
+import { ArrowRight } from "lucide-react";
+import { LobbyActionLink, LobbyPanel } from "./lobby-primitives";
 
 export function LobbyTutorialSection() {
   return (
-    <LobbyPanel
+    <section
       aria-labelledby="geoduels-seo-heading"
-      className="mt-8 w-full max-w-[1220px] p-6 pointer-events-auto sm:mt-[156px] sm:p-8"
+      className="w-full border-t border-white/10 py-8 pointer-events-auto sm:py-10"
     >
       <div className="space-y-6 text-left">
-        <div className="max-w-3xl space-y-3">
-          <span className="inline-flex rounded-full border border-[#2ad18f]/30 bg-[#2ad18f]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#7de3b7]">
-            Tutorial
-          </span>
-          <h1
-            id="geoduels-seo-heading"
-            className="text-[30px] font-extrabold leading-tight tracking-tight text-white sm:text-[40px]"
+        <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
+          <div className="max-w-3xl space-y-3">
+            <span className="inline-flex rounded-full border border-[#2ad18f]/30 bg-[#2ad18f]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#7de3b7]">
+              Tutorial
+            </span>
+            <h1
+              id="geoduels-seo-heading"
+              className="text-[30px] font-extrabold leading-tight tracking-tight text-white sm:text-[40px]"
+            >
+              GeoDuels
+            </h1>
+            <p className="text-[15px] leading-7 text-[#a9bfd4] sm:text-base">
+              A free GeoGuessr-inspired Street View game. Queue for ranked
+              matches against other players, with friends, or jump into
+              singleplayer.
+            </p>
+          </div>
+          <LobbyActionLink
+            href="/help"
+            variant="secondary"
+            size="lg"
+            className="shrink-0 rounded-xl"
           >
-            GeoDuels
-          </h1>
-          <p className="text-[15px] leading-7 text-[#a9bfd4] sm:text-base">
-            A free GeoGuessr-inspired Street View game. Queue for ranked
-            matches against other players, with friends, or jump into singleplayer.
-          </p>
+            Learn more
+            <ArrowRight size={16} />
+          </LobbyActionLink>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">
@@ -39,7 +52,7 @@ export function LobbyTutorialSection() {
           </TutorialCard>
         </div>
       </div>
-    </LobbyPanel>
+    </section>
   );
 }
 

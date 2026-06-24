@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRecordMatchResultFinalRankedDeltaCastsParameters(t *testing.T) {
+func TestFinalizeMatchFinalRankedDeltaCastsParameters(t *testing.T) {
 	body, err := os.ReadFile("matches_write.go")
 	if err != nil {
 		t.Fatal(err)
@@ -26,10 +26,10 @@ func TestRecordMatchHistoryCastsReplayExpirationParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if strings.Contains(source, "$4 + make_interval(days => $17)") {
+	if strings.Contains(source, "$4 + make_interval(days => $16)") {
 		t.Fatal("replay expiration must cast pgx timestamp and integer parameters")
 	}
-	if !strings.Contains(source, "$4::timestamptz + make_interval(days => $17::integer)") {
+	if !strings.Contains(source, "$4::timestamptz + make_interval(days => $16::integer)") {
 		t.Fatal("typed replay expiration expression is missing")
 	}
 }

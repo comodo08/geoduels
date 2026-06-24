@@ -31,6 +31,9 @@ export default function HomePageOverlays({
   actions,
 }: HomePageOverlaysProps) {
   const activeNotification = overlays.notifications?.[0];
+  const replayConfig = overlays.endMatch.open
+    ? overlays.endMatch.matchConfig
+    : undefined;
   return (
     <>
       <RequiredNicknameModal
@@ -117,6 +120,7 @@ export default function HomePageOverlays({
       {overlays.endMatch.open && (
         <EndMatchOverlay
           onLeaveGame={actions.leaveGame}
+          backLabel={overlays.endMatch.backLabel}
           mode={overlays.endMatch.mode}
           outcome={overlays.endMatch.outcome}
           sides={overlays.endMatch.sides}
@@ -131,7 +135,7 @@ export default function HomePageOverlays({
           onReportPlayer={actions.reportPlayer}
           onPlayAgain={
             overlays.endMatch.mode === "singleplayer"
-              ? actions.startSingleplayer
+              ? () => actions.startSingleplayer(replayConfig)
               : undefined
           }
           asPage

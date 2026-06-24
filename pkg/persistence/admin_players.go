@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"geoduels/pkg/contracts"
 )
@@ -371,23 +372,26 @@ func (s *pgStore) GetAdminPlayerDetail(userID string) (AdminPlayerDetail, error)
 	if err != nil {
 		return AdminPlayerDetail{}, err
 	}
-	stats, err := s.adminPlayerStats(ctx, userID)
-	if err != nil {
-		return AdminPlayerDetail{}, err
-	}
-	eloHistory, err := s.adminPlayerEloHistory(ctx, userID, 7)
-	if err != nil {
-		return AdminPlayerDetail{}, err
-	}
-	matches, err := s.ListPlayerMatchHistory(userID, 25)
-	if err != nil {
+	var stats AdminPlayerStats
+	var eloHistory []AdminPlayerEloPoint
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		var queryErr error
+		stats, queryErr = s.adminPlayerStats(groupCtx, userID)
+		return queryErr
+	})
+	group.Go(func() error {
+		var queryErr error
+		eloHistory, queryErr = s.adminPlayerEloHistory(groupCtx, userID, 7)
+		return queryErr
+	})
+	if err := group.Wait(); err != nil {
 		return AdminPlayerDetail{}, err
 	}
 	return AdminPlayerDetail{
 		Player:     player,
 		Stats:      stats,
 		EloHistory: eloHistory,
-		Matches:    matches,
 	}, nil
 }
 

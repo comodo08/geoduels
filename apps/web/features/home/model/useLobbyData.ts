@@ -84,7 +84,7 @@ export function useLobbyData({
       }
       return resp.json();
     },
-    refetchOnMount: false,
+    refetchOnMount: "always",
     staleTime: 60_000,
   });
 

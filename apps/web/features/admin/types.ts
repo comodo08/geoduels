@@ -117,7 +117,6 @@ export type PlayerDetail = {
     delta: number;
     played: number;
   }>;
-  matches: MatchHistory[];
 };
 
 export type EnforcementAction = {

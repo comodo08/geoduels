@@ -203,6 +203,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/content/changelog/{slug}", a.publicChangelogPost).Methods(http.MethodGet)
 
 	r.HandleFunc("/v1/leaderboard", a.leaderboard).Methods(http.MethodGet)
+	r.HandleFunc("/v1/players/{id}", a.publicPlayerProfile).Methods(http.MethodGet)
+	r.HandleFunc("/v1/players/{id}/matches", a.publicPlayerMatches).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}", a.match).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}/bootstrap", a.matchBootstrap).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}/route", a.matchRoute).Methods(http.MethodGet)
@@ -228,7 +230,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/maps/{id}/comments/{commentId}", a.deleteMapComment).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/maps/{id}/comments/{commentId}/like", a.likeMapComment).Methods(http.MethodPost)
 	r.HandleFunc("/v1/maps/{id}/comments/{commentId}/like", a.unlikeMapComment).Methods(http.MethodDelete)
-	r.HandleFunc("/v1/maps/{id}/revisions", a.uploadMapRevision).Methods(http.MethodPost)
+	r.HandleFunc("/v1/maps/{id}/locations", a.replaceMapLocations).Methods(http.MethodPut)
 	r.HandleFunc("/v1/admin/players", a.adminPlayers).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/players/{id}", a.adminPlayerDetail).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/players/{id}/matches", a.adminPlayerMatches).Methods(http.MethodGet)

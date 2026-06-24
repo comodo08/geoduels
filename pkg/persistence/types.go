@@ -27,6 +27,21 @@ type Profile struct {
 	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
 }
 
+type PublicPlayerProfile struct {
+	UserID            string                  `json:"userId"`
+	DisplayName       string                  `json:"displayName"`
+	AvatarURL         string                  `json:"avatarUrl,omitempty"`
+	MMR               int                     `json:"mmr"`
+	RatingRD          float64                 `json:"ratingRd,omitempty"`
+	SeasonID          string                  `json:"seasonId,omitempty"`
+	GamesPlayed       int                     `json:"gamesPlayed"`
+	Wins              int                     `json:"wins"`
+	RankedGamesPlayed int                     `json:"rankedGamesPlayed"`
+	RankedWins        int                     `json:"rankedWins"`
+	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
+	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
+}
+
 type LeaderboardEntry struct {
 	Rank        int    `json:"rank"`
 	UserID      string `json:"userId"`
@@ -79,7 +94,7 @@ type ModerationCaseNotificationPayload = contracts.ModerationCaseNotificationPay
 type EnforcementActionSummary = contracts.EnforcementActionSummary
 type UserRoleGrant = contracts.UserRoleGrant
 
-type MapRevisionSummary = contracts.MapRevisionSummary
+type MapImportSummary = contracts.MapImportSummary
 
 type MatchHistorySummary struct {
 	MatchID      string    `json:"matchId"`
@@ -87,6 +102,17 @@ type MatchHistorySummary struct {
 	StartedAt    time.Time `json:"startedAt"`
 	EndedAt      time.Time `json:"endedAt"`
 	WinnerUserID string    `json:"winnerUserId,omitempty"`
+	Outcome      string    `json:"outcome"`
+	Ranked       bool      `json:"ranked"`
+	RatingDelta  int       `json:"ratingDelta,omitempty"`
+	TotalScore   int       `json:"totalScore,omitempty"`
+}
+
+type MatchHistoryPage struct {
+	Matches     []MatchHistorySummary
+	HasMore     bool
+	NextEndedAt time.Time
+	NextMatchID string
 }
 
 type CreateModerationReportParams struct {
@@ -162,7 +188,6 @@ type AdminPlayerDetail struct {
 	Player     AdminPlayerSummary    `json:"player"`
 	Stats      AdminPlayerStats      `json:"stats"`
 	EloHistory []AdminPlayerEloPoint `json:"eloHistory"`
-	Matches    []MatchHistorySummary `json:"matches"`
 }
 
 type UserNotification struct {

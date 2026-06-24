@@ -140,7 +140,8 @@ export type Snapshot = {
   matchId: string;
   mode?: "duel" | "singleplayer" | "team_duel" | "free_for_all";
   config?: {
-    ruleset?: "moving" | "nmpz";
+    ruleset?: "moving" | "no_move" | "nmpz";
+    streetNames?: "shown" | "hidden";
     mapKey?: string;
     mapId?: string;
     mapName?: string;

@@ -168,23 +168,8 @@ func (q *matchCoordinator) authorizeChatConversation(ctx context.Context, conver
 				}
 			}
 		}
-		if raw, found, err := q.persist.GetFinalMatchSnapshot(id); err == nil && found {
-			var snap contracts.MatchSnapshot
-			if json.Unmarshal(raw, &snap) == nil {
-				if resolver, ok := q.persist.(interface {
-					ResolveLegacyEntityID(entityType, legacyID string) (string, bool, error)
-				}); ok {
-					snap = contracts.NormalizeSnapshotEntityIDs(snap, func(entityType, value string) string {
-						if resolved, found, resolveErr := resolver.ResolveLegacyEntityID(entityType, value); resolveErr == nil && found {
-							return resolved
-						}
-						return value
-					})
-				}
-				if _, ok := snap.Players[userID]; ok {
-					return scope, nil
-				}
-			}
+		if participated, err := q.persist.PlayerParticipatedInMatch(userID, id); err == nil && participated {
+			return scope, nil
 		}
 		return chatScope{}, errors.New("forbidden")
 	default:

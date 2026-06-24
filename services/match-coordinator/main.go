@@ -162,9 +162,9 @@ func (q *matchCoordinator) runMatchmakingLoop(interval time.Duration, batchSize 
 		if err == nil && status.QueueBlocked() {
 			continue
 		}
-		for _, ruleset := range []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ} {
-			if _, err := q.store.RunMatchmaking(matchstore.QueuePoolRegistered, ruleset, batchSize); err != nil {
-				observability.Log("warn", "matchmaking tick failed", map[string]any{"pool": string(matchstore.QueuePoolRegistered), "ruleset": string(ruleset), "error": err.Error()})
+		for _, queue := range matchstore.AllQueueVariants {
+			if _, err := q.store.RunMatchmaking(matchstore.QueuePoolRegistered, queue, batchSize); err != nil {
+				observability.Log("warn", "matchmaking tick failed", map[string]any{"pool": string(matchstore.QueuePoolRegistered), "queue": string(queue), "error": err.Error()})
 			}
 		}
 	}
@@ -270,7 +270,10 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 		profile.DisplayName = userID
 	}
 	queuePool := matchstore.QueuePoolRegistered
-	selectedRulesets := parseQueueRulesets(r.URL.Query().Get("rulesets"))
+	selectedQueues := parseQueueVariants(
+		r.URL.Query().Get("queues"),
+		r.URL.Query().Get("rulesets"),
+	)
 
 	if err := q.store.LeaveAllRulesets(queuePool, userID); err != nil {
 		http.Error(w, "queue unavailable", http.StatusBadGateway)
@@ -278,8 +281,8 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var found *contracts.MatchFound
-	for _, ruleset := range selectedRulesets {
-		_, nextFound, err := q.store.Join(queuePool, ruleset, contracts.QueueJoinRequest{
+	for _, queue := range selectedQueues {
+		_, nextFound, err := q.store.Join(queuePool, queue, contracts.QueueJoinRequest{
 			UserID:            userID,
 			DisplayName:       profile.DisplayName,
 			AvatarURL:         profile.AvatarURL,
@@ -316,7 +319,7 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	assigned := false
 	defer func() {
 		if !assigned {
-			_ = q.store.Leave(queuePool, selectedRulesets, userID)
+			_ = q.store.Leave(queuePool, selectedQueues, userID)
 		}
 	}()
 
@@ -326,9 +329,9 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if found == nil {
-			found, err = q.store.Poll(queuePool, selectedRulesets, userID)
+			found, err = q.store.Poll(queuePool, selectedQueues, userID)
 			if err != nil {
-				observability.Log("warn", "queue poll failed", map[string]any{"userId": userID, "pool": string(queuePool), "rulesets": selectedRulesets, "error": err.Error()})
+				observability.Log("warn", "queue poll failed", map[string]any{"userId": userID, "pool": string(queuePool), "queues": selectedQueues, "error": err.Error()})
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "QUEUE_POLL_FAILED", "message": "queue poll failed"})
 				return
 			}
@@ -360,9 +363,9 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 		case <-pollTicker.C:
 		case <-heartbeatTicker.C:
 			q.touchPresence(userID)
-			status, err := q.store.Heartbeat(queuePool, selectedRulesets, userID)
+			status, err := q.store.Heartbeat(queuePool, selectedQueues, userID)
 			if err != nil {
-				observability.Log("warn", "queue heartbeat failed", map[string]any{"userId": userID, "pool": string(queuePool), "rulesets": selectedRulesets, "error": err.Error()})
+				observability.Log("warn", "queue heartbeat failed", map[string]any{"userId": userID, "pool": string(queuePool), "queues": selectedQueues, "error": err.Error()})
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "QUEUE_HEARTBEAT_FAILED", "message": "queue heartbeat failed"})
 				return
 			}
@@ -399,7 +402,7 @@ func (q *matchCoordinator) heartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	q.touchPresence(claims.Sub)
 
-	status, err := q.store.Heartbeat(matchstore.QueuePoolRegistered, []contracts.GameRuleset{contracts.RulesetMoving, contracts.RulesetNMPZ}, claims.Sub)
+	status, err := q.store.Heartbeat(matchstore.QueuePoolRegistered, matchstore.AllQueueVariants, claims.Sub)
 	if err != nil {
 		http.Error(w, "queue unavailable", http.StatusBadGateway)
 		return
@@ -407,22 +410,41 @@ func (q *matchCoordinator) heartbeat(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": status})
 }
 
-func parseQueueRulesets(raw string) []contracts.GameRuleset {
-	if strings.TrimSpace(raw) == "" {
-		return []contracts.GameRuleset{contracts.RulesetMoving}
+func parseQueueVariants(rawQueues string, legacyRulesets string) []matchstore.QueueVariant {
+	if strings.TrimSpace(rawQueues) == "" {
+		return parseLegacyQueueRulesets(legacyRulesets)
 	}
-	out := []contracts.GameRuleset{}
-	seen := map[contracts.GameRuleset]bool{}
-	for _, part := range strings.Split(raw, ",") {
-		ruleset := contracts.NormalizeRuleset(contracts.GameRuleset(strings.TrimSpace(strings.ToLower(part))))
-		if seen[ruleset] {
+	out := []matchstore.QueueVariant{}
+	seen := map[matchstore.QueueVariant]bool{}
+	for _, part := range strings.Split(rawQueues, ",") {
+		queue := matchstore.NormalizeQueueVariant(matchstore.QueueVariant(strings.TrimSpace(strings.ToLower(part))))
+		if seen[queue] {
 			continue
 		}
-		seen[ruleset] = true
-		out = append(out, ruleset)
+		seen[queue] = true
+		out = append(out, queue)
 	}
 	if len(out) == 0 {
-		return []contracts.GameRuleset{contracts.RulesetMoving}
+		return []matchstore.QueueVariant{matchstore.QueueMoving}
+	}
+	return out
+}
+
+func parseLegacyQueueRulesets(raw string) []matchstore.QueueVariant {
+	if strings.TrimSpace(raw) == "" {
+		return []matchstore.QueueVariant{matchstore.QueueMoving}
+	}
+	out := []matchstore.QueueVariant{}
+	seen := map[matchstore.QueueVariant]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		variant := matchstore.QueueMoving
+		if strings.TrimSpace(strings.ToLower(part)) == string(contracts.RulesetNMPZ) {
+			variant = matchstore.QueueNMPZ
+		}
+		if !seen[variant] {
+			seen[variant] = true
+			out = append(out, variant)
+		}
 	}
 	return out
 }

@@ -76,4 +76,5 @@ describe('GameplaySocketClient', () => {
 
     expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({ serverUnixMs: 2_000 }));
   });
+
 });

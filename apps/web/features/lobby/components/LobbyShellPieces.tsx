@@ -1,13 +1,22 @@
-import { AnimatePresence, motion } from "framer-motion";
+import type React from "react";
 import Link from "next/link";
-import { ArrowUpRight, ChevronDown, ChevronUp, Github, Heart, Shield, Twitter, UserPlus, Youtube } from "lucide-react";
-import MarkdownContent from "../../../components/ui/MarkdownContent";
+import { ArrowUpRight, Github, Heart, Shield, Twitter, UserPlus, Youtube } from "lucide-react";
 import { formatChangelogDate } from "../lib/lobby-ui";
 import {
-  LobbyCardButton,
   LobbyNotice,
   LobbyPanel,
 } from "./lobby-primitives";
+
+function plainChangelogPreview(markdown: string) {
+  return markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/[#>*_\-~]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export function NewsPanel({
   changelogEyebrow,
@@ -15,87 +24,63 @@ export function NewsPanel({
   changelogSlug,
   changelogTitle,
   changelogUpdatedAt,
-  expanded,
-  onToggle,
 }: {
   changelogEyebrow: string;
   changelogMarkdown: string;
   changelogSlug: string;
   changelogTitle: string;
   changelogUpdatedAt: string;
-  expanded: boolean;
-  onToggle: () => void;
 }) {
+  const preview = plainChangelogPreview(changelogMarkdown) || "No changelog content yet.";
   return (
-    <LobbyPanel interactive className="group w-full p-5" style={{ animationDelay: "-3s" }}>
-      <button type="button" onClick={onToggle} className="block w-full text-left">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#2ad18f] drop-shadow-sm">
-              {changelogEyebrow}
-            </span>
-            <h2 className="text-[20px] font-extrabold leading-tight tracking-tight text-white drop-shadow-md">
-              {changelogTitle}
-            </h2>
-          </div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors group-hover:bg-white/10 group-hover:text-white">
-            {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-          </div>
-        </div>
-        <AnimatePresence>
-          {expanded ? (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-5 space-y-4 border-t border-white/[0.06] pt-5">
-                <MarkdownContent markdown={changelogMarkdown || "No changelog content yet."} compact />
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  {changelogUpdatedAt ? (
-                    <time dateTime={changelogUpdatedAt} className="text-[12px] font-semibold text-[#a9bfd4]/70">
-                      Updated {formatChangelogDate(changelogUpdatedAt)}
-                    </time>
-                  ) : (
-                    <span />
-                  )}
-                  <Link
-                    href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
-                    className="inline-flex items-center gap-1 text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#77f0be] transition hover:text-white"
-                  >
-                    Read More
-                    <ArrowUpRight size={14} />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
+    <div className="min-w-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#2ad18f] drop-shadow-sm">
+            Latest Update
+          </span>
+          <h2 className="text-[18px] font-extrabold leading-tight tracking-tight text-white drop-shadow-md">
+            {changelogTitle}
+          </h2>
+          {changelogUpdatedAt ? (
+            <time dateTime={changelogUpdatedAt} className="mt-2 block text-[12px] font-semibold text-[#a9bfd4]/70">
+              Updated {formatChangelogDate(changelogUpdatedAt)}
+            </time>
           ) : null}
-        </AnimatePresence>
-      </button>
-    </LobbyPanel>
+        </div>
+        <Link
+          href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#77f0be] transition hover:bg-white/[0.1] hover:text-white"
+        >
+          Read
+          <ArrowUpRight size={13} />
+        </Link>
+      </div>
+      <p className="mt-3 max-h-[3.25rem] overflow-hidden text-[13px] font-semibold leading-6 text-[#a9bfd4] [mask-image:linear-gradient(180deg,black_55%,transparent_100%)] [-webkit-mask-image:linear-gradient(180deg,black_55%,transparent_100%)]">
+        {preview}
+      </p>
+    </div>
   );
 }
 
 export function DonateCard({ onSupportDonation }: { onSupportDonation: () => Promise<void> }) {
   return (
-    <LobbyCardButton onClick={() => void onSupportDonation()} className="group flex w-full items-center gap-4 p-5" style={{ animationDelay: "-0.75s" }}>
+    <button
+      type="button"
+      onClick={() => void onSupportDonation()}
+      className="group flex h-full min-h-[104px] w-full items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-5 py-4 text-left transition hover:border-[#ef476f]/30 hover:bg-[#ef476f]/10"
+    >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ef476f]/14 text-[#f7a1b5]">
         <Heart size={22} />
       </div>
       <div className="min-w-0 flex-1">
-        <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#ee7f98]">Donate</span>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-[18px] font-extrabold tracking-tight text-white">Support GeoDuels</h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-[#a9bfd4]">
-              Help GeoDuels stay ad-free and in active development by donating :D
-            </p>
-          </div>
-          <ArrowUpRight size={18} className="shrink-0 text-white/50 transition-colors group-hover:text-white" />
-        </div>
+        <h3 className="text-[17px] font-extrabold tracking-tight text-white">Support GeoDuels</h3>
+        <p className="mt-1 text-[13px] font-semibold leading-snug text-[#a9bfd4]">
+          Keep the game ad-free.
+        </p>
       </div>
-    </LobbyCardButton>
+      <ArrowUpRight size={17} className="shrink-0 text-white/50 transition-colors group-hover:text-white" />
+    </button>
   );
 }
 
@@ -111,28 +96,32 @@ export function SocialLinksCard() {
     { href: "https://youtube.com/@sourcelocation", label: "YouTube", icon: <Youtube size={20} /> },
   ];
   return (
-    <LobbyPanel className="flex w-full flex-col gap-4 p-5" style={{ animationDelay: "-1s" }}>
-      <span className="block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">Community</span>
-      <div className="flex flex-wrap gap-3">
+    <div className="flex w-full flex-wrap gap-3">
         {links.map((social) => (
           <a key={social.label} href={social.href} target="_blank" rel="noreferrer" aria-label={social.label} className="glass-panel glass-panel-interactive flex h-12 w-12 items-center justify-center rounded-full text-white">
             {social.icon}
           </a>
         ))}
-      </div>
-    </LobbyPanel>
+    </div>
   );
 }
 
-export function OnlineStatusCard({ onlinePlayers }: { onlinePlayers: number }) {
+export function LobbyUpdatesPanel({
+  newsPanel,
+  donateCard,
+  socialLinksCard,
+}: {
+  newsPanel: React.ReactNode;
+  donateCard: React.ReactNode;
+  socialLinksCard: React.ReactNode;
+}) {
   return (
-    <LobbyPanel className="flex w-full items-center gap-3 px-5 py-3" style={{ animationDelay: "-0.5s" }}>
-      <div className="status-dot-wrap relative flex h-4 w-4 shrink-0 items-center justify-center">
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accentPrimary" />
+    <LobbyPanel className="grid w-full items-stretch gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.34fr)]" style={{ animationDelay: "-1s" }}>
+      <div className="flex min-w-0 flex-col justify-between gap-4">
+        {newsPanel}
+        {socialLinksCard}
       </div>
-      <div className="min-w-0">
-        <p className="text-[12px] font-semibold text-[#2ad18f] transition-colors">{onlinePlayers} Playing</p>
-      </div>
+      <div className="min-w-0">{donateCard}</div>
     </LobbyPanel>
   );
 }

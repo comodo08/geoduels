@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -116,5 +117,19 @@ func TestMapSearchPatternCapsLongTermsByRune(t *testing.T) {
 	got := mapSearchPattern(strings.Repeat("ø", 81))
 	if len([]rune(strings.Trim(got, "%"))) != 80 {
 		t.Fatalf("expected 80 runes, got %d in %q", len([]rune(strings.Trim(got, "%"))), got)
+	}
+}
+
+func TestArchiveCustomMapAdminOverrideIncludesOwnerlessMaps(t *testing.T) {
+	body, err := os.ReadFile("map_ingest.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if strings.Contains(source, "$3 and m.owner_user_id is not null") || strings.Contains(source, "$3 and owner_user_id is not null") {
+		t.Fatal("admin map deletion override must include ownerless maps")
+	}
+	if got := strings.Count(source, "owner_user_id=$2 or $3"); got != 2 {
+		t.Fatalf("admin map deletion predicates = %d, want 2", got)
 	}
 }

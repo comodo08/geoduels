@@ -142,6 +142,23 @@ func TestNormalizeMatchConfigDoesNotChooseMap(t *testing.T) {
 	if config.Ruleset != RulesetMoving {
 		t.Fatalf("Ruleset = %q, want %q", config.Ruleset, RulesetMoving)
 	}
+	if config.StreetNames != StreetNamesShown {
+		t.Fatalf("StreetNames = %q, want %q", config.StreetNames, StreetNamesShown)
+	}
+}
+
+func TestNormalizeMatchConfigKeepsNoMoveAndHiddenStreetNames(t *testing.T) {
+	config := NormalizeMatchConfig(MatchConfig{
+		Ruleset:     RulesetNoMove,
+		StreetNames: StreetNamesHidden,
+	})
+
+	if config.Ruleset != RulesetNoMove {
+		t.Fatalf("Ruleset = %q, want %q", config.Ruleset, RulesetNoMove)
+	}
+	if config.StreetNames != StreetNamesHidden {
+		t.Fatalf("StreetNames = %q, want %q", config.StreetNames, StreetNamesHidden)
+	}
 }
 
 func TestNormalizeMatchConfigMigratesLegacyMapKey(t *testing.T) {

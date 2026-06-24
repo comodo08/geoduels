@@ -4,44 +4,43 @@ import type { PlayerBadgeInfo } from "./PlayerBadge";
 import type { LeaderboardSummary } from "../../features/auth/controllers/session-controller";
 import type { PartySnapshot, PartyTeamId, PartyMode } from "../../features/lobby/lib/party-client";
 import type { PartyRuntimeStatus } from "../../features/lobby/controllers/party-controller";
-import type { GameRuleset, MaintenanceStatus, MatchConfig } from "../../features/matchmaking/lib/queue-client";
+import type { MaintenanceStatus, MatchConfig, QueueVariant } from "../../features/matchmaking/lib/queue-client";
 import {
-  NAV_ITEMS,
   formatApproximateTime,
   formatQueueElapsed,
   formatRelativeDuration,
-  isLobbyNavRoute,
-  lobbyRouteStorageKey,
   parseTime,
   type LobbyContentRoute,
 } from "../../features/lobby/lib/lobby-ui";
+import { AppShell } from "../../features/app-shell/components/AppShell";
+import { AppContentRail } from "../../features/app-shell/components/AppContentRail";
+import type { AppNavRoute } from "../../features/app-shell/navigation";
 import { PlayPanel } from "../../features/lobby/components/PlayPanel";
 import { LobbyTutorialSection } from "../../features/lobby/components/LobbyTutorialSection";
-import { LobbyHeader } from "../../features/lobby/components/LobbyHeader";
 import { DiscordProviderButton, GoogleProviderButton, SignInButton } from "../../features/lobby/components/LobbyAuthButtons";
-import { ProfileModal } from "../../features/lobby/components/ProfileModal";
 import { PartyPanel } from "../../features/lobby/components/PartyPanel";
 import { LeaderboardPanel } from "../../features/lobby/components/LeaderboardPanel";
 import {
   DonateCard,
   InvitePartyCard,
   LegalFooter,
+  LobbyUpdatesPanel,
   NewsPanel,
-  OnlineStatusCard,
   PartyErrorNotice,
   SocialLinksCard,
 } from "../../features/lobby/components/LobbyShellPieces";
 import { MaintenanceBanner, MaintenanceOverlay } from "../../features/lobby/components/MaintenanceNotice";
 import { MapPickerController, MapRouteSurface } from "../../features/lobby/components/maps/MapRouteSurfaces";
-import { HelpModal } from "../../features/lobby/components/modals/HelpModal";
 import { InviteModal } from "../../features/lobby/components/modals/InviteModal";
 import { SignInModal } from "../../features/lobby/components/modals/SignInModal";
 import { usePartyPanelState } from "../../features/lobby/hooks/usePartyPanelState";
-import { useQueueRulesetSelection } from "../../features/lobby/hooks/useQueueRulesetSelection";
+import { usePlayPreferences } from "../../features/lobby/hooks/usePlayPreferences";
+import { PlayLaunchModal } from "../../features/lobby/components/PlayLaunchModal";
+import { useExtensionAvailability } from "../../features/browser-extension/hooks/use-extension-availability";
 
 export type { LobbyContentRoute } from "../../features/lobby/lib/lobby-ui";
 
-type PartyModal = "help" | "profile" | "invite" | "signin" | null;
+type PartyModal = "invite" | "signin" | "duel" | "singleplayer" | null;
 
 type PartyView = {
   status: PartyRuntimeStatus;
@@ -63,18 +62,14 @@ type Props = {
   userAvatar?: string;
   isGuest: boolean;
   authMigrationRequired?: boolean;
-  linkedProviders?: string[];
-  badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
   connected: boolean;
   mmr: number;
-  gamesPlayed: number;
-  winsPct: number;
   leaderboard: LeaderboardSummary | null;
   leaderboardLoading: boolean;
   status: string;
   queueStartedAt: number | null;
-  joinQueue: (rulesets?: GameRuleset[]) => void;
+  joinQueue: (queues?: QueueVariant[]) => void;
   startSingleplayer: (config?: MatchConfig) => void | Promise<string>;
   cancelQueue: () => void;
   party?: PartyView;
@@ -102,21 +97,11 @@ type Props = {
   devLogin: () => void;
   onGoogleSignIn: () => void;
   onDiscordSignIn?: () => void;
-  onLinkAuthProvider?: (provider: "google" | "discord") => void;
-  onUpgradeGuestWithProvider?: (provider: "google" | "discord") => void;
-  onUnlinkAuthProvider?: (provider: "google" | "discord") => void;
   onBrowseLeaderboard: () => void;
   authLoading: boolean;
   authError: string;
-  nicknameInput: string;
-  nicknameError: string;
   nicknameSaving: boolean;
-  onChangeNickname: (value: string) => void;
-  onSaveNickname: () => Promise<boolean>;
-  onSelectBadge?: (badgeId: string) => Promise<void>;
   onSupportDonation?: () => Promise<void>;
-  onLogout: () => void;
-  onDeleteAccount?: () => Promise<void>;
 };
 
 const defaultParty: PartyView = {
@@ -151,39 +136,6 @@ const tabPanelMotion = {
   },
 };
 
-const lobbyBackgroundImage = "/bg3.v2.webp";
-const lobbyBackgroundPlaceholder = "/bg3.placeholder.v2.webp";
-const lobbyBackgroundOverlay = "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
-let lobbyBackgroundLoaded = false;
-let lobbyBackgroundLoadPromise: Promise<void> | null = null;
-
-function loadLobbyBackground() {
-  if (lobbyBackgroundLoaded) {
-    return Promise.resolve();
-  }
-  if (lobbyBackgroundLoadPromise) {
-    return lobbyBackgroundLoadPromise;
-  }
-  lobbyBackgroundLoadPromise = new Promise<void>((resolve) => {
-    const image = new Image();
-    image.onload = async () => {
-      try {
-        await image.decode();
-      } catch {
-        // Some browsers resolve onload before decode support is available.
-      }
-      lobbyBackgroundLoaded = true;
-      resolve();
-    };
-    image.onerror = () => {
-      lobbyBackgroundLoadPromise = null;
-      resolve();
-    };
-    image.src = lobbyBackgroundImage;
-  });
-  return lobbyBackgroundLoadPromise;
-}
-
 export default function LobbyScreen({
   contentRoute = "play",
   mapId = "",
@@ -194,13 +146,9 @@ export default function LobbyScreen({
   userAvatar,
   isGuest,
   authMigrationRequired = false,
-  linkedProviders = [],
-  badges = [],
   selectedBadge = null,
   connected,
   mmr,
-  gamesPlayed,
-  winsPct,
   leaderboard,
   leaderboardLoading,
   status,
@@ -223,18 +171,10 @@ export default function LobbyScreen({
   devLogin,
   onGoogleSignIn,
   onDiscordSignIn = devLogin,
-  onLinkAuthProvider = async () => { },
-  onUpgradeGuestWithProvider = async () => { },
-  onUnlinkAuthProvider = async () => { },
   onBrowseLeaderboard,
   authLoading,
   authError,
-  nicknameInput,
-  nicknameError,
   nicknameSaving,
-  onChangeNickname,
-  onSaveNickname,
-  onSelectBadge = async () => { },
   onSupportDonation = async () => { },
   maintenance,
   onlinePlayers,
@@ -246,24 +186,23 @@ export default function LobbyScreen({
   changelogMarkdown,
   changelogSlug,
   changelogUpdatedAt,
-  onLogout,
-  onDeleteAccount = async () => { },
 }: Props) {
   const [openModal, setOpenModal] = useState<PartyModal>(null);
-  const [isBlogExpanded, setIsBlogExpanded] = useState(false);
-  const { queueRulesets, toggleQueueRuleset } = useQueueRulesetSelection();
+  const extensionStatus = useExtensionAvailability();
+  const extensionAvailable = extensionStatus === true;
+  const { duel, setDuel, singleplayer, setSingleplayer } =
+    usePlayPreferences(extensionStatus);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [dismissedMaintenanceAlertKey, setDismissedMaintenanceAlertKey] = useState("");
-  const [highQualityBackgroundReady, setHighQualityBackgroundReady] = useState(lobbyBackgroundLoaded);
-  const currentNavRoute: LobbyContentRoute = contentRoute === "map-details" || contentRoute === "map-upload" ? "maps" : contentRoute;
-  const [visualNavRoute, setVisualNavRoute] = useState<LobbyContentRoute>(() => {
-    if (typeof window === "undefined") return currentNavRoute;
-    const stored = window.sessionStorage.getItem(lobbyRouteStorageKey) || "";
-    return isLobbyNavRoute(stored) ? stored : currentNavRoute;
-  });
+  const currentNavRoute: AppNavRoute =
+    contentRoute === "map-details" || contentRoute === "map-upload"
+      ? "maps"
+      : contentRoute === "party"
+        ? "play"
+        : contentRoute;
   const canInteractWithMaps = !!accessToken && !isGuest;
   const canUploadCustomMaps = canInteractWithMaps;
 
@@ -272,34 +211,6 @@ export default function LobbyScreen({
       onBrowseLeaderboard();
     }
   }, [contentRoute, onBrowseLeaderboard]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (lobbyBackgroundLoaded) {
-      setHighQualityBackgroundReady(true);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      void loadLobbyBackground().then(() => {
-        if (!cancelled && lobbyBackgroundLoaded) {
-          setHighQualityBackgroundReady(true);
-        }
-      });
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const frame = window.requestAnimationFrame(() => {
-      setVisualNavRoute(currentNavRoute);
-      window.sessionStorage.setItem(lobbyRouteStorageKey, currentNavRoute);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [currentNavRoute]);
 
   useEffect(() => {
     if (!maintenance && status !== "queueing") {
@@ -325,11 +236,6 @@ export default function LobbyScreen({
   const duelModeLabel = isQueueing ? "Searching..." : "Ranked";
   const showGoogleButton = !!googleClientId;
   const showDiscordButton = !!discordClientId;
-  const hasGoogleProvider = linkedProviders.includes("google");
-  const hasDiscordProvider = linkedProviders.includes("discord");
-  const linkedProviderCount = linkedProviders.filter((provider) =>
-    provider === "google" || provider === "discord"
-  ).length;
   const maintenanceStartMs = parseTime(maintenance?.startsAt);
   const maintenanceEndMs = parseTime(maintenance?.endsAt);
   const maintenanceIsWarning = maintenance?.phase === "warning";
@@ -354,8 +260,7 @@ export default function LobbyScreen({
     nicknameSaving ||
     queuePaused ||
     playPaused ||
-    maintenanceIsActive ||
-    queueRulesets.length === 0;
+    maintenanceIsActive;
   const singleplayerDisabled =
     isQueueing ||
     isSingleplayerLoading ||
@@ -364,12 +269,34 @@ export default function LobbyScreen({
     nicknameSaving ||
     playPaused ||
     maintenanceIsActive;
-  const onRankedPlay = () => {
+  const onDuelsPlay = () => {
     if (!canUseRankedQueue) {
       setOpenModal("signin");
       return;
     }
-    joinQueue(queueRulesets);
+    setOpenModal("duel");
+  };
+
+  const startDuelQueue = () => {
+    const queues: QueueVariant[] = [];
+    for (const mode of duel.modes) {
+      if (duel.streetNames === "shown" || duel.streetNames === "any") {
+        queues.push(mode);
+      }
+      if (duel.streetNames === "hidden" || duel.streetNames === "any") {
+        queues.push(`${mode}_hidden` as QueueVariant);
+      }
+    }
+    setOpenModal(null);
+    joinQueue(queues);
+  };
+
+  const startSingleplayerFromModal = () => {
+    setOpenModal(null);
+    void startSingleplayer({
+      ruleset: singleplayer.mode,
+      streetNames: singleplayer.streetNames,
+    });
   };
 
   const discordProviderButton = showDiscordButton ? (
@@ -398,14 +325,10 @@ export default function LobbyScreen({
       changelogSlug={changelogSlug}
       changelogTitle={changelogTitle}
       changelogUpdatedAt={changelogUpdatedAt}
-      expanded={isBlogExpanded}
-      onToggle={() => setIsBlogExpanded((prev) => !prev)}
     />
   );
   const donateCard = <DonateCard onSupportDonation={onSupportDonation} />;
   const socialLinksCard = <SocialLinksCard />;
-  const onlineStatusCard = <OnlineStatusCard onlinePlayers={onlinePlayers} />;
-
   const partyPanelState = usePartyPanelState({
     party,
     userId,
@@ -490,8 +413,6 @@ export default function LobbyScreen({
     />
   );
 
-  const renderHelpModal = () => <HelpModal onClose={() => setOpenModal(null)} />;
-
   const renderInvitePartyModal = () => (
     <InviteModal
       inviteCodeInput={inviteCodeInput}
@@ -517,40 +438,45 @@ export default function LobbyScreen({
     />
   );
 
-  const renderProfileModal = () => (
-    <ProfileModal
-      userId={userId}
-      userEmail={userEmail}
-      displayName={displayName}
-      userAvatar={userAvatar}
-      isGuest={isGuest}
-      isAdmin={isAdmin}
-      selectedBadge={selectedBadge}
-      badges={badges}
-      mmr={mmr}
-      gamesPlayed={gamesPlayed}
-      winsPct={winsPct}
-      authLoading={authLoading}
-      authError={authError}
-      nicknameInput={nicknameInput}
-      nicknameError={nicknameError}
-      nicknameSaving={nicknameSaving}
-      linkedProviderCount={linkedProviderCount}
-      showGoogleButton={showGoogleButton}
-      showDiscordButton={showDiscordButton}
-      hasGoogleProvider={hasGoogleProvider}
-      hasDiscordProvider={hasDiscordProvider}
-      onChangeNickname={onChangeNickname}
-      onSaveNickname={onSaveNickname}
-      onSelectBadge={onSelectBadge}
-      onLinkAuthProvider={onLinkAuthProvider}
-      onUnlinkAuthProvider={onUnlinkAuthProvider}
-      onUpgradeGuestWithProvider={onUpgradeGuestWithProvider}
-      onDeleteAccount={onDeleteAccount}
-      onLogout={onLogout}
-      onClose={() => setOpenModal(null)}
-    />
-  );
+  const renderPlayLaunchModal = () => {
+    if (openModal === "duel") {
+      return (
+        <PlayLaunchModal
+          kind="duel"
+          extensionAvailable={extensionAvailable}
+          modes={duel.modes}
+          streetNames={duel.streetNames}
+          disabled={duelDisabled}
+          onModesChange={(modes) => setDuel((current) => ({ ...current, modes }))}
+          onStreetNamesChange={(streetNames) =>
+            setDuel((current) => ({ ...current, streetNames }))
+          }
+          onClose={() => setOpenModal(null)}
+          onStart={startDuelQueue}
+        />
+      );
+    }
+    if (openModal === "singleplayer") {
+      return (
+        <PlayLaunchModal
+          kind="singleplayer"
+          extensionAvailable={extensionAvailable}
+          mode={singleplayer.mode}
+          streetNames={singleplayer.streetNames}
+          disabled={singleplayerDisabled}
+          onModeChange={(mode) =>
+            setSingleplayer((current) => ({ ...current, mode }))
+          }
+          onStreetNamesChange={(streetNames) =>
+            setSingleplayer((current) => ({ ...current, streetNames }))
+          }
+          onClose={() => setOpenModal(null)}
+          onStart={startSingleplayerFromModal}
+        />
+      );
+    }
+    return null;
+  };
 
   const invitePartyCard = (
     <InvitePartyCard
@@ -571,132 +497,106 @@ export default function LobbyScreen({
     />
   ) : null;
   const showPartyPanel = partyActive && contentRoute !== "maps" && contentRoute !== "map-details" && contentRoute !== "map-upload";
-  const visualNavIndex = Math.max(0, NAV_ITEMS.findIndex((item) => item.route === visualNavRoute));
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden font-sans text-[#f4f9ff] selection:bg-accentPrimary/30">
+    <>
       <AnimatePresence>{maintenanceOverlay}</AnimatePresence>
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `${lobbyBackgroundOverlay}, url('${lobbyBackgroundPlaceholder}')`,
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "cover",
-            filter: "blur(14px)",
-            transform: "scale(1.06)",
-          }}
-        />
-        <div
-          className={`absolute inset-0 transition-opacity duration-700 ease-out ${
-            highQualityBackgroundReady ? "opacity-100" : "opacity-0"
-          }`}
-          style={{
-            backgroundImage: `${lobbyBackgroundOverlay}, url('${lobbyBackgroundImage}')`,
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "cover",
-            transform: "scale(1.06)",
-          }}
-        />
-      </div>
       <AnimatePresence>
-        {openModal === "help" && renderHelpModal()}
-        {openModal === "profile" && renderProfileModal()}
         {openModal === "invite" && renderInvitePartyModal()}
         {openModal === "signin" && renderSignInModal()}
+        {renderPlayLaunchModal()}
         {mapPickerModal}
       </AnimatePresence>
-
-      <LobbyHeader
-        currentNavRoute={currentNavRoute}
-        displayName={displayName}
+      <AppShell
+        activeNavRoute={currentNavRoute}
         isAdmin={isAdmin}
-        isQueueing={isQueueing}
         maintenanceBanner={maintenanceBanner}
-        mmr={mmr}
-        selectedBadge={selectedBadge}
-        setOpenHelp={() => setOpenModal("help")}
-        setOpenProfile={() => setOpenModal("profile")}
-        showPartyPanel={showPartyPanel}
-        signInButton={signInButton}
-        userAvatar={userAvatar}
-        userAvatarFallback={userAvatarFallback}
-        userEmail={userEmail}
-        userId={userId}
-        visualNavIndex={visualNavIndex}
-        visualNavRoute={visualNavRoute}
-      />
-
-      {/* Main Content Area */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-start px-4 pb-10 pt-4 pointer-events-none sm:px-6 sm:pb-12 sm:pt-8">
-        {partyErrorNotice}
-
-        <AnimatePresence mode="popLayout">
-          {showPartyPanel ? partyPanel : null}
-
-          {!showPartyPanel && contentRoute === "play" && (
-            <PlayPanel
-              isQueueing={isQueueing}
-              isSingleplayerLoading={isSingleplayerLoading}
-              queueError={queueError}
-              queueRulesets={queueRulesets}
-              toggleQueueRuleset={toggleQueueRuleset}
-              onRankedPlay={onRankedPlay}
-              cancelQueue={cancelQueue}
-              startSingleplayer={startSingleplayer}
-              duelDisabled={duelDisabled}
-              singleplayerDisabled={singleplayerDisabled}
-              queuePaused={queuePaused}
-              playPaused={playPaused}
-              maintenanceIsActive={maintenanceIsActive}
-              primaryButtonLabel={primaryButtonLabel}
-              queueElapsedLabel={queueElapsedLabel}
-              duelModeLabel={duelModeLabel}
-              sideCards={
-                <>
-                  {onlineStatusCard}
-                  {newsPanel}
-                  {donateCard}
-                  {socialLinksCard}
-                </>
+        navigationDisabled={isQueueing}
+        navigationHidden={showPartyPanel}
+        onlinePlayers={onlinePlayers}
+        signedOutAction={signInButton}
+        viewer={
+          userId && userEmail
+            ? {
+                userId,
+                displayName: displayName || userEmail || "Player",
+                avatarUrl: userAvatar,
+                avatarFallback: userAvatarFallback,
+                mmr,
+                selectedBadge,
               }
-            />
-          )}
+            : null
+        }
+      >
+        <AppContentRail
+          as="main"
+          size="wide"
+          className="relative z-10 flex flex-1 flex-col items-center justify-start pb-28 pt-4 pointer-events-none sm:pb-12 sm:pt-8"
+        >
+          {partyErrorNotice}
 
-          {!showPartyPanel && contentRoute === "top" && (
-            <motion.div
-              key="top"
-              {...tabPanelMotion}
-              className="flex w-full justify-center pointer-events-auto"
-            >
-              {leaderboardPanel}
-            </motion.div>
-          )}
+          <AnimatePresence mode="popLayout">
+            {showPartyPanel ? partyPanel : null}
 
-          {!showPartyPanel && mapRouteSurface}
+            {!showPartyPanel && contentRoute === "play" && (
+              <PlayPanel
+                isQueueing={isQueueing}
+                isSingleplayerLoading={isSingleplayerLoading}
+                queueError={queueError}
+                onDuelsPlay={onDuelsPlay}
+                cancelQueue={cancelQueue}
+                onSingleplayerPlay={() => setOpenModal("singleplayer")}
+                duelDisabled={duelDisabled}
+                singleplayerDisabled={singleplayerDisabled}
+                queuePaused={queuePaused}
+                playPaused={playPaused}
+                maintenanceIsActive={maintenanceIsActive}
+                primaryButtonLabel={primaryButtonLabel}
+                queueElapsedLabel={queueElapsedLabel}
+                duelModeLabel={duelModeLabel}
+                updatesPanel={
+                  <LobbyUpdatesPanel
+                    newsPanel={newsPanel}
+                    donateCard={donateCard}
+                    socialLinksCard={socialLinksCard}
+                  />
+                }
+              />
+            )}
 
-          {!showPartyPanel && contentRoute === "friends" && (
-            <motion.div
-              key="friends"
-              {...tabPanelMotion}
-              className="flex w-full max-w-[480px] flex-col gap-5 pointer-events-auto"
-            >
-              {invitePartyCard}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            {!showPartyPanel && contentRoute === "top" && (
+              <motion.div
+                key="top"
+                {...tabPanelMotion}
+                className="flex w-full justify-center pointer-events-auto"
+              >
+                {leaderboardPanel}
+              </motion.div>
+            )}
 
-        {!showPartyPanel && contentRoute === "play" ? (
-          <>
-            <LobbyTutorialSection />
-            <div className="mt-4 w-full max-w-[1220px] px-6 sm:px-8">
-              {legalCard}
+            {!showPartyPanel && mapRouteSurface}
+
+            {!showPartyPanel && contentRoute === "friends" && (
+              <motion.div
+                key="friends"
+                {...tabPanelMotion}
+                className="flex w-full max-w-[520px] flex-col gap-5 pointer-events-auto"
+              >
+                {invitePartyCard}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!showPartyPanel && contentRoute === "play" ? (
+            <div className="mt-10 w-full sm:mt-16">
+              <LobbyTutorialSection />
+              <div className="mt-4 w-full">
+                {legalCard}
+              </div>
             </div>
-          </>
-        ) : null}
-      </main>
-    </div>
+          ) : null}
+        </AppContentRail>
+      </AppShell>
+    </>
   );
 }

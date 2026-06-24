@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -161,7 +162,7 @@ func (s *recoverTestStore) RunDueRankedSeasonReset(now time.Time) (persistence.R
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ActivateMapRevision(mapKey, displayName string, dataset []byte) (persistence.MapRevisionSummary, error) {
+func (s *recoverTestStore) ReplaceMapLocations(mapKey, displayName string, dataset []byte) (persistence.MapImportSummary, error) {
 	panic("unexpected call")
 }
 
@@ -223,6 +224,10 @@ func (s *recoverTestStore) GetProfile(userID string) (persistence.Profile, error
 	return persistence.Profile{UserID: userID, DisplayName: userID, MMR: 1000}, nil
 }
 
+func (s *recoverTestStore) GetPublicPlayerProfile(userID string) (persistence.PublicPlayerProfile, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) UpdateSelectedBadge(userID, badgeID string) (persistence.Profile, error) {
 	panic("unexpected call")
 }
@@ -267,11 +272,7 @@ func (s *recoverTestStore) GetLeaderboardOverview(userID, mode, seasonID string,
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) RecordMatchResult(snap contracts.MatchSnapshot) error {
-	panic("unexpected call")
-}
-
-func (s *recoverTestStore) RecordFinalMatchSnapshot(matchID string, snapshot []byte) error {
+func (s *recoverTestStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error) {
 	panic("unexpected call")
 }
 
@@ -280,6 +281,14 @@ func (s *recoverTestStore) GetFinalMatchSnapshot(matchID string) ([]byte, bool, 
 }
 
 func (s *recoverTestStore) ListPlayerMatchHistory(userID string, limit int) ([]persistence.MatchHistorySummary, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (persistence.MatchHistoryPage, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) PlayerParticipatedInMatch(userID, matchID string) (bool, error) {
 	panic("unexpected call")
 }
 
@@ -415,22 +424,6 @@ func (s *recoverTestStore) ExpireOpenParties() error {
 }
 
 func (s *recoverTestStore) UpsertMatchSession(params persistence.MatchSessionUpsert) error {
-	return nil
-}
-
-func (s *recoverTestStore) CompleteMatchSession(matchID string) error {
-	if s.parties == nil {
-		return nil
-	}
-	for id, snap := range s.parties {
-		if snap.ActiveMatchID == matchID || snap.StartedMatchID == matchID {
-			snap.State = contracts.PartyOpen
-			snap.LastMatchID = matchID
-			snap.ActiveMatchID = ""
-			snap.StartedMatchID = ""
-			s.parties[id] = snap
-		}
-	}
 	return nil
 }
 
@@ -810,6 +803,25 @@ var _ matchstore.Store = (*heartbeatTestStore)(nil)
 
 func queueWSURL(serverURL string) string {
 	return "ws" + strings.TrimPrefix(serverURL, "http")
+}
+
+func TestParseQueueVariantsSupportsSixQueuesAndLegacyRulesets(t *testing.T) {
+	got := parseQueueVariants(
+		"moving,no_move,nmpz,moving_hidden,no_move_hidden,nmpz_hidden",
+		"",
+	)
+	if !reflect.DeepEqual(got, matchstore.AllQueueVariants) {
+		t.Fatalf("queues = %#v, want %#v", got, matchstore.AllQueueVariants)
+	}
+
+	legacy := parseQueueVariants("", "moving,nmpz")
+	wantLegacy := []matchstore.QueueVariant{
+		matchstore.QueueMoving,
+		matchstore.QueueNMPZ,
+	}
+	if !reflect.DeepEqual(legacy, wantLegacy) {
+		t.Fatalf("legacy queues = %#v, want %#v", legacy, wantLegacy)
+	}
 }
 
 func testParty(id, owner string, members ...string) contracts.PartySnapshot {

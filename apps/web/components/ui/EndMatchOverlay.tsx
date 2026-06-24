@@ -17,6 +17,7 @@ const GuessMap = dynamic(() => import("../GuessMap"), { ssr: false });
 type Props = {
   onLeaveGame: () => void;
   onPlayAgain?: () => Promise<string> | void;
+  backLabel?: string;
   mode: EndMatchMode;
   outcome?: "win" | "lose" | "draw";
   sides: MatchSidesView;
@@ -58,6 +59,7 @@ export default function EndMatchOverlay({
   participantsById = {},
   onReportPlayer,
   onPlayAgain,
+  backLabel = "Back to lobby",
   asPage = false,
 }: Props) {
   const [reportedUserIds, setReportedUserIds] = useState<Record<string, boolean>>({});
@@ -68,13 +70,13 @@ export default function EndMatchOverlay({
   const [pendingReport, setPendingReport] = useState<{ userId: string; name: string; } | null>(null);
   const [playAgainBusy, setPlayAgainBusy] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [duelBreakdownMode, setDuelBreakdownMode] = useState<"health" | "points">("health");
 
   const totalRounds = roundResults.length;
   const hasRoundResults = totalRounds > 0;
   const playerIds = Object.keys(roundResults[0]?.players || {});
   const selfPlayerId = selfUserId || playerIds[0] || "self";
 
-  const backLabel = mode === "singleplayer" ? "Back To Home" : "Back To Party";
   const showPlayAgain = mode === "singleplayer" && !!onPlayAgain;
 
   const isDuelsMode = mode === 'duel' || mode === 'team_duel';
@@ -172,6 +174,35 @@ export default function EndMatchOverlay({
     );
   }
 
+  function renderSideScoreCell(
+    round: RoundResult,
+    side: MatchSideView,
+    highlight = false,
+  ) {
+    const result =
+      side.participant.kind === "team"
+        ? round.teams?.[side.id]
+        : round.players[side.id];
+    if (!result) return <span className="text-white/35">-</span>;
+    const guessPlayerId =
+      side.participant.kind === "team"
+        ? round.teams?.[side.id]?.representativeUserId
+        : side.id;
+    const guessTime = formatGuessTime(
+      guessPlayerId ? round.players[guessPlayerId]?.guessMs : undefined,
+    );
+    return (
+      <div className={`flex items-baseline gap-2 ${highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}`}>
+        <span>{result.score.toLocaleString()} pts</span>
+        {guessTime ? (
+          <span className="text-[11px] font-bold tracking-[0.1em] text-[#8caab0]">
+            {guessTime}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderSideCard(side: MatchSideView, opponent = false) {
     const reportUserId =
       opponent && side.participant.kind === "player"
@@ -212,6 +243,32 @@ export default function EndMatchOverlay({
       <div className="glass-panel rounded-[20px] p-1">
         {isDuelsMode ? (
           <div className="w-full overflow-x-auto">
+            <div className="flex items-center justify-end gap-3 px-4 py-3">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8caab0]">
+                Preview mode
+              </span>
+              <div
+                role="group"
+                aria-label="Breakdown preview mode"
+                className="inline-flex rounded-full border border-white/10 bg-black/20 p-1"
+              >
+                {(["health", "points"] as const).map((previewMode) => (
+                  <button
+                    key={previewMode}
+                    type="button"
+                    aria-pressed={duelBreakdownMode === previewMode}
+                    onClick={() => setDuelBreakdownMode(previewMode)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition ${
+                      duelBreakdownMode === previewMode
+                        ? "bg-white/15 text-white"
+                        : "text-[#8caab0] hover:text-white"
+                    }`}
+                  >
+                    {previewMode}
+                  </button>
+                ))}
+              </div>
+            </div>
             <table className="w-full text-left text-sm text-white">
               <thead>
                 <tr className="border-b border-white/10 text-[#8caab0]">
@@ -225,10 +282,14 @@ export default function EndMatchOverlay({
                   <tr key={round.roundId} className="hover:bg-white/[0.02]">
                     <td className="py-3 px-4 font-bold text-[#dce6ff]">R{round.roundNumber}</td>
                     <td className="py-3 px-4">
-                      {renderHealthCell(round, sides.self, true)}
+                      {duelBreakdownMode === "health"
+                        ? renderHealthCell(round, sides.self, true)
+                        : renderSideScoreCell(round, sides.self, true)}
                     </td>
                     <td className="py-3 px-4">
-                      {renderHealthCell(round, sides.opponent)}
+                      {duelBreakdownMode === "health"
+                        ? renderHealthCell(round, sides.opponent)
+                        : renderSideScoreCell(round, sides.opponent)}
                     </td>
                   </tr>
                 ))}

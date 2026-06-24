@@ -63,6 +63,7 @@ type gameplayNode struct {
 	userMatch  map[string]string
 	matchUsers map[string][]string
 	matchModes map[string]contracts.MatchMode
+	finalizing map[string]bool
 
 	metrics *observability.RuntimeMetrics
 
@@ -133,6 +134,7 @@ func main() {
 		userMatch:  map[string]string{},
 		matchUsers: map[string][]string{},
 		matchModes: map[string]contracts.MatchMode{},
+		finalizing: map[string]bool{},
 		metrics:    observability.NewRuntimeMetrics(),
 		drainTTL:   getenvDuration("GAMEPLAY_DRAIN_TIMEOUT", 9*time.Minute+30*time.Second),
 	}
@@ -196,7 +198,7 @@ func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
 	}
-	if len(found.PlannedRounds) == 0 || found.ResolvedMap.RevisionID == "" {
+	if len(found.PlannedRounds) == 0 || found.ResolvedMap.MapID == "" {
 		http.Error(w, "match has no resolved round plan", http.StatusBadRequest)
 		return
 	}
@@ -358,8 +360,10 @@ func (g *gameplayNode) ws(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	g.writeSnapshotToUser(userID, matchID, snap)
-	g.broadcastState(matchID, snap, userID)
+	if snap.State != contracts.MatchEnded {
+		g.writeSnapshotToUser(userID, matchID, snap)
+	}
+	g.publishRuntimeState(matchID, snap, userID)
 
 	for {
 		var cmd contracts.CommandEnvelope
@@ -374,10 +378,7 @@ func (g *gameplayNode) ws(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		if nextSnap != nil {
-			g.broadcastState(matchID, nextSnap, "")
-			if nextSnap.State == contracts.MatchEnded {
-				g.terminalize(matchID, nextSnap)
-			}
+			g.publishRuntimeState(matchID, nextSnap, "")
 		}
 	}
 }
@@ -476,12 +477,20 @@ func (g *gameplayNode) tick() {
 			if err != nil {
 				continue
 			}
-			g.broadcastState(matchID, snap, "")
-			if snap.State == contracts.MatchEnded {
-				g.terminalize(matchID, snap)
-			}
+			g.publishRuntimeState(matchID, snap, "")
 		}
 	}
+}
+
+func (g *gameplayNode) publishRuntimeState(matchID string, snap *contracts.MatchSnapshot, excludeUserID string) {
+	if snap == nil {
+		return
+	}
+	if snap.State == contracts.MatchEnded {
+		g.terminalize(matchID, snap)
+		return
+	}
+	g.broadcastState(matchID, snap, excludeUserID)
 }
 
 func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot) {
@@ -491,10 +500,31 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 
 	g.mu.Lock()
 	players, ok := g.matchUsers[matchID]
-	if !ok {
+	if !ok || g.finalizing[matchID] {
 		g.mu.Unlock()
 		return
 	}
+	players = append([]string(nil), players...)
+	g.finalizing[matchID] = true
+	g.mu.Unlock()
+
+	finalized, err := g.persist.FinalizeMatch(*snap, g.nodeEpoch)
+	if err != nil {
+		log.Printf("finalize match %s failed: %v", matchID, err)
+		g.mu.Lock()
+		delete(g.finalizing, matchID)
+		g.mu.Unlock()
+		time.AfterFunc(time.Second, func() {
+			if retrySnap, ok := g.getSnapshot(matchID); ok && retrySnap.State == contracts.MatchEnded {
+				g.terminalize(matchID, retrySnap)
+			}
+		})
+		return
+	}
+	g.broadcastState(matchID, &finalized, "")
+
+	g.mu.Lock()
+	delete(g.finalizing, matchID)
 	delete(g.matchUsers, matchID)
 	delete(g.matchModes, matchID)
 	for _, userID := range players {
@@ -504,25 +534,6 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 	}
 	g.mu.Unlock()
 
-	if err := g.persist.RecordRuntimeMatch(matchID, string(contracts.MatchEnded), g.nodeEpoch, true); err != nil {
-		log.Printf("record runtime match failed: %v", err)
-	}
-	if err := g.persist.CompleteMatchSession(matchID); err != nil {
-		log.Printf("complete match session failed: %v", err)
-	}
-	matchPersisted := false
-	if b, err := json.Marshal(snap); err == nil {
-		if err := g.persist.RecordFinalMatchSnapshot(matchID, b); err != nil {
-			log.Printf("record final snapshot failed: %v", err)
-		} else {
-			matchPersisted = true
-		}
-	}
-	if snap.Mode == contracts.ModeDuel && matchPersisted {
-		if err := g.persist.RecordMatchResult(*snap); err != nil {
-			log.Printf("record match result failed: %v", err)
-		}
-	}
 	g.clearQueuedMatchArtifacts(players)
 	if err := g.coord.ClearAssignment(context.Background(), coordinator.Assignment{
 		MatchID: matchID,

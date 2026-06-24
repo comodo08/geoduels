@@ -142,6 +142,84 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 	return p, nil
 }
 
+func (s *pgStore) GetPublicPlayerProfile(userID string) (PublicPlayerProfile, error) {
+	userID = strings.TrimSpace(userID)
+	p := PublicPlayerProfile{
+		UserID:      userID,
+		DisplayName: userID,
+		MMR:         initialMMR,
+		RatingRD:    initialRatingRD,
+	}
+	if userID == "" {
+		return p, errors.New("user id required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	seasonID, err := s.activeSeasonID(ctx)
+	if err != nil {
+		return p, err
+	}
+	p.SeasonID = seasonID
+	var selectedBadgeCode int16
+	var selectedBadgeSeasonID string
+	err = s.pool.QueryRow(ctx, `
+		select
+			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text),
+			coalesce(u.avatar_url, ui.avatar_url, ''),
+			coalesce(r.mmr, $4),
+			coalesce(r.rd, $5),
+			coalesce(us.games_played, 0),
+			coalesce(us.wins, 0),
+			coalesce(rs.games_played, 0),
+			coalesce(rs.wins, 0),
+			coalesce(u.selected_badge_code, 0),
+			coalesce(u.selected_badge_season_id, '')
+		from users u
+		left join lateral (
+			select provider_name, avatar_url
+			from user_identities
+			where user_id = u.id and provider = 'google'
+			order by created_at asc
+			limit 1
+		) ui on true
+		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $3
+		left join user_stats us on us.user_id = u.id
+		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
+		where u.id = $1
+	`, userID, modeDuel, seasonID, initialMMR, initialRatingRD).Scan(
+		&p.DisplayName,
+		&p.AvatarURL,
+		&p.MMR,
+		&p.RatingRD,
+		&p.GamesPlayed,
+		&p.Wins,
+		&p.RankedGamesPlayed,
+		&p.RankedWins,
+		&selectedBadgeCode,
+		&selectedBadgeSeasonID,
+	)
+	if err != nil {
+		return p, err
+	}
+	badges, selected, err := s.profileBadges(ctx, userID, badgeIDFromParts(selectedBadgeCode, selectedBadgeSeasonID))
+	if err != nil {
+		return p, err
+	}
+	p.Badges = ownedPlayerBadges(badges)
+	p.SelectedBadge = selected
+	return p, nil
+}
+
+func ownedPlayerBadges(badges []contracts.PlayerBadge) []contracts.PlayerBadge {
+	owned := make([]contracts.PlayerBadge, 0, len(badges))
+	for _, badge := range badges {
+		if badge.Owned {
+			owned = append(owned, badge)
+		}
+	}
+	return owned
+}
+
 func (s *pgStore) UpdateSelectedBadge(userID, badgeID string) (Profile, error) {
 	userID = strings.TrimSpace(userID)
 	badgeID = strings.TrimSpace(badgeID)
@@ -237,7 +315,7 @@ func (s *pgStore) profileBadges(ctx context.Context, userID, selectedBadgeID str
 			break
 		}
 	}
-	if selected == nil {
+	if selected == nil && selectedBadgeID != "" {
 		for i := range badges {
 			if badges[i].Owned {
 				selected = &badges[i]

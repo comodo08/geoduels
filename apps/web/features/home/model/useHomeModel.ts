@@ -62,6 +62,7 @@ function nicknameValidationError(nickname: string) {
 export function useHomeModel(options?: {
   routeMatchId?: string | null;
   routeContext?: "home" | "match";
+  backgroundDataEnabled?: boolean;
   partyInviteCode?: string | null;
   onPartyEntered?: (inviteCode: string) => void;
   onPartyLeft?: () => void;
@@ -84,6 +85,7 @@ export function useHomeModel(options?: {
   } | null>(null);
   const routeMatchId = options?.routeMatchId ?? null;
   const routeContext = options?.routeContext ?? "home";
+  const backgroundDataEnabled = options?.backgroundDataEnabled ?? true;
   const partyInviteCode = options?.partyInviteCode?.trim().toUpperCase() ?? "";
   const onPartyEntered = options?.onPartyEntered;
   const onPartyLeft = options?.onPartyLeft;
@@ -124,12 +126,12 @@ export function useHomeModel(options?: {
     config,
     sessionController,
     auth,
-    enabled: !isMatchRoute,
+    enabled: !isMatchRoute && backgroundDataEnabled,
   });
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications", auth.userId || "anonymous"],
-    enabled: !isMatchRoute && !!auth.userId && !!auth.accessToken && !auth.nicknameRequired,
+    enabled: !isMatchRoute && backgroundDataEnabled && !!auth.userId && !!auth.accessToken && !auth.nicknameRequired,
     queryFn: async () => {
       const session = await sessionController.ensureFreshSession(60_000, {
         allowNicknameRequired: false,
@@ -146,7 +148,7 @@ export function useHomeModel(options?: {
 
   const resumableSessionQuery = useQuery({
     queryKey: ["session-resumable", auth.userId || "anonymous"],
-    enabled: !isMatchRoute && !partyInviteCode && !!auth.userId && !auth.nicknameRequired,
+    enabled: !isMatchRoute && backgroundDataEnabled && !partyInviteCode && !!auth.userId && !auth.nicknameRequired,
     queryFn: async ({ signal }) => {
       const session = await sessionController.ensureFreshSession(60_000, {
         allowNicknameRequired: false,
@@ -435,8 +437,8 @@ export function useHomeModel(options?: {
     }
   }
 
-  const prevEndedMatchRef = useRef("");
   const hadPartyRuntimeRef = useRef(false);
+  const lastSingleplayerPBRefreshRef = useRef("");
 
   useEffect(() => {
     startHomeRuntime(runtimeRef.current);
@@ -548,44 +550,27 @@ export function useHomeModel(options?: {
   ]);
 
   useEffect(() => {
+    if (!match.lastFinalizedMatchId) return;
+    void queryClient.invalidateQueries({ queryKey: ["me"] });
+    void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+    void queryClient.invalidateQueries({ queryKey: ["maps"] });
+    void queryClient.invalidateQueries({ queryKey: ["map-details"] });
+  }, [match.lastFinalizedMatchId, queryClient]);
+
+  useEffect(() => {
     const snapshot = match.snapshot;
     if (
       !snapshot ||
+      snapshot.mode !== "singleplayer" ||
       snapshot.state !== "ended" ||
-      snapshot.matchId === prevEndedMatchRef.current
+      snapshot.matchId === lastSingleplayerPBRefreshRef.current
     ) {
       return;
     }
-    prevEndedMatchRef.current = snapshot.matchId;
-    if (snapshot.mode === "singleplayer") {
-      return;
-    }
-    sessionController.setGamesPlayed((value) => value + 1);
-    const me = snapshot.players[auth.userId];
-    const opponentId =
-      Object.keys(snapshot.players || {}).find((id) => id !== auth.userId) ||
-      "";
-    const opp = opponentId ? snapshot.players[opponentId] : undefined;
-    if (me && opp && me.hp > opp.hp) {
-      sessionController.setWins((value) => value + 1);
-    }
-    if (me && opp && !me.isGuest) {
-      const preview = snapshot.ratingPreview?.[me.userId];
-      const selfDelta =
-        me.hp > opp.hp
-          ? preview?.win
-          : me.hp < opp.hp
-            ? preview?.lose
-            : preview?.draw;
-      if (typeof selfDelta === "number") {
-        sessionController.setMmr(me.mmr + selfDelta);
-      }
-      sessionController.setRankedGamesPlayed((value) => value + 1);
-      if (me.hp > opp.hp) {
-        sessionController.setRankedWins((value) => value + 1);
-      }
-    }
-  }, [match.snapshot, auth.userId, sessionController]);
+    lastSingleplayerPBRefreshRef.current = snapshot.matchId;
+    void queryClient.invalidateQueries({ queryKey: ["maps"] });
+    void queryClient.invalidateQueries({ queryKey: ["map-details"] });
+  }, [match.snapshot, queryClient]);
 
   const routeSourcePartyId =
     matchRoute.replacement && "sourcePartyId" in matchRoute.replacement

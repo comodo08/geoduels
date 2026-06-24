@@ -212,17 +212,6 @@ func (s *pgStore) CleanupStorage(batchSize int) (StorageCleanupResult, error) {
 	`, batchSize); err != nil {
 		return out, err
 	}
-	if err := run(&out.InactiveMapRevisions, `
-		delete from map_revisions r where r.id in (
-			select r2.id from map_revisions r2
-			join maps m on m.map_key=r2.map_key
-			where r2.id<>m.active_revision_id
-			  and not exists(select 1 from match_round_plans p where p.map_revision_id=r2.id)
-			order by r2.created_at limit $1
-		)
-	`, batchSize); err != nil {
-		return out, err
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return out, err
 	}

@@ -194,7 +194,12 @@ export function deriveHomeModel({
   const selfPlayer = snapshot?.players?.[selfId];
   const oppPlayer = oppId ? snapshot?.players?.[oppId] : undefined;
   const matchConfig = snapshot?.config || {};
-  const ruleset = matchConfig.ruleset === "nmpz" ? "nmpz" : "moving";
+  const ruleset =
+    matchConfig.ruleset === "nmpz" || matchConfig.ruleset === "no_move"
+      ? matchConfig.ruleset
+      : "moving";
+  const streetNames =
+    matchConfig.streetNames === "hidden" ? "hidden" : "shown";
   const pressureTimeLimitMs =
     typeof matchConfig.pressureTimeLimitMs === "number" &&
     matchConfig.pressureTimeLimitMs > 0
@@ -484,9 +489,16 @@ export function deriveHomeModel({
             ? "Free for All"
         : ruleset === "nmpz"
           ? "NMPZ"
-          : "Moving",
+          : ruleset === "no_move"
+            ? "No Move"
+            : "Moving",
       mapName: match.snapshot?.config?.mapName || (ruleset === "nmpz" ? "A Location World" : "A Source World"),
+      backLabel: match.sourcePartyInviteCode
+        ? "Back to party"
+        : "Back to lobby",
       streetViewInteractive: ruleset !== "nmpz",
+      ruleset,
+      streetNames,
       selfUserId: selfId,
     },
     chat: {
@@ -523,6 +535,10 @@ export function deriveHomeModel({
               resultPlayerFallbacks,
               resultPlayerBorderColors,
               participantsById,
+              matchConfig: snapshot?.config,
+              backLabel: match.sourcePartyInviteCode
+                ? "Back to party"
+                : "Back to lobby",
             }
           : { open: false },
     },

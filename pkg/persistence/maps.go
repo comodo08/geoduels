@@ -14,12 +14,10 @@ import (
 )
 
 const (
-	maxRevisionsPerMap       = 10
-	maxInactiveRevisionsKept = 0
-	absoluteMaxMapLocations  = 1_000_000
-	minMapLocations          = 5
-	plannedRoundCount        = 20
-	mapTrendingWindowDays    = 7
+	absoluteMaxMapLocations = 1_000_000
+	minMapLocations         = 5
+	plannedRoundCount       = 20
+	mapTrendingWindowDays   = 7
 )
 
 type MapCatalog interface {
@@ -27,7 +25,7 @@ type MapCatalog interface {
 	GetMap(userID, mapID string) (contracts.MapDetails, bool, error)
 	GetMapUploadQuota(userID string) (contracts.MapUploadQuota, error)
 	CreateCustomMap(userID, displayName, description, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error)
-	UploadCustomMapRevision(userID, mapID string, source io.Reader) (contracts.CustomMap, error)
+	ReplaceCustomMapLocations(userID, mapID string, source io.Reader) (contracts.CustomMap, error)
 	UpdateCustomMap(userID, mapID string, update contracts.CustomMapUpdate) (contracts.CustomMap, error)
 	PublishCustomMap(userID, mapID string) (contracts.CustomMap, error)
 	SetMapFavorite(userID, mapID string, favorite bool) (contracts.CustomMap, error)
@@ -37,7 +35,7 @@ type MapCatalog interface {
 	CreateMapComment(userID, mapID string, input contracts.MapCommentCreate) (contracts.MapComment, error)
 	DeleteMapComment(userID, mapID, commentID string, moderator bool) error
 	SetMapCommentLike(userID, mapID, commentID string, liked bool) (contracts.MapComment, error)
-	ArchiveCustomMap(userID, mapID string, allowAnyOwner bool) error
+	ArchiveCustomMap(userID, mapID string, allowAnyMap bool) error
 	PrepareMatchPlan(ctx context.Context, found *contracts.MatchFound) error
 }
 
@@ -48,19 +46,20 @@ func (s *pgStore) ListMaps(userID string, opts contracts.MapListOptions) ([]cont
 	sortMode := normalizeMapSort(opts.Sort)
 	searchPattern := mapSearchPattern(opts.Search)
 	query := `
-		select m.map_key, coalesce(m.owner_user_id::text, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
-		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, coalesce(m.active_revision_id::text, ''), (m.owner_user_id is null or m.official_at is not null),
+		select m.id::text,m.map_key,coalesce(m.owner_user_id::text, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
+		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, (m.owner_user_id is null or m.official_at is not null),
 		       m.official_at is not null,
 		       coalesce(m.published_at, '0001-01-01'::timestamptz), m.play_count, m.favorite_count, m.comment_count, m.trending_score,
-		       exists(select 1 from map_favorites mf where mf.map_id=m.map_key and mf.user_id=nullif($1,'')::uuid),
+		       exists(select 1 from map_favorites mf where mf.map_id=m.id and mf.user_id=nullif($1,'')::uuid),
 		       trim(both ':' from concat_ws(':', nullif(m.official_region_type,''), nullif(m.official_region_code,''))),
-		       coalesce((select value_json->>'rankedMovingMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'rankedNmpzMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'singleplayerMovingMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'singleplayerNmpzMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       m.created_at, m.updated_at
+		       coalesce((select value_json->>'rankedMovingMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'rankedNmpzMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'singleplayerMovingMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'singleplayerNmpzMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       m.created_at,m.updated_at,pb.best_score,coalesce(pb.match_id::text,''),pb.achieved_at
 		from maps m
 		left join users u on u.id = m.owner_user_id
+		left join player_map_bests pb on pb.map_id=m.id and pb.user_id=nullif($1,'')::uuid and pb.ruleset=0
 		where m.archived_at is null
 	`
 	args := []any{strings.TrimSpace(userID)}
@@ -70,7 +69,7 @@ func (s *pgStore) ListMaps(userID string, opts contracts.MapListOptions) ([]cont
 	case "community":
 		query += ` and m.owner_user_id is not null and m.published_at is not null and m.status='ready'`
 	case "favorites":
-		query += ` and exists(select 1 from map_favorites mf where mf.map_id=m.map_key and mf.user_id=nullif($1,'')::uuid)`
+		query += ` and exists(select 1 from map_favorites mf where mf.map_id=m.id and mf.user_id=nullif($1,'')::uuid)`
 	case "mine":
 		query += ` and m.owner_user_id = nullif($1,'')::uuid`
 	default:
@@ -116,20 +115,21 @@ func (s *pgStore) GetMap(userID, mapID string) (contracts.MapDetails, bool, erro
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	row := s.pool.QueryRow(ctx, `
-		select m.map_key, coalesce(m.owner_user_id::text, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
-		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, coalesce(m.active_revision_id::text, ''), (m.owner_user_id is null or m.official_at is not null),
+		select m.id::text,m.map_key,coalesce(m.owner_user_id::text, ''), case when m.official_at is not null then 'GeoDuels' else coalesce(u.display_name, 'GeoDuels') end, m.display_name, m.description, m.visibility, m.status,
+		       m.difficulty, m.thumbnail_variant, coalesce(m.thumbnail_key, 'generic/variant-' || greatest(1, least(5, m.thumbnail_variant))::text), m.location_count, (m.owner_user_id is null or m.official_at is not null),
 		       m.official_at is not null,
 		       coalesce(m.published_at, '0001-01-01'::timestamptz), m.play_count, m.favorite_count, m.comment_count, m.trending_score,
-		       exists(select 1 from map_favorites mf where mf.map_id=m.map_key and mf.user_id=nullif($2,'')::uuid),
+		       exists(select 1 from map_favorites mf where mf.map_id=m.id and mf.user_id=nullif($2,'')::uuid),
 		       trim(both ':' from concat_ws(':', nullif(m.official_region_type,''), nullif(m.official_region_code,''))),
-		       coalesce((select value_json->>'rankedMovingMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'rankedNmpzMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'singleplayerMovingMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       coalesce((select value_json->>'singleplayerNmpzMapId' from site_settings where key='gameplay_map_settings'), '') = m.map_key,
-		       m.created_at, m.updated_at
+		       coalesce((select value_json->>'rankedMovingMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'rankedNmpzMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'singleplayerMovingMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       coalesce((select value_json->>'singleplayerNmpzMapId' from site_settings where key='gameplay_map_settings'), '') in (m.id::text,m.map_key),
+		       m.created_at,m.updated_at,pb.best_score,coalesce(pb.match_id::text,''),pb.achieved_at
 		from maps m
 		left join users u on u.id = m.owner_user_id
-		where m.map_key = $1 and m.archived_at is null
+		left join player_map_bests pb on pb.map_id=m.id and pb.user_id=nullif($2,'')::uuid and pb.ruleset=0
+		where (m.id::text=$1 or m.map_key=$1 or exists(select 1 from map_aliases a where a.map_id=m.id and a.alias=$1)) and m.archived_at is null
 		  and (m.owner_user_id is null or m.official_at is not null or m.owner_user_id = nullif($2,'')::uuid or m.published_at is not null or m.visibility = 'unlisted')
 	`, strings.TrimSpace(mapID), strings.TrimSpace(userID))
 	item, err := scanCustomMap(row)
@@ -139,7 +139,7 @@ func (s *pgStore) GetMap(userID, mapID string) (contracts.MapDetails, bool, erro
 	if err != nil {
 		return contracts.MapDetails{}, false, err
 	}
-	stats, err := s.mapCountryStats(ctx, item.ActiveRevisionID)
+	stats, err := s.mapCountryStats(ctx, item.ID)
 	if err != nil {
 		return contracts.MapDetails{}, false, err
 	}

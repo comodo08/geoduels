@@ -40,9 +40,9 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 	if _, err := tx.Exec(ctx, `
 		insert into match_sessions(
 			match_id, preset_id, mode, state, ranked, source_kind, source_party_id, source_party_invite_code,
-			node_id, node_epoch, public_route, config_json, map_id, map_revision_id, updated_at
+			node_id, node_epoch, public_route, config_json, map_id, updated_at
 		)
-		values($1, $2, $3, 'live', $4, $5, nullif($6, '')::uuid, nullif($7, ''), $8, $9, $10, $11::jsonb, nullif($12, ''), nullif($13, '')::uuid, now())
+		values($1,$2,$3,'live',$4,$5,nullif($6,'')::uuid,nullif($7,''),$8,$9,$10,$11::jsonb,nullif($12,'')::uuid,now())
 		on conflict (match_id) do update set
 			preset_id = excluded.preset_id,
 			mode = excluded.mode,
@@ -56,9 +56,8 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 			public_route = excluded.public_route,
 			config_json = excluded.config_json,
 			map_id = excluded.map_id,
-			map_revision_id = excluded.map_revision_id,
 			updated_at = now()
-	`, found.MatchID, string(presetID), string(found.Mode), ranked, sourceKind, found.SourcePartyID, found.SourcePartyInviteCode, params.NodeID, params.NodeEpoch, params.PublicRoute, string(cfgJSON), resolvedMapID(found), found.ResolvedMap.RevisionID); err != nil {
+	`, found.MatchID, string(presetID), string(found.Mode), ranked, sourceKind, found.SourcePartyID, found.SourcePartyInviteCode, params.NodeID, params.NodeEpoch, params.PublicRoute, string(cfgJSON), resolvedMapID(found)); err != nil {
 		return err
 	}
 	for _, userID := range found.Players {
@@ -96,48 +95,6 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 		`, found.MatchID, userID, teamID, profile.DisplayName, profile.AvatarURL, joinedAt); err != nil {
 			return err
 		}
-	}
-	return tx.Commit(ctx)
-}
-
-func (s *pgStore) CompleteMatchSession(matchID string) error {
-	matchID = strings.TrimSpace(matchID)
-	if matchID == "" {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `
-		update match_sessions
-		set state = 'ended', ended_at = coalesce(ended_at, now()), updated_at = now()
-		where match_id = $1
-	`, matchID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		update parties
-		set state = 'open',
-			last_match_id = $1,
-			active_match_id = null,
-			started_match_id = null,
-			updated_at = now()
-		where active_match_id = $1 or started_match_id = $1
-	`, matchID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		update party_members pm
-		set ready = false
-		from match_sessions ms
-		where ms.match_id = $1
-		  and pm.party_id = ms.source_party_id
-	`, matchID); err != nil {
-		return err
 	}
 	return tx.Commit(ctx)
 }

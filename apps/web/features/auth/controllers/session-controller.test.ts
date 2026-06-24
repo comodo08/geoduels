@@ -172,4 +172,37 @@ describe('SessionController', () => {
     expect(controller.getState().leaderboard?.nextResetAt).toBe('2026-07-01T21:00:00Z');
     expect(controller.getState().leaderboard?.entries).toHaveLength(1);
   });
+
+  it('applies a committed match rating to the active profile', () => {
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.applySessionSnapshot(
+      {
+        userId: 'self',
+        accessToken: tokenWithExp(Date.now() + 60 * 60_000),
+        nicknameRequired: false,
+        nicknameInput: 'Player'
+      },
+      {
+        mmr: 1000,
+        ratingRd: 220,
+        gamesPlayed: 9,
+        wins: 5,
+        rankedGamesPlayed: 7,
+        rankedWins: 4
+      }
+    );
+
+    controller.applyCommittedRating(1025, 180);
+
+    expect(controller.getState()).toEqual(
+      expect.objectContaining({
+        mmr: 1025,
+        ratingRd: 180,
+        gamesPlayed: 9,
+        wins: 5,
+        rankedGamesPlayed: 7,
+        rankedWins: 4
+      })
+    );
+  });
 });

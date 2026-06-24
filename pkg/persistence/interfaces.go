@@ -33,6 +33,7 @@ type SessionRepository interface {
 type ProfileRepository interface {
 	UpsertUser(userID, email, displayName string) error
 	GetProfile(userID string) (Profile, error)
+	GetPublicPlayerProfile(userID string) (PublicPlayerProfile, error)
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
 }
 
@@ -53,10 +54,11 @@ type LeaderboardRepository interface {
 }
 
 type MatchRepository interface {
-	RecordMatchResult(snap contracts.MatchSnapshot) error
-	RecordFinalMatchSnapshot(matchID string, snapshot []byte) error
+	FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error)
 	GetFinalMatchSnapshot(matchID string) ([]byte, bool, error)
 	ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error)
+	ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (MatchHistoryPage, error)
+	PlayerParticipatedInMatch(userID, matchID string) (bool, error)
 }
 
 type ModerationRepository interface {
@@ -110,7 +112,7 @@ type SeasonRepository interface {
 	GetRankedSeasonSettings() (RankedSeasonSettings, error)
 	SetRankedSeasonResetRule(monthlyResetDay int) (RankedSeasonSettings, error)
 	RunDueRankedSeasonReset(now time.Time) (RankedSeasonResetResult, bool, error)
-	ActivateMapRevision(mapKey, displayName string, dataset []byte) (MapRevisionSummary, error)
+	ReplaceMapLocations(mapKey, displayName string, dataset []byte) (MapImportSummary, error)
 }
 
 type GameplayMapRepository interface {
@@ -130,27 +132,25 @@ type RuntimeRepository interface {
 	GetRuntimeMatch(matchID string) (RuntimeMatch, bool, error)
 	RecordRuntimeMatch(matchID, state string, ownerEpoch int64, terminal bool) error
 	UpsertMatchSession(params MatchSessionUpsert) error
-	CompleteMatchSession(matchID string) error
 	MatchSessionSourceParty(matchID string) (string, string, bool, error)
 	ExpireStaleRuntimeMatches(prefix string, olderThan time.Duration) error
 }
 
 type StorageCleanupResult struct {
-	ReplaysCompressed    int64
-	ExpiredReplays       int64
-	RuntimeMatches       int64
-	MatchSessions        int64
-	MatchPlans           int64
-	ChatMessages         int64
-	ChatConversations    int64
-	AuthSessions         int64
-	Parties              int64
-	MapUploadEvents      int64
-	MapDailyUsers        int64
-	UserNotifications    int64
-	NotificationOutbox   int64
-	DiscordSyncOutbox    int64
-	InactiveMapRevisions int64
+	ReplaysCompressed  int64
+	ExpiredReplays     int64
+	RuntimeMatches     int64
+	MatchSessions      int64
+	MatchPlans         int64
+	ChatMessages       int64
+	ChatConversations  int64
+	AuthSessions       int64
+	Parties            int64
+	MapUploadEvents    int64
+	MapDailyUsers      int64
+	UserNotifications  int64
+	NotificationOutbox int64
+	DiscordSyncOutbox  int64
 }
 
 type StorageMaintenance interface {

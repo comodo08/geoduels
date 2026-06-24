@@ -63,8 +63,13 @@ func equalBytes(a, b []byte) bool {
 }
 
 func (s *pgStore) ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error) {
+	page, err := s.ListPlayerMatchHistoryPage(userID, limit, time.Time{}, "")
+	return page.Matches, err
+}
+
+func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (MatchHistoryPage, error) {
 	if userID == "" {
-		return nil, errors.New("userID required")
+		return MatchHistoryPage{}, errors.New("userID required")
 	}
 	if limit <= 0 {
 		limit = 20
@@ -74,25 +79,82 @@ func (s *pgStore) ListPlayerMatchHistory(userID string, limit int) ([]MatchHisto
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	rows, err := s.pool.Query(ctx, `
-		select h.match_id, h.mode, h.started_at, h.ended_at, coalesce(h.winner_user_id::text, '')
-		from match_history h
-		join match_players p on p.match_id = h.match_id
+	query := `
+		select
+			h.match_id, h.mode, h.started_at, h.ended_at,
+			coalesce(h.winner_user_id::text, ''),
+			case
+				when h.mode = 'singleplayer' then 'completed'
+				when h.winner_user_id is null then 'draw'
+				when h.winner_user_id = p.user_id then 'win'
+				else 'loss'
+			end,
+			coalesce(h.ranked, false),
+			coalesce(p.final_ranked_delta, 0),
+			coalesce(p.total_score, 0)
+		from match_players p
+		join match_history h on h.match_id = p.match_id
 		where p.user_id = $1
-		order by h.ended_at desc, h.match_id desc
+	`
+	args := []any{userID, limit + 1}
+	if !beforeEndedAt.IsZero() && beforeMatchID != "" {
+		query += ` and (p.ended_at, p.match_id) < ($3, $4::uuid)`
+		args = append(args, beforeEndedAt, beforeMatchID)
+	}
+	query += `
+		order by p.ended_at desc, p.match_id desc
 		limit $2
-	`, userID, limit)
+	`
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return MatchHistoryPage{}, err
 	}
 	defer rows.Close()
-	out := make([]MatchHistorySummary, 0, limit)
+	out := make([]MatchHistorySummary, 0, limit+1)
 	for rows.Next() {
 		var item MatchHistorySummary
-		if err := rows.Scan(&item.MatchID, &item.Mode, &item.StartedAt, &item.EndedAt, &item.WinnerUserID); err != nil {
-			return nil, err
+		if err := rows.Scan(
+			&item.MatchID,
+			&item.Mode,
+			&item.StartedAt,
+			&item.EndedAt,
+			&item.WinnerUserID,
+			&item.Outcome,
+			&item.Ranked,
+			&item.RatingDelta,
+			&item.TotalScore,
+		); err != nil {
+			return MatchHistoryPage{}, err
 		}
 		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return MatchHistoryPage{}, err
+	}
+	page := MatchHistoryPage{Matches: out}
+	if len(out) > limit {
+		page.HasMore = true
+		page.Matches = out[:limit]
+		last := page.Matches[len(page.Matches)-1]
+		page.NextEndedAt = last.EndedAt
+		page.NextMatchID = last.MatchID
+	}
+	return page, nil
+}
+
+func (s *pgStore) PlayerParticipatedInMatch(userID, matchID string) (bool, error) {
+	if userID == "" || matchID == "" {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		select exists (
+			select 1
+			from match_players
+			where user_id = $1 and match_id = $2
+		)
+	`, userID, matchID).Scan(&exists)
+	return exists, err
 }

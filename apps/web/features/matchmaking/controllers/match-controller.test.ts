@@ -91,7 +91,7 @@ describe('MatchController', () => {
 
     controller.joinQueue();
     await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
-    expect(MockWebSocket.instances[0]?.url).toBe('ws://localhost:8090/queue?accessToken=guest-access-token&rulesets=moving');
+    expect(MockWebSocket.instances[0]?.url).toBe('ws://localhost:8090/queue?accessToken=guest-access-token&queues=moving');
     MockWebSocket.instances[0]?.emitMessage({
       type: 'queue_status',
       payload: { status: 'queued', queuedAt: 1773355276730 }
@@ -359,6 +359,56 @@ describe('MatchController', () => {
     });
 
     expect(listener).toHaveBeenCalledTimes(callsAfterSnapshot);
+    controller.destroy();
+  });
+
+  it('applies the committed rating from an ended snapshot', async () => {
+    const session: AuthSessionSnapshot = {
+      userId: 'self',
+      accessToken: 'rating-access-token',
+      nicknameRequired: false,
+      nicknameInput: 'Self'
+    };
+    const sessionController = {
+      getPlayableSession: vi.fn(async () => session),
+      ensureFreshSession: vi.fn(async () => session),
+      getSessionSnapshot: vi.fn(() => session),
+      getState: vi.fn(() => ({ userId: 'self' })),
+      applyCommittedRating: vi.fn(),
+      refreshSession: vi.fn(async () => null),
+      clearAuthSession: vi.fn()
+    } as any;
+
+    const controller = new MatchController({ config: runtimeConfig, sessionController });
+    controller.start();
+    await controller.resumeResolvedMatch({
+      matchId: 'ranked-1',
+      node: 'gameplay-node-0',
+      wsPath: '/ws/gameplay-node-0',
+      ticket: 'rating-ticket'
+    });
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+
+    MockWebSocket.instances[0]?.emitMessage({
+      kind: 'event',
+      type: 'match.state',
+      payload: {
+        matchId: 'ranked-1',
+        state: 'ended',
+        players: {
+          self: {
+            userId: 'self',
+            mmr: 1025,
+            ratingRd: 180,
+            isGuest: false
+          }
+        },
+        eventSequence: 10
+      }
+    });
+
+    expect(sessionController.applyCommittedRating).toHaveBeenCalledWith(1025, 180);
+    expect(controller.getState().lastFinalizedMatchId).toBe('ranked-1');
     controller.destroy();
   });
 

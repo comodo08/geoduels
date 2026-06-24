@@ -3,6 +3,7 @@ import { apiFetch, authHeaders, expectJSON, mergeHeaders } from "../../../lib/ht
 
 export type CustomMap = {
   id: string;
+  mapKey?: string;
   ownerUserId?: string;
   authorName?: string;
   displayName: string;
@@ -13,7 +14,11 @@ export type CustomMap = {
   thumbnailVariant: number;
   thumbnailKey: string;
   locationCount: number;
-  activeRevisionId?: string;
+  personalBest?: {
+    score: number;
+    matchId: string;
+    achievedAt: string;
+  };
   system: boolean;
   official?: boolean;
   publishedAt?: string;
@@ -103,10 +108,10 @@ export async function createMap(config: RuntimeConfig, accessToken: string, inpu
   return expectJSON(await apiFetch(config, "/v1/maps", { method: "POST", headers: headers(accessToken), body }), "Map request failed");
 }
 
-export async function uploadMapRevision(config: RuntimeConfig, accessToken: string, mapId: string, file: File): Promise<CustomMap> {
+export async function replaceMapLocations(config: RuntimeConfig, accessToken: string, mapId: string, file: File): Promise<CustomMap> {
   const body = new FormData();
   body.set("file", file);
-  return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}/revisions`, { method: "POST", headers: headers(accessToken), body }), "Map request failed");
+  return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}/locations`, { method: "PUT", headers: headers(accessToken), body }), "Map request failed");
 }
 
 export async function archiveMap(config: RuntimeConfig, accessToken: string, mapId: string): Promise<void> {

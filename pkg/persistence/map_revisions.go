@@ -2,8 +2,7 @@ package persistence
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
+	"crypto/sha256"
 	"errors"
 	"strings"
 	"time"
@@ -13,97 +12,80 @@ import (
 	"geoduels/pkg/entityid"
 )
 
-func (s *pgStore) ActivateMapRevision(mapKey, displayName string, dataset []byte) (MapRevisionSummary, error) {
-	if strings.TrimSpace(mapKey) == "" {
-		return MapRevisionSummary{}, errors.New("map key required")
+// ReplaceMapLocations atomically replaces the current dataset for an official
+// map. Match plans contain copied coordinates, so active matches do not depend
+// on retaining old map datasets.
+func (s *pgStore) ReplaceMapLocations(mapKey, displayName string, dataset []byte) (MapImportSummary, error) {
+	mapKey = strings.TrimSpace(mapKey)
+	if mapKey == "" {
+		return MapImportSummary{}, errors.New("map key required")
 	}
 	rows, err := parseMapRows(dataset)
 	if err != nil {
-		return MapRevisionSummary{}, err
+		return MapImportSummary{}, err
 	}
 	if len(rows) == 0 {
-		return MapRevisionSummary{}, errors.New("no valid rows")
+		return MapImportSummary{}, errors.New("no valid rows")
 	}
 	if strings.TrimSpace(displayName) == "" {
 		displayName = mapKey
 	}
-	sum := sha1.Sum(dataset)
-	contentHash := hex.EncodeToString(sum[:])
-	revisionID := entityid.Derive("map-revision", mapKey+":"+contentHash)
-
+	digest := sha256.Sum256(dataset)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return MapRevisionSummary{}, err
+		return MapImportSummary{}, err
 	}
 	defer tx.Rollback(ctx)
 
+	mapID := entityid.Derive("map", mapKey)
 	if _, err := tx.Exec(ctx, `
-		insert into maps(map_key, display_name)
-		values($1, $2)
-		on conflict (map_key) do update set
-			display_name = excluded.display_name
-	`, mapKey, displayName); err != nil {
-		return MapRevisionSummary{}, err
+		insert into maps(id,map_key,display_name,status,visibility,location_count,content_hash,created_at,updated_at)
+		values($1,$2,$3,'processing','public',0,$4,now(),now())
+		on conflict(map_key) do update set display_name=excluded.display_name,status='processing',updated_at=now()
+	`, mapID, mapKey, displayName, digest[:]); err != nil {
+		return MapImportSummary{}, err
 	}
-
-	inserted := true
-	var existing string
-	var revisionStorageID int32
-	err = tx.QueryRow(ctx, `select id,storage_id from map_revisions where map_key = $1 and content_hash = $2 limit 1`, mapKey, contentHash).Scan(&existing, &revisionStorageID)
-	if err == nil {
-		revisionID = existing
-		inserted = false
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return MapRevisionSummary{}, err
-	} else {
-		if err := tx.QueryRow(ctx, `
-			insert into map_revisions(id, map_key, content_hash, status, row_count)
-			values($1, $2, $3, 'validated', 0)
-			returning storage_id
-		`, revisionID, mapKey, contentHash).Scan(&revisionStorageID); err != nil {
-			return MapRevisionSummary{}, err
-		}
+	var mapStorageID int32
+	if err := tx.QueryRow(ctx, `select id::text,storage_id from maps where map_key=$1 for update`, mapKey).Scan(&mapID, &mapStorageID); err != nil {
+		return MapImportSummary{}, err
 	}
-
-	if inserted {
-		block := make([][]any, 0, len(rows))
-		for _, r := range rows {
-			block = append(block, []any{revisionStorageID, r.LatE7, r.LngE7, r.Country, r.PanoID, r.HeadingCDeg, r.PitchCDeg, r.RandKey})
-		}
-		if _, err := tx.CopyFrom(
-			ctx,
-			pgx.Identifier{"locations"},
-			[]string{"revision_storage_id", "lat_e7", "lng_e7", "country", "pano_id", "heading_cdeg", "pitch_cdeg", "rand_key_i"},
-			pgx.CopyFromRows(block),
-		); err != nil {
-			return MapRevisionSummary{}, err
-		}
+	if _, err := tx.Exec(ctx, `delete from locations where map_storage_id=$1`, mapStorageID); err != nil {
+		return MapImportSummary{}, err
 	}
-
-	if _, err := tx.Exec(ctx, `update map_revisions set row_count = $2, status = 'active' where id = $1`, revisionID, len(rows)); err != nil {
-		return MapRevisionSummary{}, err
+	block := make([][]any, 0, len(rows))
+	for _, row := range rows {
+		block = append(block, []any{mapStorageID, row.LatE7, row.LngE7, row.Country, row.PanoID, row.HeadingCDeg, row.PitchCDeg, row.RandKey})
+	}
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"locations"},
+		[]string{"map_storage_id", "lat_e7", "lng_e7", "country", "pano_id", "heading_cdeg", "pitch_cdeg", "rand_key_i"},
+		pgx.CopyFromRows(block)); err != nil {
+		return MapImportSummary{}, err
+	}
+	if _, err := tx.Exec(ctx, `delete from map_country_stats where map_id=$1`, mapID); err != nil {
+		return MapImportSummary{}, err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into map_aliases(map_key, active_revision_id, updated_at)
-		values($1, $2, now())
-		on conflict (map_key) do update set
-			rollback_revision_id = map_aliases.active_revision_id,
-			active_revision_id = excluded.active_revision_id,
-			updated_at = now()
-	`, mapKey, revisionID); err != nil {
-		return MapRevisionSummary{}, err
+		insert into map_country_stats(map_id,country,location_count)
+		select $1,coalesce(nullif(country,''),'Unknown'),count(*)::int
+		from locations where map_storage_id=$2
+		group by coalesce(nullif(country,''),'Unknown')
+	`, mapID, mapStorageID); err != nil {
+		return MapImportSummary{}, err
 	}
-
+	if _, err := tx.Exec(ctx, `
+		update maps
+		set status='ready',location_count=$2,content_hash=$3,rejected_location_count=0,updated_at=now()
+		where id=$1
+	`, mapID, len(rows), digest[:]); err != nil {
+		return MapImportSummary{}, err
+	}
+	if _, err := tx.Exec(ctx, `insert into map_aliases(alias,map_id) values($1,$2) on conflict(alias) do update set map_id=excluded.map_id`, mapKey, mapID); err != nil {
+		return MapImportSummary{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
-		return MapRevisionSummary{}, err
+		return MapImportSummary{}, err
 	}
-	return MapRevisionSummary{
-		MapKey:      mapKey,
-		RevisionID:  revisionID,
-		RowCount:    len(rows),
-		Inserted:    inserted,
-		DisplayName: displayName,
-	}, nil
+	return MapImportSummary{MapID: mapID, MapKey: mapKey, LocationCount: len(rows), DisplayName: displayName}, nil
 }

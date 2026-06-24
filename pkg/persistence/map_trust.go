@@ -156,7 +156,7 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 	if err := tx.QueryRow(ctx, `
 		select count(distinct mf.user_id)::int, count(distinct mf.map_id)::int
 		from map_favorites mf
-		join maps m on m.map_key=mf.map_id
+		join maps m on m.id=mf.map_id
 		join users favoriter on favoriter.id=mf.user_id
 		where m.owner_user_id=$1
 		  and mf.user_id<>$1
@@ -256,21 +256,15 @@ func enforceMapUploadQuota(ctx context.Context, tx pgx.Tx, userID, mapID string,
 
 	currentLocations := quota.CurrentActiveLocations
 	if !create {
-		var existingLocations, revisions int
+		var existingLocations int
 		if err := tx.QueryRow(ctx, `
 			select location_count
 			from maps
-			where map_key=$1 and owner_user_id=$2 and archived_at is null
+			where id=$1 and owner_user_id=$2 and archived_at is null
 		`, mapID, userID).Scan(&existingLocations); err != nil {
 			return err
 		}
 		currentLocations -= existingLocations
-		if err := tx.QueryRow(ctx, `select count(*) from map_revisions where map_key=$1`, mapID).Scan(&revisions); err != nil {
-			return err
-		}
-		if revisions >= maxRevisionsPerMap {
-			return fmt.Errorf("map limit is %d revisions", maxRevisionsPerMap)
-		}
 	}
 	if currentLocations+incoming > quota.MaxActiveLocations {
 		return fmt.Errorf("%s tier account limit is %d active map locations", quota.Tier, quota.MaxActiveLocations)

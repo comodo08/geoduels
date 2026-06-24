@@ -29,16 +29,8 @@ type HomePageLobbyProps = {
     | "devLogin"
     | "triggerGoogleSignIn"
     | "triggerDiscordSignIn"
-    | "linkAuthProvider"
-    | "upgradeGuestWithProvider"
-    | "unlinkAuthProvider"
     | "loadLeaderboard"
-    | "submitProfileNickname"
-    | "selectBadge"
     | "startSupportDonation"
-    | "setNicknameInput"
-    | "clearAuthSession"
-    | "deleteAccount"
   >;
 };
 
@@ -71,13 +63,9 @@ export default function HomePageLobby({
       userAvatar={auth.userAvatar}
       isGuest={auth.isGuest}
       authMigrationRequired={!!auth.authMigrationRequired}
-      linkedProviders={auth.linkedProviders || []}
-      badges={auth.badges || []}
       selectedBadge={auth.selectedBadge}
       connected={lobby.connected}
       mmr={lobby.mmr}
-      gamesPlayed={lobby.gamesPlayed}
-      winsPct={lobby.winsPct}
       leaderboard={lobby.leaderboard}
       leaderboardLoading={lobby.leaderboardLoading}
       status={lobby.status}
@@ -114,21 +102,11 @@ export default function HomePageLobby({
       devLogin={actions.devLogin}
       onGoogleSignIn={actions.triggerGoogleSignIn}
       onDiscordSignIn={actions.triggerDiscordSignIn || actions.triggerGoogleSignIn}
-      onLinkAuthProvider={actions.linkAuthProvider}
-      onUpgradeGuestWithProvider={actions.upgradeGuestWithProvider}
-      onUnlinkAuthProvider={actions.unlinkAuthProvider}
       onBrowseLeaderboard={actions.loadLeaderboard}
       authLoading={auth.authLoading}
       authError={auth.authError}
-      nicknameInput={auth.nicknameInput}
-      nicknameError={auth.nicknameError}
       nicknameSaving={auth.nicknameSaving}
-      onChangeNickname={actions.setNicknameInput}
-      onSaveNickname={actions.submitProfileNickname}
-      onSelectBadge={actions.selectBadge}
       onSupportDonation={actions.startSupportDonation}
-      onLogout={() => actions.clearAuthSession()}
-      onDeleteAccount={actions.deleteAccount}
     />
   );
 }

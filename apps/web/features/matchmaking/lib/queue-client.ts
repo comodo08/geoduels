@@ -4,9 +4,18 @@ import { apiFetch, authHeaders, mergeHeaders } from '../../../lib/http';
 import type { Snapshot } from '../../../components/ui/types';
 import type { AuthSessionSnapshot } from '../../auth/session';
 
-export type GameRuleset = 'moving' | 'nmpz';
+export type GameRuleset = 'moving' | 'no_move' | 'nmpz';
+export type StreetNamesVisibility = 'shown' | 'hidden';
+export type QueueVariant =
+  | 'moving'
+  | 'no_move'
+  | 'nmpz'
+  | 'moving_hidden'
+  | 'no_move_hidden'
+  | 'nmpz_hidden';
 export type MatchConfig = {
   ruleset?: GameRuleset;
+  streetNames?: StreetNamesVisibility;
   mapId?: string;
   mapName?: string;
   mapKey?: string;
@@ -97,12 +106,12 @@ export async function streamQueue(
   config: RuntimeConfig,
   session: AuthSessionSnapshot,
   signal: AbortSignal,
-  rulesets: GameRuleset[],
+  queues: QueueVariant[],
   onEvent: (event: QueueEvent) => void
 ) {
   const base = normalizeWSBase(config.queueURL).replace(/\/$/, '');
-  const selectedRulesets = (rulesets.length ? rulesets : ['moving']).join(',');
-  const target = `${base}/queue?accessToken=${encodeURIComponent(session.accessToken)}&rulesets=${encodeURIComponent(selectedRulesets)}`;
+  const selectedQueues = (queues.length ? queues : ['moving']).join(',');
+  const target = `${base}/queue?accessToken=${encodeURIComponent(session.accessToken)}&queues=${encodeURIComponent(selectedQueues)}`;
 
   await new Promise<void>((resolve, reject) => {
     let settled = false;

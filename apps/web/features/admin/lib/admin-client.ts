@@ -198,22 +198,6 @@ export async function requestAdminReleaseModerationCase(
   return resp.json();
 }
 
-export async function requestAdminPlayerMatches(
-  config: RuntimeConfig,
-  accessToken: string,
-  userId: string,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/matches`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load match history"));
-  }
-  return resp.json();
-}
-
 export async function requestAdminModerationCase(
   config: RuntimeConfig,
   accessToken: string,
@@ -226,6 +210,22 @@ export async function requestAdminModerationCase(
   );
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load moderation case"));
+  }
+  return resp.json();
+}
+
+export async function requestAdminMatchChat(
+  config: RuntimeConfig,
+  accessToken: string,
+  matchId: string,
+) {
+  const resp = await apiFetch(
+    config,
+    `/v1/admin/matches/${encodeURIComponent(matchId)}/chat`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to load match chat"));
   }
   return resp.json();
 }

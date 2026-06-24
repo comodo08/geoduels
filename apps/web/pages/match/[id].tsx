@@ -18,7 +18,10 @@ import {
   normalizeEntityRouteId,
   toPublicEntityId,
 } from "../../lib/entity-id";
-import type { MatchSessionResponse } from "../../features/matchmaking/lib/queue-client";
+import type {
+  MatchConfig,
+  MatchSessionResponse,
+} from "../../features/matchmaking/lib/queue-client";
 
 export function normalizeRouteMatchId(
   raw: string | string[] | undefined,
@@ -145,20 +148,22 @@ export default function MatchPage() {
   const canonicalURL = routeMatchId
     ? `${siteURL}/match/${encodeURIComponent(toPublicEntityId(routeMatchId))}`
     : `${siteURL}/`;
+  const sourcePartyInviteCode =
+    model.view.meta.sourcePartyInviteCode ||
+    matchSourcePartyInviteCode(routeSession.replacement) ||
+    "";
+  const backHref = sourcePartyInviteCode
+    ? `/party/${encodeURIComponent(sourcePartyInviteCode)}`
+    : "/";
+  const backLabel = sourcePartyInviteCode
+    ? "Back to party"
+    : "Back to lobby";
   const handleLeaveToParty = () => {
-    const sourcePartyInviteCode =
-      model.view.meta.sourcePartyInviteCode ||
-      matchSourcePartyInviteCode(routeSession.replacement) ||
-      "";
     model.actions.leaveGame();
-    void router.push(
-      sourcePartyInviteCode
-        ? `/party/${encodeURIComponent(sourcePartyInviteCode)}`
-        : "/",
-    );
+    void router.push(backHref);
   };
-  const handlePlayAgain = async () => {
-    const nextMatchId = await model.actions.startSingleplayer();
+  const handlePlayAgain = async (matchConfig?: MatchConfig) => {
+    const nextMatchId = await model.actions.startSingleplayer(matchConfig);
     if (nextMatchId) {
       void router.push(
         `/match/${encodeURIComponent(toPublicEntityId(nextMatchId))}`,
@@ -253,6 +258,7 @@ export default function MatchPage() {
           historyOverlay && (
             <EndMatchOverlay
               onLeaveGame={handleLeaveToParty}
+              backLabel={backLabel}
               mode={historyOverlay.mode}
               outcome={historyOverlay.outcome}
               sides={historyOverlay.sides}
@@ -267,7 +273,7 @@ export default function MatchPage() {
               onReportPlayer={handleHistoryReport}
               onPlayAgain={
                 historyOverlay.mode === "singleplayer"
-                  ? handlePlayAgain
+                  ? () => handlePlayAgain(routeSession.historySnapshot?.config)
                   : undefined
               }
               asPage
@@ -308,10 +314,10 @@ export default function MatchPage() {
                   </button>
                 ) : null}
                 <Link
-                  href="/"
+                  href={backHref}
                   className="mt-4 inline-flex rounded-full border border-white/10 bg-white/10 px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-[0.1em] text-white transition hover:bg-white/15"
                 >
-                  Back To Party
+                  {backLabel}
                 </Link>
               </div>
             </div>

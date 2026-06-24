@@ -7,11 +7,7 @@ export function MaintenanceBanner({
   message,
   countdown,
   onDismiss,
-}: {
-  message: string;
-  countdown: string;
-  onDismiss?: () => void;
-}) {
+}: { message: string; countdown: string; onDismiss?: () => void }) {
   const trailing = onDismiss ? (
     <div className="flex items-center gap-2">
       <span>{countdown || "Soon"}</span>
@@ -47,11 +43,7 @@ export function MaintenanceOverlay({
   message,
   eta,
   onDismiss,
-}: {
-  message: string;
-  eta: string;
-  onDismiss?: () => void;
-}) {
+}: { message: string; eta: string; onDismiss?: () => void }) {
   return (
     <AppModalShell
       title="Maintenance Break"
@@ -75,12 +67,8 @@ export function MaintenanceOverlay({
         <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#f4c84c]/30 bg-[#f4c84c]/10">
           <Loader2 size={30} className="animate-spin text-[#f4c84c]" />
         </div>
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#f4d98a]">
-          Maintenance Break
-        </p>
-        <h2 className="mt-3 text-[30px] font-black tracking-tight text-white sm:text-[38px]">
-          We&apos;ll Be Back Shortly
-        </h2>
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#f4d98a]">Maintenance Break</p>
+        <h2 className="mt-3 text-[30px] font-black tracking-tight text-white sm:text-[38px]">We&apos;ll Be Back Shortly</h2>
         <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#d9e7f5]">
           {message || "GeoDuels is temporarily offline while we finish a scheduled upgrade."}
         </p>

@@ -62,4 +62,28 @@ describe("ChatPanel", () => {
       expect(screen.getByRole("button", { name: "Open chat and unmute" })).toBeInTheDocument();
     });
   });
+
+  it("renders review mode without interactive controls", () => {
+    render(
+      <ChatPanel
+        mode="review"
+        messages={[{
+          id: "message-1",
+          matchId: "match-1",
+          senderUserId: "player-1",
+          senderDisplayName: "Explorer",
+          kind: "text",
+          body: "hello",
+          createdAt: "2026-06-20T12:00:00Z",
+        }]}
+        selfUserId=""
+      />,
+    );
+
+    expect(screen.getByText("Explorer")).toBeInTheDocument();
+    expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mute chat" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Message")).not.toBeInTheDocument();
+  });
 });

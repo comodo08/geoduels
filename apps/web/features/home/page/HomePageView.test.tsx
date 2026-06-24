@@ -66,6 +66,8 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         showResultStage: false,
         showMatchEndPage: true,
         streetViewSrc: "",
+        ruleset: "moving",
+        streetNames: "shown",
         roundResult: undefined,
         roundResults: [],
         resultOverlay: undefined,

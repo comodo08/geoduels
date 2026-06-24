@@ -5,6 +5,7 @@ import Head from 'next/head';
 import { Montserrat } from 'next/font/google';
 import type { ReactElement, ReactNode } from 'react';
 import { useState } from 'react';
+import { TooltipProvider } from '../components/ui/Tooltip';
 import 'leaflet/dist/leaflet.css';
 import 'easymde/dist/easymde.min.css';
 import '../styles/globals.css';
@@ -44,9 +45,11 @@ export default function App({ Component, pageProps }: AppPropsWithLayout) {
         <link rel="apple-touch-icon" href="/icon.v1.png" />
       </Head>
       <div className={montserrat.variable}>
-        <QueryClientProvider client={queryClient}>
-          {getLayout(<Component {...pageProps} />)}
-        </QueryClientProvider>
+        <TooltipProvider>
+          <QueryClientProvider client={queryClient}>
+            {getLayout(<Component {...pageProps} />)}
+          </QueryClientProvider>
+        </TooltipProvider>
       </div>
     </>
   );

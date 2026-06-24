@@ -43,6 +43,7 @@ const visualRecipeAllowed = [
   "components/home/RequiredNicknameModal.tsx",
   "features/home/page/HomePageGame.tsx",
   "features/home/page/HomePageOverlays.tsx",
+  "features/app-shell/components/AppShell.tsx",
   "pages/match/[id].tsx",
   "features/lobby/components/lobby-primitives.tsx",
   "features/lobby/components/LobbyTutorialSection.tsx",
@@ -59,7 +60,6 @@ const visualDebtBudgets = new Map([
   ["features/lobby/components/maps/MapPanels.tsx", 26],
   ["features/lobby/components/PlayPanel.tsx", 7],
   ["features/lobby/components/PartyPanel.tsx", 18],
-  ["features/lobby/components/ProfileModal.tsx", 8],
   ["features/lobby/components/MapUploadForm.tsx", 1],
 ]);
 
@@ -73,7 +73,6 @@ const lineBudgets = new Map([
   ["features/admin/lib/admin-client.ts", 650],
   ["features/auth/lib/auth-client.ts", 360],
   ["features/matchmaking/lib/queue-client.ts", 450],
-  ["features/lobby/components/ProfileModal.tsx", 450],
   ["features/lobby/components/PlayPanel.tsx", 300],
   ["features/lobby/components/PartyPanel.tsx", 550],
   ["features/lobby/components/LobbyAuthButtons.tsx", 125],

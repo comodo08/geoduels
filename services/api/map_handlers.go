@@ -220,7 +220,7 @@ func (a *api) createMap(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, item)
 }
 
-func (a *api) uploadMapRevision(w http.ResponseWriter, r *http.Request) {
+func (a *api) replaceMapLocations(w http.ResponseWriter, r *http.Request) {
 	userID, ok := a.mapUser(w, r, true)
 	if !ok {
 		return
@@ -245,7 +245,7 @@ func (a *api) uploadMapRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer closeFile()
-	item, err := catalog.UploadCustomMapRevision(userID, resolveCompactEntityID(mux.Vars(r)["id"]), file)
+	item, err := catalog.ReplaceCustomMapLocations(userID, resolveCompactEntityID(mux.Vars(r)["id"]), file)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.NotFound(w, r)
 		return

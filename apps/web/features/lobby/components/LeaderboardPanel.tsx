@@ -1,4 +1,5 @@
 import type { LeaderboardSummary } from "../../auth/controllers/session-controller";
+import PlayerProfileLink from "../../../components/ui/PlayerProfileLink";
 import { useSeasonResetCountdown } from "../lib/season-countdown";
 import { LobbyPanel, LobbySectionHeader } from "./lobby-primitives";
 
@@ -64,7 +65,9 @@ export function LeaderboardPanel({
                   </span>
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-white">{entry.displayName || entry.userId}</p>
+                  <PlayerProfileLink userId={entry.userId} className="block truncate font-bold text-white hover:text-emerald-200">
+                    {entry.displayName || entry.userId}
+                  </PlayerProfileLink>
                   <p className="truncate text-[12px] text-[#8caab0]">
                     {isSelf ? "You" : `${entry.gamesPlayed} games`}
                   </p>

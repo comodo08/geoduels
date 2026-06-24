@@ -85,12 +85,31 @@ describe("EndMatchOverlay breakdown", () => {
     render(<EndMatchOverlay {...createProps()} />);
     openBreakdown();
 
+    expect(screen.getByRole("button", { name: "health" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "points" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("5,000 HP")).toBeInTheDocument();
     expect(screen.getByText("0 HP")).toBeInTheDocument();
     expect(screen.getByText("2.5s")).toHaveClass("text-[#8caab0]");
     expect(screen.getByText("7.0s")).toHaveClass("text-[#8caab0]");
     expect(screen.queryByText("4,500")).not.toBeInTheDocument();
     expect(screen.queryByText("Total")).not.toBeInTheDocument();
+  });
+
+  it("switches a duel breakdown between health and points", () => {
+    render(<EndMatchOverlay {...createProps()} />);
+    openBreakdown();
+
+    fireEvent.click(screen.getByRole("button", { name: "points" }));
+
+    expect(screen.getByRole("button", { name: "points" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("4,500 pts")).toBeInTheDocument();
+    expect(screen.getByText("1,000 pts")).toBeInTheDocument();
+    expect(screen.queryByText("5,000 HP")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "health" }));
+
+    expect(screen.getByText("5,000 HP")).toBeInTheDocument();
+    expect(screen.queryByText("4,500 pts")).not.toBeInTheDocument();
   });
 
   it("shows team health rather than individual player health for a team duel", () => {
@@ -171,6 +190,76 @@ describe("EndMatchOverlay breakdown", () => {
     expect(screen.queryByText("2,222 HP")).not.toBeInTheDocument();
   });
 
+  it("shows team points rather than representative player points in points mode", () => {
+    const props = createProps();
+    render(
+      <EndMatchOverlay
+        {...props}
+        mode="team_duel"
+        sides={{
+          self: {
+            id: "a",
+            participant: {
+              kind: "team",
+              id: "a",
+              name: "Team Red",
+              avatarFallback: "R",
+              avatarColor: "#dc2626",
+              members: [],
+            },
+            hp: 6000,
+            connection: "connected",
+          },
+          opponent: {
+            id: "b",
+            participant: {
+              kind: "team",
+              id: "b",
+              name: "Team Blue",
+              avatarFallback: "B",
+              avatarColor: "#2563eb",
+              members: [],
+            },
+            hp: 3200,
+            connection: "connected",
+          },
+        }}
+        roundResults={[
+          {
+            ...props.roundResults[0],
+            teams: {
+              a: {
+                teamId: "a",
+                representativeUserId: "self",
+                lat: 1,
+                lng: 1,
+                distanceKm: 10,
+                score: 4800,
+                hpAfterRound: 6000,
+              },
+              b: {
+                teamId: "b",
+                representativeUserId: "opponent",
+                lat: 2,
+                lng: 2,
+                distanceKm: 500,
+                score: 900,
+                hpAfterRound: 3200,
+              },
+            },
+          },
+        ]}
+      />,
+    );
+    openBreakdown();
+    fireEvent.click(screen.getByRole("button", { name: "points" }));
+
+    expect(screen.getByText("4,800 pts")).toBeInTheDocument();
+    expect(screen.getByText("900 pts")).toBeInTheDocument();
+    expect(screen.queryByText("4,500 pts")).not.toBeInTheDocument();
+    expect(screen.queryByText("1,000 pts")).not.toBeInTheDocument();
+  });
+
   it("shows a placeholder when an older round result has no health value", () => {
     const props = createProps();
     render(
@@ -209,5 +298,21 @@ describe("EndMatchOverlay breakdown", () => {
     expect(screen.getByText("2.5s")).toHaveClass("text-[#8caab0]");
     expect(screen.getByText("Total")).toBeInTheDocument();
     expect(screen.queryByText("5,000 HP")).not.toBeInTheDocument();
+  });
+
+  it("renders the explicit return destination instead of inferring it from mode", () => {
+    render(
+      <EndMatchOverlay
+        {...createProps({
+          mode: "singleplayer",
+          backLabel: "Back to party",
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Back to party" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Back To Home")).not.toBeInTheDocument();
   });
 });

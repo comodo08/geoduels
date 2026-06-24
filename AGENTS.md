@@ -10,7 +10,7 @@ GeoDuels is a GeoGuessr-style multiplayer game: Next.js web client, account/API 
 - `services/gameplay-node`: authoritative live match simulation.
 - `services/moderation-worker`: background moderation projection and enforcement processing.
 - `services/discord-worker`: Discord role/member synchronization and badge processing.
-- `workers/location-ingest` and `workers/storage-maintenance`: one-off official-map ingest and bounded storage maintenance.
+- `workers/storage-maintenance`: bounded storage maintenance.
 
 ## Auth And Tickets
 
@@ -29,6 +29,10 @@ GeoDuels is a GeoGuessr-style multiplayer game: Next.js web client, account/API 
 - `/match/[id]` is the canonical route for live reconnects and saved match/history views.
 - `/players/[id]` is the public player profile route.
 - API match bootstrap/session endpoints resolve existing match routes
+
+## Browser Testing
+
+If Chrome/Chromium is not found, use either Edge or Brave Browser.
 
 ## Documentation Map
 

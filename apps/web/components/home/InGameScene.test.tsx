@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import InGameScene from './InGameScene';
 import type { InGameSceneProps } from './InGameScene';
@@ -8,6 +8,8 @@ function createProps(overrides: Partial<InGameSceneProps> = {}): InGameSceneProp
     uiPhase: 'live_round',
     streetViewSrc: 'https://www.google.com/maps/embed/v1/streetview?key=test&pano=pano-1',
     streetViewInteractive: true,
+    ruleset: 'moving',
+    streetNames: 'shown',
     showResultStage: false,
     isSingleplayer: false,
     isPointsMode: false,
@@ -73,6 +75,17 @@ describe('InGameScene', () => {
   });
 
   beforeEach(() => {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    window.localStorage.clear();
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -124,6 +137,141 @@ describe('InGameScene', () => {
 
     expect(document.activeElement).not.toBe(streetViewFrame);
     expect(document.activeElement?.tagName).toBe('SECTION');
+  });
+
+  it('renders an immediate wrap-safe app-owned compass when the extension bridge is ready', async () => {
+    render(<InGameScene {...createProps()} />);
+
+    const streetViewFrame = screen.getByTitle('Street View') as HTMLIFrameElement;
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          type: 'ready',
+          capabilities: { heading: true, roadLabels: true },
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          type: 'pov',
+          heading: 359,
+        },
+      }),
+    );
+
+    expect(await screen.findByTestId('extension-compass')).toHaveAttribute(
+      'aria-label',
+      'Compass heading 359 degrees',
+    );
+    expect(
+      (screen.getByTestId('extension-compass').firstElementChild as HTMLElement)
+        .style.transform,
+    ).toBe('translateX(132px)');
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          type: 'pov',
+          heading: 1,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('extension-compass')).toHaveAttribute(
+        'aria-label',
+        'Compass heading 1 degrees',
+      );
+      expect(
+        (screen.getByTestId('extension-compass').firstElementChild as HTMLElement)
+          .style.transform,
+      ).toBe('translateX(128px)');
+    });
+    expect(
+      screen.getByTestId('extension-compass').firstElementChild,
+    ).not.toHaveClass('transition-transform');
+    expect(
+      screen.queryByRole('button', {
+        name: 'Street View enhancement settings',
+      }),
+    ).not.toBeInTheDocument();
+
+    for (const heading of [90, 180, 270, 0]) {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://www.google.com',
+          source: streetViewFrame.contentWindow,
+          data: {
+            source: 'geoduels-extension',
+            version: 1,
+            type: 'pov',
+            heading,
+          },
+        }),
+      );
+    }
+    await waitFor(() => {
+      expect(
+        (screen.getByTestId('extension-compass').firstElementChild as HTMLElement)
+          .style.transform,
+      ).toBe('translateX(-590px)');
+    });
+  });
+
+  it('covers extension-required Street View until the requested configuration is active', async () => {
+    render(
+      <InGameScene
+        {...createProps({ ruleset: 'no_move', streetNames: 'hidden' })}
+      />,
+    );
+    const streetViewFrame = screen.getByTitle('Street View') as HTMLIFrameElement;
+
+    expect(screen.getByText('Preparing official extension…')).toBeInTheDocument();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          type: 'ready',
+          capabilities: { heading: true, roadLabels: true },
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          type: 'configured',
+          ruleset: 'no_move',
+          streetNames: 'hidden',
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Preparing official extension…'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('renders team identity without promoting member avatars, badges, or ratings', () => {

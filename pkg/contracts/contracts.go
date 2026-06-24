@@ -64,11 +64,19 @@ func IsPrivatePartyMode(mode MatchMode) bool {
 	return mode == ModeDuel || mode == ModeTeamDuel || mode == ModeFreeForAll
 }
 
-type GameRuleset string
+type GameRuleset = string
 
 const (
 	RulesetMoving GameRuleset = "moving"
+	RulesetNoMove GameRuleset = "no_move"
 	RulesetNMPZ   GameRuleset = "nmpz"
+)
+
+type StreetNamesVisibility = string
+
+const (
+	StreetNamesShown  StreetNamesVisibility = "shown"
+	StreetNamesHidden StreetNamesVisibility = "hidden"
 )
 
 type RoundTimerMode string
@@ -89,17 +97,20 @@ const (
 )
 
 type MatchConfig struct {
-	Ruleset             GameRuleset    `json:"ruleset,omitempty"`
-	MapID               string         `json:"mapId,omitempty"`
-	MapName             string         `json:"mapName,omitempty"`
-	MapKey              string         `json:"mapKey,omitempty"` // Legacy read compatibility.
-	RoundTimerMode      RoundTimerMode `json:"roundTimerMode,omitempty"`
-	RoundTimeLimitMS    int64          `json:"roundTimeLimitMs,omitempty"`
-	PressureTimeLimitMS int64          `json:"pressureTimeLimitMs,omitempty"`
+	Ruleset             GameRuleset           `json:"ruleset,omitempty"`
+	StreetNames         StreetNamesVisibility `json:"streetNames,omitempty"`
+	MapID               string                `json:"mapId,omitempty"`
+	MapName             string                `json:"mapName,omitempty"`
+	MapKey              string                `json:"mapKey,omitempty"` // Legacy read compatibility.
+	RoundTimerMode      RoundTimerMode        `json:"roundTimerMode,omitempty"`
+	RoundTimeLimitMS    int64                 `json:"roundTimeLimitMs,omitempty"`
+	PressureTimeLimitMS int64                 `json:"pressureTimeLimitMs,omitempty"`
 }
 
 func NormalizeRuleset(v GameRuleset) GameRuleset {
 	switch v {
+	case RulesetNoMove:
+		return RulesetNoMove
 	case RulesetNMPZ:
 		return RulesetNMPZ
 	default:
@@ -107,8 +118,16 @@ func NormalizeRuleset(v GameRuleset) GameRuleset {
 	}
 }
 
+func NormalizeStreetNames(v StreetNamesVisibility) StreetNamesVisibility {
+	if v == StreetNamesHidden {
+		return StreetNamesHidden
+	}
+	return StreetNamesShown
+}
+
 func NormalizeMatchConfig(cfg MatchConfig) MatchConfig {
 	cfg.Ruleset = NormalizeRuleset(cfg.Ruleset)
+	cfg.StreetNames = NormalizeStreetNames(cfg.StreetNames)
 	if cfg.MapID == "" {
 		cfg.MapID = cfg.MapKey
 	}
@@ -699,7 +718,6 @@ type MatchParticipant struct {
 
 type ResolvedMap struct {
 	MapID       string `json:"mapId"`
-	RevisionID  string `json:"revisionId"`
 	DisplayName string `json:"displayName"`
 }
 
@@ -904,42 +922,48 @@ type ModerationCaseNotificationPayload struct {
 	LatestActivityAt     time.Time      `json:"latestActivityAt"`
 }
 
-type MapRevisionSummary struct {
-	MapKey      string `json:"mapKey"`
-	RevisionID  string `json:"revisionId"`
-	RowCount    int    `json:"rowCount"`
-	Inserted    bool   `json:"inserted"`
-	DisplayName string `json:"displayName"`
+type MapImportSummary struct {
+	MapID         string `json:"mapId"`
+	MapKey        string `json:"mapKey"`
+	LocationCount int    `json:"locationCount"`
+	DisplayName   string `json:"displayName"`
+}
+
+type MapPersonalBest struct {
+	Score      int       `json:"score"`
+	MatchID    string    `json:"matchId"`
+	AchievedAt time.Time `json:"achievedAt"`
 }
 
 type CustomMap struct {
-	ID               string     `json:"id"`
-	OwnerUserID      string     `json:"ownerUserId,omitempty"`
-	AuthorName       string     `json:"authorName,omitempty"`
-	DisplayName      string     `json:"displayName"`
-	Description      string     `json:"description,omitempty"`
-	Visibility       string     `json:"visibility"`
-	Status           string     `json:"status"`
-	Difficulty       string     `json:"difficulty"`
-	ThumbnailVariant int        `json:"thumbnailVariant"`
-	ThumbnailKey     string     `json:"thumbnailKey"`
-	LocationCount    int        `json:"locationCount"`
-	ActiveRevisionID string     `json:"activeRevisionId,omitempty"`
-	System           bool       `json:"system"`
-	Official         bool       `json:"official,omitempty"`
-	PublishedAt      *time.Time `json:"publishedAt,omitempty"`
-	PlayCount        int        `json:"playCount"`
-	FavoriteCount    int        `json:"favoriteCount"`
-	CommentCount     int        `json:"commentCount"`
-	TrendingScore    float64    `json:"trendingScore"`
-	Favorited        bool       `json:"favorited,omitempty"`
-	OfficialRegion   string     `json:"officialRegion,omitempty"`
-	RankedMoving     bool       `json:"rankedMoving,omitempty"`
-	RankedNMPZ       bool       `json:"rankedNmpz,omitempty"`
-	DefaultMoving    bool       `json:"defaultMoving,omitempty"`
-	DefaultNMPZ      bool       `json:"defaultNmpz,omitempty"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	ID               string           `json:"id"`
+	MapKey           string           `json:"mapKey"`
+	OwnerUserID      string           `json:"ownerUserId,omitempty"`
+	AuthorName       string           `json:"authorName,omitempty"`
+	DisplayName      string           `json:"displayName"`
+	Description      string           `json:"description,omitempty"`
+	Visibility       string           `json:"visibility"`
+	Status           string           `json:"status"`
+	Difficulty       string           `json:"difficulty"`
+	ThumbnailVariant int              `json:"thumbnailVariant"`
+	ThumbnailKey     string           `json:"thumbnailKey"`
+	LocationCount    int              `json:"locationCount"`
+	PersonalBest     *MapPersonalBest `json:"personalBest,omitempty"`
+	System           bool             `json:"system"`
+	Official         bool             `json:"official,omitempty"`
+	PublishedAt      *time.Time       `json:"publishedAt,omitempty"`
+	PlayCount        int              `json:"playCount"`
+	FavoriteCount    int              `json:"favoriteCount"`
+	CommentCount     int              `json:"commentCount"`
+	TrendingScore    float64          `json:"trendingScore"`
+	Favorited        bool             `json:"favorited,omitempty"`
+	OfficialRegion   string           `json:"officialRegion,omitempty"`
+	RankedMoving     bool             `json:"rankedMoving,omitempty"`
+	RankedNMPZ       bool             `json:"rankedNmpz,omitempty"`
+	DefaultMoving    bool             `json:"defaultMoving,omitempty"`
+	DefaultNMPZ      bool             `json:"defaultNmpz,omitempty"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
 }
 
 type CustomMapUpdate struct {

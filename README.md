@@ -17,14 +17,12 @@ https://geoduels.io/
 - `services/gameplay-node` (Go): round engine and authoritative match state broadcast for assigned matches.
 - `services/moderation-worker` (Go): background moderation projection and enforcement processing.
 - `services/discord-worker` (Go): Discord role synchronization and membership badge processing.
-- `workers/location-ingest` (Go): one-off bootstrap utility for official location datasets.
 - `workers/storage-maintenance` (Go): replay compression, retention cleanup, and other bounded storage maintenance.
 
 ### Data and state
 
-- PostgreSQL: source of truth for profiles, stats, user maps, immutable map revisions, round plans, and match persistence.
+- PostgreSQL: source of truth for profiles, stats, user maps and their current location datasets, round plans, and match persistence.
 - Redis: queue and distributed coordination state for matchmaking and gameplay node ownership.
-- Dataset JSON files (`datasets/*.json`): seed source for location ingest.
 
 ### Network flow
 
@@ -35,7 +33,7 @@ https://geoduels.io/
 5. Browser upgrades to websocket through `realtime-gateway` (`/ws/{node}`), which proxies to the assigned `gameplay-node`.
 6. `gameplay-node` runs duel engine and broadcasts authoritative snapshots.
 
-Before step 4, the launching service resolves the selected immutable map revision and persists the match's complete round plan. Gameplay pods receive that bounded plan and never preload map catalogs.
+Before step 4, the launching service locks the selected map while reading its current locations and persists the match's complete round plan. Gameplay pods receive that bounded plan and never preload map catalogs.
 
 ## Custom maps
 
@@ -45,7 +43,7 @@ Before step 4, the launching service resolves the selected immutable map revisio
   - trusted: 25 maps, 500,000 active locations, 10 uploads/hour, and 30 uploads/day
   - established: 100 maps, 1,000,000 active locations, 10 uploads/hour, and 30 uploads/day
 - Trust advances from account age and qualified favorites/maps. Moderation restrictions force the base tier, and administrators can apply a tier override.
-- Each map may retain at most 10 immutable revisions. The current tier's active-location allowance is also the per-map location ceiling.
+- A replacement upload atomically swaps the map's current locations. The current tier's active-location allowance is also the per-map location ceiling.
 - Ranked duels always use the official server-selected map. Private lobbies may select an accessible ready map independently from movement rules.
 
 ### Match route flow
@@ -85,7 +83,6 @@ Production images are built from service Dockerfiles and pushed to registry:
 - `geoduels-moderation-worker`
 - `geoduels-discord-worker`
 - `geoduels-web`
-- `geoduels-location-ingest`
 
 ## Maintenance and draining
 
@@ -113,19 +110,15 @@ cp .env.example .env
 cp apps/web/.env.local.example apps/web/.env.local
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
-POSTGRES_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable' \
-  go run ./workers/location-ingest \
-  -dataset datasets/a-source-world.sample.json \
-  -map-key a-source-world
 docker compose up -d gameplay-node match-coordinator realtime-gateway api
 cd apps/web
 npm ci
 npm run dev
 ```
 
-The tracked sample map at `datasets/a-source-world.sample.json` contains 10 public landmark locations so contributors can launch a playable local stack without private location data. To use a larger local dataset, keep it in ignored `datasets/*.json` and pass that path to `workers/location-ingest`.
+Create and manage maps through the web map administration UI.
 
-To remove stale or unavailable Street View panoramas from a Vali export, validate it before ingesting:
+To remove stale or unavailable Street View panoramas from a Vali export, validate it before uploading through the web UI:
 
 ```bash
 cd apps/web
@@ -223,4 +216,4 @@ For production PostgreSQL, enable `wal_compression=on` and `track_io_timing=on` 
 - `infra/k3s/base` - base k8s manifests
 - `infra/k3s/overlays/k3d` - local 3-node k3d overlay for routing/scaling tests
 - production overlays and Flux cluster state live in the private ops repository
-- `services/*/Dockerfile`, `apps/web/Dockerfile`, `workers/location-ingest/Dockerfile` - production image definitions
+- `services/*/Dockerfile`, `apps/web/Dockerfile` - production image definitions

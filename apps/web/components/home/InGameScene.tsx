@@ -13,15 +13,20 @@ import { motionPresetClass } from '../ui/motion';
 import { ResultDistanceBar } from '../ui/RoundResultOverlay';
 import type { RoundResultOverlayProps, UIPhase } from '../ui/types';
 import type { MatchSidesView, PlayerIdentityView } from '../ui/ParticipantIdentity';
+import { StreetViewEnhancements } from '../../features/browser-extension/components/StreetViewEnhancements';
+import { useGeoDuelsExtension } from '../../features/browser-extension/hooks/use-geoduels-extension';
 
 export type InGameSceneProps = {
   uiPhase: UIPhase;
   streetViewSrc: string;
   streetViewInteractive: boolean;
+  ruleset: "moving" | "no_move" | "nmpz";
+  streetNames: "shown" | "hidden";
   showResultStage: boolean;
   isSingleplayer: boolean;
   isPointsMode: boolean;
   partyMode?: "duel" | "team_duel" | "free_for_all";
+  backLabel?: string;
   resultOverlay?: RoundResultOverlayProps;
   sides: MatchSidesView;
   hpPct: (hp: number) => string;
@@ -65,10 +70,13 @@ export default function InGameScene({
   uiPhase,
   streetViewSrc,
   streetViewInteractive,
+  ruleset,
+  streetNames,
   showResultStage,
   isSingleplayer,
   isPointsMode,
   partyMode = "duel",
+  backLabel = "Back to lobby",
   resultOverlay,
   sides,
   hpPct,
@@ -113,6 +121,14 @@ export default function InGameScene({
   const [streetViewResetCount, setStreetViewResetCount] = useState(0);
   const sceneRef = useRef<HTMLElement | null>(null);
   const streetViewFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const extension = useGeoDuelsExtension(
+    streetViewFrameRef,
+    streetViewSrc,
+    ruleset,
+    streetNames,
+  );
+  const extensionRequired = ruleset === "no_move" || streetNames === "hidden";
+  const streetViewReady = !extensionRequired || extension.configured;
   const canShowForfeit = uiPhase !== 'match_end';
   const disableStreetViewTabbing = !streetViewInteractive;
   const utilityControlPosition = 'absolute left-3 top-3 z-40 pointer-events-auto md:bottom-4 md:left-4 md:top-auto';
@@ -228,8 +244,20 @@ export default function InGameScene({
             loading="eager"
           />
           {!streetViewInteractive ? <div className="absolute inset-0 z-[1]" aria-hidden="true" /> : null}
+          {!streetViewReady ? (
+            <div className="absolute inset-0 z-[2] grid place-items-center bg-[#071018] text-sm font-bold text-white/75">
+              Preparing official extension…
+            </div>
+          ) : null}
         </div>
       )}
+
+      {extension.available && extension.capabilities ? (
+        <StreetViewEnhancements
+          capabilities={extension.capabilities}
+          heading={extension.heading}
+        />
+      ) : null}
 
       <AnimatePresence>
         {showResultStage && resultOverlay && <RoundResultOverlay {...resultOverlay} />}
@@ -286,6 +314,10 @@ export default function InGameScene({
               isTimerCritical={isTimerCritical}
               isTimerPulseActive={isTimerPulseActive}
               hideMultiplier={partyMode === "free_for_all"}
+              hasTopCompass={
+                extension.available &&
+                extension.capabilities?.heading === true
+              }
             />
           </motion.div>
         )}
@@ -485,7 +517,7 @@ export default function InGameScene({
                 onClick={canAdvanceRound ? onAdvanceRound : onLeaveGame}
                 className="mx-auto inline-flex items-center justify-center rounded-[16px] bg-accentPrimary px-8 py-[16px] text-[16px] font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_4px_16px_rgba(42,209,143,0.3)] transition-all duration-200 hover:scale-[1.01] hover:bg-accentPrimaryDeep hover:shadow-[0_6px_24px_rgba(42,209,143,0.4)] active:scale-[0.98]"
               >
-                {canAdvanceRound ? 'Next Round' : 'Back To Party'}
+                {canAdvanceRound ? 'Next Round' : backLabel}
               </motion.button>
             )}
           </div>

@@ -47,10 +47,13 @@ export default function HomePageGame({
       uiPhase={game.uiPhase}
       streetViewSrc={game.streetViewSrc}
       streetViewInteractive={game.streetViewInteractive}
+      ruleset={game.ruleset}
+      streetNames={game.streetNames}
       showResultStage={game.showResultStage}
       isSingleplayer={game.isSingleplayer}
       isPointsMode={game.isPointsMode}
       partyMode={game.mode === "singleplayer" ? undefined : game.mode}
+      backLabel={game.backLabel}
       resultOverlay={
         game.roundResult && game.resultOverlay
           ? {

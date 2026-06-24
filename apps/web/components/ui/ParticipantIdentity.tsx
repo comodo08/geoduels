@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import AvatarBadge from "./AvatarBadge";
+import { MmrDisplay, RatingTrophyIcon } from "./MmrDisplay";
+export { RatingTrophyIcon } from "./MmrDisplay";
 import PlayerNameWithBadge from "./PlayerNameWithBadge";
+import PlayerProfileLink from "./PlayerProfileLink";
 import type { RatingDeltaPreview } from "./types";
 import type {
   ParticipantIdentityView,
@@ -24,19 +27,6 @@ export function formatRatingDelta(value?: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
-export function RatingTrophyIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M19 4h-2V2H7v2H5C3.34 4 2 5.34 2 7v3c0 1.9 1.25 3.51 3 4.15V15c0 1.66 1.34 3 3 3h4c0 1.25-.84 2.33-2 2.8v2.2L12 24l2-1v-2.2c-1.16-.47-2-1.55-2-2.8h4c1.66 0 3-1.34 3-3v-.85c1.75-.64 3-2.25 3-4.15V7c0-1.66-1.34-3-3-3zM5 12c-.55 0-1-.45-1-1V7c0-.55.45-1 1-1h2v6H5zm14-1c0 .55-.45 1-1 1h-2V6h2c.55 0 1 .45 1 1v4z" />
-    </svg>
-  );
-}
-
 export function ParticipantAvatar({
   participant,
   size = "md",
@@ -48,7 +38,7 @@ export function ParticipantAvatar({
   opponent?: boolean;
   className?: string;
 }) {
-  return (
+  const avatar = (
     <AvatarBadge
       avatarUrl={participant.kind === "player" ? participant.avatarUrl : undefined}
       fallback={participant.avatarFallback}
@@ -59,6 +49,8 @@ export function ParticipantAvatar({
       avatarColor={participant.kind === "team" ? participant.avatarColor : undefined}
     />
   );
+  if (participant.kind === "team") return avatar;
+  return <PlayerProfileLink userId={participant.id} disabled={participant.isGuest} className="inline-flex">{avatar}</PlayerProfileLink>;
 }
 
 export function ParticipantName({
@@ -84,6 +76,8 @@ export function ParticipantName({
   return (
     <PlayerNameWithBadge
       name={participant.name}
+      userId={participant.id}
+      profileDisabled={participant.isGuest}
       isAdmin={participant.isAdmin}
       selectedBadge={participant.selectedBadge}
       nameClassName={nameClassName}
@@ -110,13 +104,8 @@ export function PlayerRating({
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
       {rating !== undefined ? (
-        <div
-          className={`flex items-center gap-1.5 rounded-full bg-black/20 px-3 py-1 font-bold text-[#facc15] shadow-inner backdrop-blur-sm ${
-            compact ? "text-xs" : "text-sm md:text-base"
-          }`}
-        >
-          <RatingTrophyIcon className={compact ? "h-3.5 w-3.5" : "h-4 w-4 md:h-5 md:w-5"} />
-          <span>{rating}</span>
+        <div className="flex items-center gap-1.5">
+          <MmrDisplay value={rating} size={compact ? "sm" : "md"} />
           {delta ? (
             <span className={ratingDelta && ratingDelta > 0 ? "text-[#2ad18f]" : "text-red-400"}>
               ({delta})

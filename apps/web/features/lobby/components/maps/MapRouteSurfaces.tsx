@@ -25,10 +25,10 @@ import { isMapScope, type LobbyContentRoute } from "../../lib/lobby-ui";
 import { MapUploadForm } from "../MapUploadForm";
 import {
   MapDetailsPanel,
-  MapPickerModal,
   MapsPanel,
   MapUploadPanel,
 } from "./MapPanels";
+import { MapPickerModal } from "./MapPickerModal";
 
 const tabPanelMotion = {
   initial: {
@@ -321,7 +321,7 @@ export function MapRouteSurface({
           onPostComment={postMapComment}
           onPostReply={postMapReply}
           onPublishMap={(itemId) => mapManagement.publishMap.mutate(itemId)}
-          onRevisionFile={(itemId, file) => mapManagement.uploadRevision.mutate({ mapId: itemId, file })}
+          onLocationFile={(itemId, file) => mapManagement.replaceLocations.mutate({ mapId: itemId, file })}
           onSetMapOfficial={(itemId, official) => mapManagement.setOfficial.mutate({ mapId: itemId, official })}
           onSetMapRole={(itemId, role) => mapManagement.setRole.mutate({ mapId: itemId, role })}
           onSetCommentBody={setCommentBody}

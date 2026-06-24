@@ -74,8 +74,12 @@ func (s *pgStore) SetMapOfficial(adminUserID, mapID string, official bool) (cont
 	if mapID == "" {
 		return contracts.CustomMap{}, errors.New("map required")
 	}
+	canonicalID, _, err := resolveMapIdentity(ctx, s.pool, mapID)
+	if err != nil {
+		return contracts.CustomMap{}, err
+	}
+	mapID = canonicalID
 	var tag pgconn.CommandTag
-	var err error
 	if official {
 		if err := s.ensureReadyMap(ctx, mapID, minMapLocations); err != nil {
 			return contracts.CustomMap{}, err
@@ -83,13 +87,13 @@ func (s *pgStore) SetMapOfficial(adminUserID, mapID string, official bool) (cont
 		tag, err = s.pool.Exec(ctx, `
 			update maps
 			set official_at=coalesce(official_at, now()), official_by=$2, published_at=coalesce(published_at, now()), visibility='public', updated_at=now()
-			where map_key=$1 and archived_at is null
+			where id=$1 and archived_at is null
 		`, mapID, strings.TrimSpace(adminUserID))
 	} else {
 		tag, err = s.pool.Exec(ctx, `
 			update maps
 			set official_at=null, official_by=null, updated_at=now()
-			where map_key=$1 and archived_at is null
+			where id=$1 and archived_at is null
 		`, mapID)
 	}
 	if err != nil {
@@ -106,6 +110,11 @@ func (s *pgStore) SetGameplayMapRole(adminUserID, mapID, role string) (contracts
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	mapID = strings.TrimSpace(mapID)
+	canonicalID, _, err := resolveMapIdentity(ctx, s.pool, mapID)
+	if err != nil {
+		return contracts.CustomMap{}, err
+	}
+	mapID = canonicalID
 	field, err := gameplayMapRoleField(role)
 	if err != nil {
 		return contracts.CustomMap{}, err
@@ -164,17 +173,17 @@ func (s *pgStore) ensureReadyMap(ctx context.Context, mapID string, requiredLoca
 }
 
 func (s *pgStore) ensureReadyMapTx(ctx context.Context, tx pgx.Tx, mapID string, requiredLocations int) error {
-	var status, revisionID string
+	var status string
 	var count int
 	if err := tx.QueryRow(ctx, `
-		select status, coalesce(active_revision_id::text,''), location_count
+		select status,location_count
 		from maps
-		where map_key=$1 and archived_at is null
+		where id=$1 and archived_at is null
 		for share
-	`, mapID).Scan(&status, &revisionID, &count); err != nil {
+	`, mapID).Scan(&status, &count); err != nil {
 		return err
 	}
-	if status != "ready" || revisionID == "" {
+	if status != "ready" {
 		return errors.New("selected map is not ready")
 	}
 	if count < requiredLocations {
@@ -201,7 +210,10 @@ func gameplayMapRoleField(role string) (string, error) {
 func (s *pgStore) ResolveGameplayMapID(mode contracts.MatchMode, ruleset contracts.GameRuleset, requestedMapID string) (string, error) {
 	requestedMapID = strings.TrimSpace(requestedMapID)
 	if requestedMapID != "" {
-		return requestedMapID, nil
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		id, _, err := resolveMapIdentity(ctx, s.pool, requestedMapID)
+		return id, err
 	}
 	settings, err := s.GetGameplayMapSettings()
 	if err != nil {
@@ -210,15 +222,15 @@ func (s *pgStore) ResolveGameplayMapID(mode contracts.MatchMode, ruleset contrac
 	ruleset = contracts.NormalizeRuleset(ruleset)
 	if mode == contracts.ModeSingleplayer {
 		if ruleset == contracts.RulesetNMPZ {
-			return settings.SingleplayerNMPZMapID, nil
+			return s.ResolveGameplayMapID(mode, ruleset, settings.SingleplayerNMPZMapID)
 		}
-		return settings.SingleplayerMovingMapID, nil
+		return s.ResolveGameplayMapID(mode, ruleset, settings.SingleplayerMovingMapID)
 	}
 	if mode == contracts.ModeDuel {
 		if ruleset == contracts.RulesetNMPZ {
-			return settings.RankedNMPZMapID, nil
+			return s.ResolveGameplayMapID(mode, ruleset, settings.RankedNMPZMapID)
 		}
-		return settings.RankedMovingMapID, nil
+		return s.ResolveGameplayMapID(mode, ruleset, settings.RankedMovingMapID)
 	}
 	return requestedMapID, nil
 }

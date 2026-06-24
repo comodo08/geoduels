@@ -18,7 +18,7 @@ import (
 
 var ErrPartyMapUnavailable = errors.New("selected map is not accessible or ready")
 
-const partyMapAccessiblePredicate = `map_key=$1
+const partyMapAccessiblePredicate = `id=$1
 	and archived_at is null
 	and status='ready'
 	and (owner_user_id is null or owner_user_id=$2 or published_at is not null or visibility='unlisted')`
@@ -130,6 +130,11 @@ func (s *pgStore) SetPartyConfig(partyID string, cfg contracts.MatchConfig) (con
 	if err := tx.QueryRow(ctx, `select owner_user_id from parties where id=$1 and state='open' for update`, partyID).Scan(&owner); err != nil {
 		return contracts.PartySnapshot{}, err
 	}
+	canonicalMapID, _, err := resolveMapIdentity(ctx, tx, cfg.MapID)
+	if err != nil {
+		return contracts.PartySnapshot{}, ErrPartyMapUnavailable
+	}
+	cfg.MapID = canonicalMapID
 	var accessible bool
 	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where `+partyMapAccessiblePredicate+`)`, cfg.MapID, owner).Scan(&accessible); err != nil {
 		return contracts.PartySnapshot{}, err
@@ -600,7 +605,7 @@ func (s *pgStore) getParty(whereClause, value string) (contracts.PartySnapshot, 
 		       l.created_at, l.expires_at, l.config_json::text, coalesce(l.map_id, ''),
 		       coalesce(mp.display_name, ''), coalesce(mp.location_count, 0)
 		from parties l
-		left join maps mp on mp.map_key = l.map_id
+		left join maps mp on mp.id = l.map_id
 		where `+whereClause, value)
 	var configJSON, mapID string
 	if err := row.Scan(&snap.ID, &snap.InviteCode, &snap.OwnerUserID, &snap.State, &snap.Mode, &snap.MapScope, &snap.ActiveMatchID, &snap.LastMatchID, &snap.StartedMatchID, &snap.CreatedAt, &snap.ExpiresAt, &configJSON, &mapID, &snap.MapName, &snap.MapLocationCount); err != nil {
@@ -741,7 +746,7 @@ func (s *pgStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 		}
 	}
 	for userID, badge := range fallback {
-		if out[userID] == nil {
+		if out[userID] == nil && selected[userID] != "" {
 			out[userID] = badge
 		}
 	}

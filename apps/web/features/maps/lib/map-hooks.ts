@@ -12,7 +12,7 @@ import {
   setMapCommentLike,
   setMapFavorite,
   setMapOfficial,
-  uploadMapRevision,
+  replaceMapLocations,
   validateMapFile,
   type GameplayMapRole,
   type MapComment,
@@ -195,16 +195,16 @@ export function useMapManagement(config: RuntimeConfig, accessToken: string | un
         void queryClient.invalidateQueries({ queryKey: ["map-details", vars.mapId] });
       },
     }),
-    uploadRevision: useMutation({
+    replaceLocations: useMutation({
       mutationFn: async ({ mapId, file }: { mapId: string; file: File }) => {
         await validateMapFile(file, maxMapLocations);
-        return uploadMapRevision(config, accessToken || "", mapId, file);
+        return replaceMapLocations(config, accessToken || "", mapId, file);
       },
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: ["maps"] });
         void queryClient.invalidateQueries({ queryKey: ["map-upload-quota"] });
       },
-      onError: (error) => onUploadError(error instanceof Error ? error.message : "Revision upload failed"),
+      onError: (error) => onUploadError(error instanceof Error ? error.message : "Map replacement failed"),
     }),
   };
 }

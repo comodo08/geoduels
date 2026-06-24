@@ -1050,7 +1050,7 @@ func (a *api) uploadMap(w http.ResponseWriter, r *http.Request, mapKey string) {
 		http.Error(w, "failed to read file", http.StatusBadRequest)
 		return
 	}
-	summary, err := a.store.ActivateMapRevision(mapKey, mapKey, dataset)
+	summary, err := a.store.ReplaceMapLocations(mapKey, mapKey, dataset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1063,4 +1063,4 @@ func readUploadedFile(file multipart.File, _ *multipart.FileHeader) ([]byte, err
 	return io.ReadAll(file)
 }
 
-var _ contracts.MapRevisionSummary
+var _ contracts.MapImportSummary

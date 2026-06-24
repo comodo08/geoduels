@@ -6,6 +6,8 @@ import type { MaintenanceStatus } from "../../matchmaking/lib/queue-client";
 import type {
   GameRuleset,
   MatchConfig,
+  QueueVariant,
+  StreetNamesVisibility,
 } from "../../matchmaking/lib/queue-client";
 import type {
   ChatEmote,
@@ -120,7 +122,10 @@ export type HomeGameView = {
   connectionIssue: string;
   modeName: string;
   mapName: string;
+  backLabel?: "Back to lobby" | "Back to party";
   streetViewInteractive: boolean;
+  ruleset: GameRuleset;
+  streetNames: StreetNamesVisibility;
   selfUserId: string;
 };
 
@@ -148,6 +153,8 @@ export type HomeOverlaysView = {
         resultPlayerFallbacks: Record<string, string | undefined>;
         resultPlayerBorderColors: Record<string, string | undefined>;
         participantsById: Record<string, PlayerIdentityView>;
+        matchConfig?: MatchConfig;
+        backLabel?: "Back to lobby" | "Back to party";
       }
     | { open: false };
 };
@@ -174,7 +181,7 @@ export type HomeViewModel = {
 };
 
 export type HomeActions = {
-  joinQueue: (rulesets?: GameRuleset[]) => void;
+  joinQueue: (queues?: QueueVariant[]) => void;
   startSingleplayer: (config?: MatchConfig) => Promise<string>;
   cancelQueue: () => void;
   createParty: (mode?: PartyMode, config?: MatchConfig) => Promise<boolean>;

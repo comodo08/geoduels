@@ -1,13 +1,17 @@
 import type { MapScope } from "../../maps/lib/maps-client";
 import { getTeamPresentation } from "../../../lib/team-presentation";
+import { formatRelativeTime } from "../../../components/ui/RelativeTime";
+import {
+  APP_NAV_ITEMS,
+  appNavRouteStorageKey,
+  isAppNavRoute,
+  type AppNavRoute,
+} from "../../app-shell/navigation";
 
 export type LobbyContentRoute =
-  | "play"
-  | "friends"
-  | "maps"
+  | AppNavRoute
   | "map-details"
   | "map-upload"
-  | "top"
   | "party";
 
 export const CLOCK_OPTIONS = [
@@ -24,14 +28,8 @@ export const PRESSURE_OPTIONS = [
   { value: "15", label: "15s" },
 ] as const;
 
-export const NAV_ITEMS: Array<{ label: string; route: LobbyContentRoute; href: string }> = [
-  { label: "FRIENDS", route: "friends", href: "/friends" },
-  { label: "PLAY", route: "play", href: "/" },
-  { label: "MAPS", route: "maps", href: "/maps" },
-  { label: "TOP", route: "top", href: "/top" },
-];
-
-export const lobbyRouteStorageKey = "geoduels.lobbyRoute";
+export const NAV_ITEMS = APP_NAV_ITEMS;
+export const lobbyRouteStorageKey = appNavRouteStorageKey;
 
 export function lobbyTeamLabel(teamId?: string) {
   return getTeamPresentation(teamId).name;
@@ -51,7 +49,7 @@ export function isMapScope(value: unknown): value is MapScope {
 }
 
 export function isLobbyNavRoute(value: string): value is LobbyContentRoute {
-  return NAV_ITEMS.some((item) => item.route === value);
+  return isAppNavRoute(value);
 }
 
 export function parseTime(value?: string) {
@@ -103,19 +101,7 @@ export function formatChangelogDate(value: string) {
 }
 
 export function formatCommentAge(value: string) {
-  const ms = Date.parse(value);
-  if (!Number.isFinite(ms)) return "";
-  const seconds = Math.max(1, Math.floor((Date.now() - ms) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+  return formatRelativeTime(value);
 }
 
 export function commentAvatarFallback(name: string) {

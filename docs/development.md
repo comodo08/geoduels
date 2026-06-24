@@ -6,19 +6,15 @@
 - Go 1.26+
 - Node 20+
 
-## Prepare infrastructure and data
+## Prepare infrastructure
 
 ```bash
 cp .env.example .env
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
-POSTGRES_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable' \
-  go run ./workers/location-ingest \
-  -dataset datasets/a-source-world.sample.json \
-  -map-key a-source-world
 ```
 
-The tracked sample contains enough locations for a playable official local map. The ingest command is idempotent for the same map key and dataset revision.
+Create and manage maps through the web map administration UI.
 
 ## Start the backend stack
 

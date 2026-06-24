@@ -11,40 +11,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func pruneMapRevisions(ctx context.Context, tx pgx.Tx, mapID, activeRevisionID string) error {
-	rows, err := tx.Query(ctx, `
-		select id
-		from map_revisions
-		where map_key=$1 and id<>$2
-		  and not exists(select 1 from match_round_plans p where p.map_revision_id=map_revisions.id)
-		order by created_at desc
-		offset $3
-	`, strings.TrimSpace(mapID), strings.TrimSpace(activeRevisionID), maxInactiveRevisionsKept)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var revisionID string
-		if err := rows.Scan(&revisionID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `delete from map_revisions where id=$1`, revisionID); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-
 func incrementMapFavoriteStats(ctx context.Context, tx pgx.Tx, mapID, userID string) error {
-	if _, err := tx.Exec(ctx, `update maps set favorite_count=favorite_count+1, updated_at=now() where map_key=$1`, mapID); err != nil {
+	if _, err := tx.Exec(ctx, `update maps set favorite_count=favorite_count+1, updated_at=now() where id=$1`, mapID); err != nil {
 		return err
 	}
 	return markMapDailyUser(ctx, tx, mapID, userID, "favorited")
 }
 
 func incrementMapCommentStats(ctx context.Context, tx pgx.Tx, mapID, userID string) error {
-	if _, err := tx.Exec(ctx, `update maps set comment_count=comment_count+1, updated_at=now() where map_key=$1`, mapID); err != nil {
+	if _, err := tx.Exec(ctx, `update maps set comment_count=comment_count+1, updated_at=now() where id=$1`, mapID); err != nil {
 		return err
 	}
 	return markMapDailyUser(ctx, tx, mapID, userID, "commented")
@@ -89,7 +64,7 @@ func refreshMapTrendingScore(ctx context.Context, tx pgx.Tx, mapID string) error
 		select
 			coalesce(sum(unique_players) * 3 + sum(unique_favoriters) * 8 + sum(unique_commenters) * 2, 0)::float8,
 			coalesce(sum(unique_players) + sum(unique_favoriters) + sum(unique_commenters), 0)::float8,
-			(select published_at from maps where map_key=$1)
+			(select published_at from maps where id=$1)
 		from map_stats_daily
 		where map_id=$1 and day >= current_date - $2::int
 	`, mapID, mapTrendingWindowDays).Scan(&base, &interactions, &published); err != nil {
@@ -104,6 +79,6 @@ func refreshMapTrendingScore(ctx context.Context, tx pgx.Tx, mapID string) error
 		decay := 1 - math.Min(age.Hours()/(24*7), 1)
 		score = base * (1 + 19*decay)
 	}
-	_, err := tx.Exec(ctx, `update maps set trending_score=$2 where map_key=$1`, mapID, score)
+	_, err := tx.Exec(ctx, `update maps set trending_score=$2 where id=$1`, mapID, score)
 	return err
 }

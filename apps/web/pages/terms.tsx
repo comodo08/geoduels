@@ -43,7 +43,7 @@ const sections = [
     title: "6. Fair Play and Ranked Integrity",
     body: [
       "Ranked integrity is central to GeoDuels. You may not cheat, automate, manipulate, or gain an unfair advantage in any match, party, queue, leaderboard, or ranking system.",
-      "Prohibited conduct includes bots, scripts, macros, overlays, location hint tools, external databases used during a match, unauthorized browser extensions, automated guessing, account sharing, boosting, smurf abuse, coordinated win-trading, intentionally throwing matches, MMR manipulation, and exploiting bugs or system behavior.",
+      "Prohibited conduct includes bots, scripts, macros, overlays, location hint tools, external databases used during a match, unauthorized browser extensions, automated guessing, account sharing, boosting, smurf abuse, coordinated win-trading, intentionally throwing matches, MMR manipulation, and exploiting bugs or system behavior. The official GeoDuels browser extension is authorized only for the gameplay features presented by GeoDuels.",
       "You may not tamper with clients, network traffic, tokens, matchmaking, game state APIs, maps, location data, or any infrastructure used by GeoDuels.",
     ],
   },

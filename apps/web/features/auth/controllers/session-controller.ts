@@ -444,44 +444,6 @@ export class SessionController extends ObservableStore<SessionState> {
     });
   };
 
-  setMmr = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function" ? update(this.state.mmr) : update;
-    this.patchState({ mmr: value });
-  };
-
-  setRatingRd = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function" ? update(this.state.ratingRd) : update;
-    this.patchState({ ratingRd: value });
-  };
-
-  setGamesPlayed = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function" ? update(this.state.gamesPlayed) : update;
-    this.patchState({ gamesPlayed: value });
-  };
-
-  setWins = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function" ? update(this.state.wins) : update;
-    this.patchState({ wins: value });
-  };
-
-  setRankedGamesPlayed = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function"
-        ? update(this.state.rankedGamesPlayed)
-        : update;
-    this.patchState({ rankedGamesPlayed: value });
-  };
-
-  setRankedWins = (update: number | ((value: number) => number)) => {
-    const value =
-      typeof update === "function" ? update(this.state.rankedWins) : update;
-    this.patchState({ rankedWins: value });
-  };
-
   getSessionSnapshot = (): AuthSessionSnapshot | null => {
     return hasPlayableSession(this.session) ? this.session : null;
   };
@@ -610,6 +572,16 @@ export class SessionController extends ObservableStore<SessionState> {
         ? profile.linkedProviders.filter((provider): provider is string => typeof provider === "string")
         : this.state.linkedProviders,
       nicknameInput: this.state.nicknameInput || nextDisplayName,
+    });
+  }
+
+  applyCommittedRating(mmr: number, ratingRd?: number) {
+    this.patchState({
+      mmr,
+      ratingRd:
+        typeof ratingRd === "number"
+          ? ratingRd
+          : this.state.ratingRd,
     });
   }
 

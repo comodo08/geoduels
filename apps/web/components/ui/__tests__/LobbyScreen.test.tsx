@@ -12,6 +12,22 @@ function resetStoredQueueRulesets() {
     return;
   }
   window.localStorage.removeItem('geoduels.queueRulesets');
+  window.localStorage.removeItem('geoduels.play.duels');
+  window.localStorage.removeItem('geoduels.play.singleplayer');
+}
+
+function reportExtensionAvailable() {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      source: window,
+      origin: window.location.origin,
+      data: {
+        source: 'geoduels-extension',
+        version: 1,
+        type: 'extension_ready',
+      },
+    }),
+  );
 }
 
 function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof LobbyScreen>>) {
@@ -23,8 +39,6 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
     isGuest: false,
     connected: true,
     mmr: 1200,
-    gamesPlayed: 10,
-    winsPct: 60,
     leaderboard: null,
     leaderboardLoading: false,
     status: 'ready',
@@ -38,7 +52,6 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
     googleClientId: '',
     appVersion: 'dev',
     isAdmin: false,
-    linkedProviders: [],
     changelogEyebrow: 'News',
     changelogTitle: 'Latest',
     changelogMarkdown: '',
@@ -49,12 +62,7 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
     onBrowseLeaderboard: vi.fn(),
     authLoading: false,
     authError: '',
-    nicknameInput: 'Self',
-    nicknameError: '',
     nicknameSaving: false,
-    onChangeNickname: vi.fn(),
-    onSaveNickname: vi.fn(async () => true),
-    onLogout: vi.fn(),
     ...overrides
   };
 
@@ -66,6 +74,16 @@ function renderLobbyScreen(overrides?: Partial<React.ComponentProps<typeof Lobby
 }
 
 beforeEach(() => {
+  const values = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    },
+  });
   resetStoredQueueRulesets();
 });
 
@@ -116,16 +134,16 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('button', { name: 'Paused' })).toBeDisabled();
   });
 
-  it('allows all duel modes to be unselected and disables play', () => {
+  it('opens the duel chooser and requires at least one mode', () => {
     renderLobbyScreen();
 
-    const playButton = screen.getAllByRole('button', { name: 'Play' })[0];
-    expect(playButton).not.toBeDisabled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
 
+    expect(screen.getByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Moving' }));
 
     expect(screen.getByRole('button', { name: 'Moving' })).toHaveAttribute('aria-pressed', 'false');
-    expect(playButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
 
   it('opens centered sign-in instead of queueing when signed out players press ranked play', () => {
@@ -161,14 +179,91 @@ describe('LobbyScreen', () => {
     expect(joinQueue).not.toHaveBeenCalled();
   });
 
-  it('queues registered players with the selected ranked rulesets', () => {
-    const joinQueue = vi.fn();
-    renderLobbyScreen({ joinQueue });
+  it('locks extension-only modes and visibility without the extension', () => {
+    renderLobbyScreen();
 
-    fireEvent.click(screen.getByRole('button', { name: 'NMPZ' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
 
-    expect(joinQueue).toHaveBeenCalledWith(['moving', 'nmpz']);
+    expect(screen.getByRole('button', { name: 'No Move' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Hidden' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Any' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: /hide street names requires the GeoDuels extension/i,
+      }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('link', { name: /Chrome setup/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Firefox setup/i })).toBeInTheDocument();
+  });
+
+  it('migrates legacy duel mode selections and defaults street names to shown', () => {
+    window.localStorage.setItem(
+      'geoduels.queueRulesets',
+      JSON.stringify(['moving', 'nmpz']),
+    );
+    renderLobbyScreen();
+    reportExtensionAvailable();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(screen.getByRole('button', { name: 'Moving' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'NMPZ' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Shown' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('queues registered players for every selected mode and visibility', async () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({ joinQueue });
+    reportExtensionAvailable();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    expect(await screen.findByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'No Move' }));
+    fireEvent.click(screen.getByRole('button', { name: 'NMPZ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Any' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(joinQueue).toHaveBeenCalledWith([
+      'moving',
+      'moving_hidden',
+      'no_move',
+      'no_move_hidden',
+      'nmpz',
+      'nmpz_hidden',
+    ]);
+  });
+
+  it('uses radio modes and no Any visibility for singleplayer', async () => {
+    const startSingleplayer = vi.fn();
+    renderLobbyScreen({ startSingleplayer });
+    reportExtensionAvailable();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[1]);
+    expect(
+      await screen.findByRole('dialog', { name: 'Start Singleplayer' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Any' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'No Move' }));
+    expect(screen.getByRole('button', { name: 'Moving' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hidden' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(startSingleplayer).toHaveBeenCalledWith({
+      ruleset: 'no_move',
+      streetNames: 'hidden',
+    });
   });
 
   it('shows singleplayer as loading while a start is connecting', () => {

@@ -605,6 +605,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		Mode:    contracts.ModeSingleplayer,
 		Config: contracts.NormalizeMatchConfig(contracts.MatchConfig{
 			Ruleset:             requestedConfig.Ruleset,
+			StreetNames:         requestedConfig.StreetNames,
 			MapID:               requestedConfig.MapID,
 			MapName:             requestedConfig.MapName,
 			MapKey:              requestedConfig.MapKey,

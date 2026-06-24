@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "GeoDuels Enhancer",
+  "version": "0.1.0",
+  "description": "Official GeoDuels extension that enhances Street View with hidden street names, new modes, a compass, and more.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://geoduels.io/*",
+        "https://*.geoduels.io/*"
+      ],
+      "js": ["src/geoduels-page.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.google.com/maps/embed/*",
+        "https://*.google.com/maps/embed/*"
+      ],
+      "js": ["src/google-street-view.js"],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "enhancer@geoduels.io",
+      "strict_min_version": "128.0"
+    }
+  }
+}
