@@ -33,7 +33,7 @@ type SessionRepository interface {
 type ProfileRepository interface {
 	UpsertUser(userID, email, displayName string) error
 	GetProfile(userID string) (Profile, error)
-	GetPublicPlayerProfile(userID string) (PublicPlayerProfile, error)
+	GetPublicPlayerProfileByNickname(nickname string) (PublicPlayerProfile, error)
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
 }
 

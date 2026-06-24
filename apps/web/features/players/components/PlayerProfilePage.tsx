@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import { AppShell } from "../../app-shell/components/AppShell";
 import { AppContentRail } from "../../app-shell/components/AppContentRail";
 import { Surface } from "../../../components/ui/Surface";
-import { toPublicEntityId } from "../../../lib/entity-id";
 import { getSiteURL } from "../../../lib/site";
 import { useProfileEditor } from "../hooks/use-profile-editor";
 import { useOptionalViewer, usePlayerProfile } from "../hooks/use-player-profile";
@@ -31,9 +30,10 @@ export function PlayerProfilePage({
   const editor = useProfileEditor(
     profile,
     owner ? viewer?.accessToken || "" : "",
+    (nickname) => void router.replace(`/players/${encodeURIComponent(nickname)}`),
   );
   const matches = matchesQuery.data?.pages.flatMap((page) => page.matches) || [];
-  const profilePath = `/players/${encodeURIComponent(toPublicEntityId(playerId))}`;
+  const profilePath = `/players/${encodeURIComponent(profile?.displayName || playerId)}`;
   const settingsOpen =
     owner && router.isReady && router.query.settings === "account";
   const shellViewer = viewer

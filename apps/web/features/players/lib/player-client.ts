@@ -4,9 +4,9 @@ import type { PlayerMatchesPage, PublicPlayerProfile } from "../types";
 
 export async function requestPlayerProfile(
   config: RuntimeConfig,
-  userId: string,
+  nickname: string,
 ): Promise<PublicPlayerProfile> {
-  const resp = await apiFetch(config, `/v1/players/${encodeURIComponent(userId)}`);
+  const resp = await apiFetch(config, `/v1/players/${encodeURIComponent(nickname)}`);
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load player profile"));
   }
@@ -15,7 +15,7 @@ export async function requestPlayerProfile(
 
 export async function requestPlayerMatches(
   config: RuntimeConfig,
-  userId: string,
+  nickname: string,
   limit = 20,
   cursor = "",
 ): Promise<PlayerMatchesPage> {
@@ -23,7 +23,7 @@ export async function requestPlayerMatches(
   if (cursor) query.set("cursor", cursor);
   const resp = await apiFetch(
     config,
-    `/v1/players/${encodeURIComponent(userId)}/matches?${query.toString()}`,
+    `/v1/players/${encodeURIComponent(nickname)}/matches?${query.toString()}`,
   );
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load match history"));

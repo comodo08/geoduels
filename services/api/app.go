@@ -203,8 +203,8 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/content/changelog/{slug}", a.publicChangelogPost).Methods(http.MethodGet)
 
 	r.HandleFunc("/v1/leaderboard", a.leaderboard).Methods(http.MethodGet)
-	r.HandleFunc("/v1/players/{id}", a.publicPlayerProfile).Methods(http.MethodGet)
-	r.HandleFunc("/v1/players/{id}/matches", a.publicPlayerMatches).Methods(http.MethodGet)
+	r.HandleFunc("/v1/players/{nickname}", a.publicPlayerProfile).Methods(http.MethodGet)
+	r.HandleFunc("/v1/players/{nickname}/matches", a.publicPlayerMatches).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}", a.match).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}/bootstrap", a.matchBootstrap).Methods(http.MethodGet)
 	r.HandleFunc("/v1/matches/{id}/route", a.matchRoute).Methods(http.MethodGet)

@@ -605,7 +605,7 @@ function PlayerDetailRoute(props: {
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href={`/players/${encodeURIComponent(toPublicEntityId(player.userId))}`} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-700 px-4 py-2 text-sm font-semibold text-sky-300 hover:border-sky-400 hover:text-white">
+          <Link href={`/players/${encodeURIComponent(player.displayName || player.userId)}`} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-700 px-4 py-2 text-sm font-semibold text-sky-300 hover:border-sky-400 hover:text-white">
             Public profile
             <ExternalLink className="h-4 w-4" />
           </Link>

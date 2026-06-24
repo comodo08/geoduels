@@ -24,7 +24,7 @@ type MapCatalog interface {
 	ListMaps(userID string, opts contracts.MapListOptions) ([]contracts.CustomMap, error)
 	GetMap(userID, mapID string) (contracts.MapDetails, bool, error)
 	GetMapUploadQuota(userID string) (contracts.MapUploadQuota, error)
-	CreateCustomMap(userID, displayName, description, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error)
+	CreateCustomMap(userID, displayName, description, visibility, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error)
 	ReplaceCustomMapLocations(userID, mapID string, source io.Reader) (contracts.CustomMap, error)
 	UpdateCustomMap(userID, mapID string, update contracts.CustomMapUpdate) (contracts.CustomMap, error)
 	PublishCustomMap(userID, mapID string) (contracts.CustomMap, error)

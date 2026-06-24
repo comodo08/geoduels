@@ -9,7 +9,6 @@ import PlayerBadge, { type PlayerBadgeInfo } from "../../../components/ui/Player
 import PlayerNameWithBadge from "../../../components/ui/PlayerNameWithBadge";
 import { Tooltip } from "../../../components/ui/Tooltip";
 import { cn } from "../../../lib/cn";
-import { toPublicEntityId } from "../../../lib/entity-id";
 import {
   APP_NAV_ITEMS,
   appNavRouteStorageKey,
@@ -205,7 +204,7 @@ function AppShellHeader({
 
         {viewer ? (
           <Link
-            href={`/players/${encodeURIComponent(toPublicEntityId(viewer.userId))}`}
+            href={`/players/${encodeURIComponent(viewer.displayName || viewer.userId)}`}
             className="group flex min-w-0 cursor-pointer items-center justify-self-end gap-2.5 sm:gap-3"
           >
             <div className="hidden min-w-0 max-w-[7.5rem] flex-col items-end justify-center sm:flex sm:max-w-none">

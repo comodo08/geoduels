@@ -164,7 +164,7 @@ export default function ChatPanel({
                         {new Date(message.createdAt).toLocaleString()}
                       </span>
                     ) : null}
-                    <PlayerProfileLink userId={message.senderUserId} stopPropagation className={`mr-1 font-bold hover:underline ${self ? 'text-[#7effbd]' : 'text-[#9fd4ff]'}`}>
+                    <PlayerProfileLink userId={message.senderUserId} nickname={message.senderDisplayName} stopPropagation className={`mr-1 font-bold hover:underline ${self ? 'text-[#7effbd]' : 'text-[#9fd4ff]'}`}>
                       {message.senderDisplayName}
                     </PlayerProfileLink>
                     <span className={message.kind === 'emote' ? 'text-lg leading-none' : ''}>

@@ -15,9 +15,9 @@ import (
 	"geoduels/pkg/entityid"
 )
 
-func (s *pgStore) CreateCustomMap(userID, displayName, description, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error) {
+func (s *pgStore) CreateCustomMap(userID, displayName, description, visibility, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error) {
 	mapID := entityid.New()
-	return s.ingestCustomMap(userID, mapID, displayName, description, "private", difficulty, thumbnailKey, thumbnailVariant, source, true)
+	return s.ingestCustomMap(userID, mapID, displayName, description, visibility, difficulty, thumbnailKey, thumbnailVariant, source, true)
 }
 
 func (s *pgStore) ReplaceCustomMapLocations(userID, mapID string, source io.Reader) (contracts.CustomMap, error) {
@@ -69,8 +69,8 @@ func (s *pgStore) ingestCustomMap(userID, mapID, displayName, description, visib
 	}
 	if create {
 		_, err = tx.Exec(ctx, `
-			insert into maps(id,map_key,owner_user_id,display_name,description,visibility,status,difficulty,thumbnail_variant,thumbnail_key,location_count,created_at,updated_at)
-			values($1,$1,$2,$3,$4,$5,'processing',$6,$7,$8,0,now(),now())
+			insert into maps(id,map_key,owner_user_id,display_name,description,visibility,status,difficulty,thumbnail_variant,thumbnail_key,location_count,published_at,created_at,updated_at)
+			values($1,$1,$2,$3,$4,$5,'processing',$6,$7,$8,0,case when $5='public' then now() else null end,now(),now())
 		`, mapID, userID, displayName, strings.TrimSpace(description), visibility, difficulty, thumbnailVariant, thumbnailKey)
 	} else {
 		var owner string

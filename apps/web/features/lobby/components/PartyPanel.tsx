@@ -439,7 +439,7 @@ function PartyMemberList({
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <PlayerProfileLink userId={member.userId} disabled={member.isGuest} className="truncate text-[16px] font-extrabold text-white hover:text-emerald-200">
+                <PlayerProfileLink userId={member.userId} nickname={member.displayName} disabled={member.isGuest} className="truncate text-[16px] font-extrabold text-white hover:text-emerald-200">
                   {member.displayName || member.userId}
                 </PlayerProfileLink>
                 {isLeader ? (

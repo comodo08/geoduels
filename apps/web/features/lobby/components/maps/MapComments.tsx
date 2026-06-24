@@ -107,7 +107,7 @@ function CommentThread({
   const root = depth === "root";
   return (
     <div className="flex gap-3">
-      <PlayerProfileLink userId={comment.userId} className="shrink-0">
+      <PlayerProfileLink userId={comment.userId} nickname={comment.userDisplayName} className="shrink-0">
         <AvatarBadge
           avatarUrl={comment.avatarUrl}
           fallback={commentAvatarFallback(comment.userDisplayName)}
@@ -167,7 +167,7 @@ function CommentHeader({
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-2">
-          <PlayerProfileLink userId={comment.userId} className="truncate text-sm font-extrabold text-white hover:text-emerald-200">{comment.userDisplayName}</PlayerProfileLink>
+          <PlayerProfileLink userId={comment.userId} nickname={comment.userDisplayName} className="truncate text-sm font-extrabold text-white hover:text-emerald-200">{comment.userDisplayName}</PlayerProfileLink>
           <time dateTime={comment.createdAt} className="text-[13px] font-bold text-inkMuted">{formatCommentAge(comment.createdAt)}</time>
           {commentDeletedLabel(comment.status) ? <span className="text-[13px] font-black text-red-300">{commentDeletedLabel(comment.status)}</span> : null}
         </div>

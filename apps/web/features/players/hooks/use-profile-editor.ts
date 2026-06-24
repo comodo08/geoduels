@@ -5,8 +5,9 @@ import { useProfileOwnerActions } from "./use-profile-mutations";
 export function useProfileEditor(
   profile: PublicPlayerProfile | undefined,
   accessToken: string,
+  onNicknameSaved?: (nickname: string) => void,
 ) {
-  const actions = useProfileOwnerActions(profile?.userId || "", accessToken);
+  const actions = useProfileOwnerActions(accessToken);
   const [editingName, setEditingName] = useState(false);
   const [nickname, setNickname] = useState(profile?.displayName || "");
   const [choosingBadge, setChoosingBadge] = useState(false);
@@ -24,7 +25,10 @@ export function useProfileEditor(
   };
   const saveName = () =>
     actions.nicknameMutation.mutate(nickname.trim(), {
-      onSuccess: () => setEditingName(false),
+      onSuccess: () => {
+        setEditingName(false);
+        onNicknameSaved?.(nickname.trim());
+      },
     });
   const cancelBadge = () => {
     setBadgeId(profile?.selectedBadge?.id || "");

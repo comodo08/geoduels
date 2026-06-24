@@ -65,7 +65,7 @@ export function LeaderboardPanel({
                   </span>
                 </div>
                 <div className="min-w-0">
-                  <PlayerProfileLink userId={entry.userId} className="block truncate font-bold text-white hover:text-emerald-200">
+                  <PlayerProfileLink userId={entry.userId} nickname={entry.displayName} className="block truncate font-bold text-white hover:text-emerald-200">
                     {entry.displayName || entry.userId}
                   </PlayerProfileLink>
                   <p className="truncate text-[12px] text-[#8caab0]">

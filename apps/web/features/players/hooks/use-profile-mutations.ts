@@ -5,12 +5,12 @@ import {
   requestUpdateSelectedBadge,
 } from "../../auth/lib/auth-client";
 
-export function useProfileOwnerActions(playerId: string, accessToken: string) {
+export function useProfileOwnerActions(accessToken: string) {
   const config = getRuntimeConfig();
   const queryClient = useQueryClient();
   const refresh = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["player-profile", playerId] }),
+      queryClient.invalidateQueries({ queryKey: ["player-profile"] }),
       queryClient.invalidateQueries({ queryKey: ["optional-viewer"] }),
     ]);
 

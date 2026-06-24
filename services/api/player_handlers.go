@@ -19,8 +19,8 @@ type playerMatchesCursor struct {
 }
 
 func (a *api) publicPlayerProfile(w http.ResponseWriter, r *http.Request) {
-	userID := a.resolveEntityID("user", mux.Vars(r)["id"])
-	profile, err := a.store.GetPublicPlayerProfile(userID)
+	nickname := strings.TrimSpace(mux.Vars(r)["nickname"])
+	profile, err := a.store.GetPublicPlayerProfileByNickname(nickname)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "player not found", http.StatusNotFound)
@@ -43,7 +43,15 @@ func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	userID := a.resolveEntityID("user", mux.Vars(r)["id"])
+	profile, err := a.store.GetPublicPlayerProfileByNickname(strings.TrimSpace(mux.Vars(r)["nickname"]))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "player not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "player profile unavailable", http.StatusInternalServerError)
+		return
+	}
 	var beforeEndedAt time.Time
 	var beforeMatchID string
 	if rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor")); rawCursor != "" {
@@ -59,7 +67,7 @@ func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
 		}
 		beforeMatchID = a.resolveEntityID("match", cursor.MatchID)
 	}
-	page, err := a.store.ListPlayerMatchHistoryPage(userID, limit, beforeEndedAt, beforeMatchID)
+	page, err := a.store.ListPlayerMatchHistoryPage(profile.UserID, limit, beforeEndedAt, beforeMatchID)
 	if err != nil {
 		http.Error(w, "match history unavailable", http.StatusInternalServerError)
 		return

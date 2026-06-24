@@ -2,7 +2,6 @@ import type { GetServerSideProps } from "next";
 import { PlayerProfilePage } from "../../features/players/components/PlayerProfilePage";
 import { requestPlayerProfile } from "../../features/players/lib/player-client";
 import type { PublicPlayerProfile } from "../../features/players/types";
-import { normalizeEntityRouteId, toPublicEntityId } from "../../lib/entity-id";
 import { createRuntimeConfig } from "../../lib/runtime-config";
 
 type PlayerRouteProps = {
@@ -15,22 +14,22 @@ export default function PlayerRoute({ playerId, initialProfile }: PlayerRoutePro
 }
 
 export const getServerSideProps: GetServerSideProps<PlayerRouteProps> = async ({ params }) => {
-  const rawId = typeof params?.id === "string" ? params.id : "";
-  const playerId = normalizeEntityRouteId(rawId);
+  const playerId = typeof params?.id === "string" ? params.id.trim() : "";
   if (!playerId) return { notFound: true };
-  const canonicalId = toPublicEntityId(playerId);
-  if (rawId !== canonicalId) {
-    return {
-      redirect: {
-        destination: `/players/${encodeURIComponent(canonicalId)}`,
-        permanent: true,
-      },
-    };
-  }
   try {
     const initialProfile = await requestPlayerProfile(createRuntimeConfig(), playerId);
+    if (playerId !== initialProfile.displayName) {
+      return {
+        redirect: {
+          destination: `/players/${encodeURIComponent(initialProfile.displayName)}`,
+          permanent: true,
+        },
+      };
+    }
     return { props: { playerId, initialProfile } };
   } catch {
-    return { notFound: true };
+    return {
+      notFound: true,
+    };
   }
 };

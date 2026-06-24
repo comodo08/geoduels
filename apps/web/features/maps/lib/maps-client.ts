@@ -35,6 +35,7 @@ export type CustomMap = {
   createdAt: string;
   updatedAt: string;
 };
+export type MapVisibility = CustomMap["visibility"];
 
 export type MapScope = "official" | "community" | "favorites" | "mine";
 export type MapSort = "trending" | "popular" | "new";
@@ -97,11 +98,12 @@ export async function getMapUploadQuota(config: RuntimeConfig, accessToken: stri
   return expectJSON(await apiFetch(config, "/v1/maps/quota", { headers: headers(accessToken) }), "Map quota request failed");
 }
 
-export async function createMap(config: RuntimeConfig, accessToken: string, input: { file: File; displayName: string; description: string; difficulty: "easy" | "normal" | "hard"; thumbnailKey: string; thumbnailVariant?: number }): Promise<CustomMap> {
+export async function createMap(config: RuntimeConfig, accessToken: string, input: { file: File; displayName: string; description: string; visibility: MapVisibility; difficulty: "easy" | "normal" | "hard"; thumbnailKey: string; thumbnailVariant?: number }): Promise<CustomMap> {
   const body = new FormData();
   body.set("file", input.file);
   body.set("displayName", input.displayName);
   body.set("description", input.description);
+  body.set("visibility", input.visibility);
   body.set("difficulty", input.difficulty);
   body.set("thumbnailKey", input.thumbnailKey);
   body.set("thumbnailVariant", String(input.thumbnailVariant || 1));

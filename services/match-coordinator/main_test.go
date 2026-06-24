@@ -224,7 +224,7 @@ func (s *recoverTestStore) GetProfile(userID string) (persistence.Profile, error
 	return persistence.Profile{UserID: userID, DisplayName: userID, MMR: 1000}, nil
 }
 
-func (s *recoverTestStore) GetPublicPlayerProfile(userID string) (persistence.PublicPlayerProfile, error) {
+func (s *recoverTestStore) GetPublicPlayerProfileByNickname(nickname string) (persistence.PublicPlayerProfile, error) {
 	panic("unexpected call")
 }
 

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
-import { toPublicEntityId } from "../../lib/entity-id";
 
 export default function PlayerProfileLink({
   userId,
+  nickname,
   children,
   className = "",
   disabled = false,
@@ -11,6 +11,7 @@ export default function PlayerProfileLink({
   title,
 }: {
   userId?: string;
+  nickname?: string;
   children: ReactNode;
   className?: string;
   disabled?: boolean;
@@ -23,9 +24,13 @@ export default function PlayerProfileLink({
   if (!userId || disabled) {
     return <span className={className}>{children}</span>;
   }
+  const publicNickname = (nickname || (typeof children === "string" ? children : "")).trim();
+  if (!publicNickname) {
+    return <span className={className}>{children}</span>;
+  }
   return (
     <Link
-      href={`/players/${encodeURIComponent(toPublicEntityId(userId))}`}
+      href={`/players/${encodeURIComponent(publicNickname)}`}
       className={className}
       onClick={handleClick}
       title={title || "View player profile"}

@@ -28,7 +28,7 @@ export default function PlayerNameWithBadge({
     </span>
   );
   return (
-    <PlayerProfileLink userId={userId} disabled={profileDisabled} className="min-w-0 hover:opacity-90">
+    <PlayerProfileLink userId={userId} nickname={name} disabled={profileDisabled} className="min-w-0 hover:opacity-90">
       {content}
     </PlayerProfileLink>
   );

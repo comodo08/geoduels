@@ -210,7 +210,7 @@ func (a *api) createMap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	item, err := catalog.CreateCustomMap(userID, r.FormValue("displayName"), r.FormValue("description"), r.FormValue("difficulty"), r.FormValue("thumbnailKey"), atoiDefault(r.FormValue("thumbnailVariant"), 1), file)
+	item, err := catalog.CreateCustomMap(userID, r.FormValue("displayName"), r.FormValue("description"), r.FormValue("visibility"), r.FormValue("difficulty"), r.FormValue("thumbnailKey"), atoiDefault(r.FormValue("thumbnailVariant"), 1), file)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

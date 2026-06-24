@@ -50,7 +50,7 @@ export function ParticipantAvatar({
     />
   );
   if (participant.kind === "team") return avatar;
-  return <PlayerProfileLink userId={participant.id} disabled={participant.isGuest} className="inline-flex">{avatar}</PlayerProfileLink>;
+  return <PlayerProfileLink userId={participant.id} nickname={participant.name} disabled={participant.isGuest} className="inline-flex">{avatar}</PlayerProfileLink>;
 }
 
 export function ParticipantName({

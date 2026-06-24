@@ -22,9 +22,14 @@ type publicPlayerTestStore struct {
 	hasMore       bool
 }
 
-func (s *publicPlayerTestStore) GetPublicPlayerProfile(userID string) (persistence.PublicPlayerProfile, error) {
+func (s *publicPlayerTestStore) GetPublicPlayerProfileByNickname(nickname string) (persistence.PublicPlayerProfile, error) {
 	profile := s.profile
-	profile.UserID = userID
+	if profile.UserID == "" {
+		profile.UserID = "player-1"
+	}
+	if profile.DisplayName == "" {
+		profile.DisplayName = nickname
+	}
 	return profile, nil
 }
 
@@ -56,8 +61,8 @@ func TestPublicPlayerProfileContainsOnlyPublicFields(t *testing.T) {
 		},
 	}
 	a := &api{store: store}
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/player-1", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "player-1"})
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
 	rec := httptest.NewRecorder()
 
 	a.publicPlayerProfile(rec, req)
@@ -88,8 +93,8 @@ func TestPublicPlayerMatchesUsesRequestedSummaryLimit(t *testing.T) {
 		}},
 	}
 	a := &api{store: store}
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/player-1/matches?limit=25", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "player-1"})
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer/matches?limit=25", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
 	rec := httptest.NewRecorder()
 
 	a.publicPlayerMatches(rec, req)
@@ -104,8 +109,8 @@ func TestPublicPlayerMatchesUsesRequestedSummaryLimit(t *testing.T) {
 
 func TestPublicPlayerMatchesRejectsInvalidLimit(t *testing.T) {
 	a := &api{store: &publicPlayerTestStore{}}
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/player-1/matches?limit=101", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "player-1"})
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer/matches?limit=101", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
 	rec := httptest.NewRecorder()
 
 	a.publicPlayerMatches(rec, req)
@@ -117,8 +122,8 @@ func TestPublicPlayerMatchesRejectsInvalidLimit(t *testing.T) {
 
 func TestPublicPlayerMatchesRejectsInvalidCursor(t *testing.T) {
 	a := &api{store: &publicPlayerTestStore{}}
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/player-1/matches?cursor=bad", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "player-1"})
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer/matches?cursor=bad", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
 	rec := httptest.NewRecorder()
 
 	a.publicPlayerMatches(rec, req)
@@ -138,8 +143,8 @@ func TestPublicPlayerMatchesReturnsNextCursor(t *testing.T) {
 		}},
 	}
 	a := &api{store: store}
-	req := httptest.NewRequest(http.MethodGet, "/v1/players/player-1/matches", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "player-1"})
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer/matches", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
 	rec := httptest.NewRecorder()
 
 	a.publicPlayerMatches(rec, req)

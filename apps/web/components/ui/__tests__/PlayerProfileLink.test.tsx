@@ -7,7 +7,7 @@ describe("PlayerProfileLink", () => {
 
   it("builds a public player route", () => {
     render(<PlayerProfileLink userId="player-1">Explorer</PlayerProfileLink>);
-    expect(screen.getByRole("link", { name: "Explorer" })).toHaveAttribute("href", "/players/player-1");
+    expect(screen.getByRole("link", { name: "Explorer" })).toHaveAttribute("href", "/players/Explorer");
   });
 
   it("renders disabled identities without a link", () => {

@@ -12,10 +12,10 @@ describe("player client", () => {
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await requestPlayerMatches(createRuntimeConfig(), "player-1", 20, "cursor-value");
+    await requestPlayerMatches(createRuntimeConfig(), "Explorer", 20, "cursor-value");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/players/player-1/matches?limit=20&cursor=cursor-value",
+      "/v1/players/Explorer/matches?limit=20&cursor=cursor-value",
       undefined,
     );
   });

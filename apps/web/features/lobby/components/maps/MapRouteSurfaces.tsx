@@ -10,6 +10,7 @@ import {
   type CustomMap,
   type MapScope,
   type MapSort,
+  type MapVisibility,
 } from "../../../maps/lib/maps-client";
 import {
   useFavoriteMap,
@@ -85,6 +86,11 @@ function useMapBrowserState() {
   };
 }
 
+type MapActionNotice = {
+  title: string;
+  message: string;
+};
+
 type MapRouteSurfaceProps = {
   accessToken: string;
   canUploadCustomMaps: boolean;
@@ -131,6 +137,7 @@ export function MapRouteSurface({
   const [mapName, setMapName] = useState("");
   const [mapDescription, setMapDescription] = useState("");
   const [mapDifficulty, setMapDifficulty] = useState<"easy" | "normal" | "hard">("normal");
+  const [mapVisibility, setMapVisibility] = useState<MapVisibility>("private");
   const [mapThumbnailKey, setMapThumbnailKey] = useState("generic/variant-1");
   const [mapThumbnailCategory, setMapThumbnailCategory] = useState<"generic" | "continents" | "countries">("generic");
   const [mapThumbnailSearch, setMapThumbnailSearch] = useState("");
@@ -142,6 +149,7 @@ export function MapRouteSurface({
   const [commentComposerFocused, setCommentComposerFocused] = useState(false);
   const [expandedCommentIds, setExpandedCommentIds] = useState<Record<string, boolean>>({});
   const [openCommentMenuId, setOpenCommentMenuId] = useState("");
+  const [mapActionNotice, setMapActionNotice] = useState<MapActionNotice | null>(null);
 
   const setMapScope = browser.setMapScope;
 
@@ -175,19 +183,25 @@ export function MapRouteSurface({
         file: mapFile,
         displayName: mapName,
         description: mapDescription,
+        visibility: mapVisibility,
         difficulty: mapDifficulty,
         thumbnailKey: mapThumbnailKey,
       });
     },
-    onSuccess: () => {
+    onSuccess: (item) => {
       setMapName("");
       setMapDescription("");
       setMapFile(null);
       setMapUploadError("");
       setMapDifficulty("normal");
+      setMapVisibility("private");
       setMapThumbnailKey("generic/variant-1");
       setMapThumbnailCategory("generic");
       setMapThumbnailSearch("");
+      setMapActionNotice({
+        title: "Map Created",
+        message: `${item.displayName} is ${item.visibility}.`,
+      });
       browser.setMapScope("mine");
       void queryClient.invalidateQueries({ queryKey: ["maps"] });
       void queryClient.invalidateQueries({ queryKey: ["map-upload-quota"] });
@@ -253,6 +267,10 @@ export function MapRouteSurface({
     if (!window.confirm(`Delete ${map.displayName}?`)) return;
     mapManagement.archiveMap.mutate(map.id, {
       onSuccess: () => {
+        setMapActionNotice({
+          title: "Map Deleted",
+          message: `${map.displayName} was removed from your maps.`,
+        });
         browser.setMapScope("mine");
         void Router.push({ pathname: "/maps", query: { scope: "mine" } });
       },
@@ -276,6 +294,8 @@ export function MapRouteSurface({
               setMapDescription={setMapDescription}
               mapDifficulty={mapDifficulty}
               setMapDifficulty={setMapDifficulty}
+              mapVisibility={mapVisibility}
+              setMapVisibility={setMapVisibility}
               mapThumbnailKey={mapThumbnailKey}
               setMapThumbnailKey={setMapThumbnailKey}
               mapThumbnailCategory={mapThumbnailCategory}
@@ -311,6 +331,7 @@ export function MapRouteSurface({
           favoriteMap={(input) => favoriteMapMutation.mutate(input)}
           isAdmin={isAdmin}
           isModerator={isModerator}
+          mapActionNotice={mapActionNotice}
           mapPickerFlow={mapPickerFlow}
           onCancelComment={() => {
             setCommentBody("");
@@ -320,7 +341,15 @@ export function MapRouteSurface({
           onDeleteMap={deleteMap}
           onPostComment={postMapComment}
           onPostReply={postMapReply}
-          onPublishMap={(itemId) => mapManagement.publishMap.mutate(itemId)}
+          onPublishMap={(itemId) =>
+            mapManagement.publishMap.mutate(itemId, {
+              onSuccess: (item) =>
+                setMapActionNotice({
+                  title: "Map Published",
+                  message: `${item.displayName} is public now.`,
+                }),
+            })
+          }
           onLocationFile={(itemId, file) => mapManagement.replaceLocations.mutate({ mapId: itemId, file })}
           onSetMapOfficial={(itemId, official) => mapManagement.setOfficial.mutate({ mapId: itemId, official })}
           onSetMapRole={(itemId, role) => mapManagement.setRole.mutate({ mapId: itemId, role })}
@@ -359,6 +388,7 @@ export function MapRouteSurface({
         mapSearchInput={browser.mapSearchInput}
         mapSort={browser.mapSort}
         mapsLoading={mapsQuery.isLoading}
+        mapActionNotice={mapActionNotice}
         partyActive={partyActive}
         readyMaps={readyMaps}
         setMapScope={browser.setMapScope}

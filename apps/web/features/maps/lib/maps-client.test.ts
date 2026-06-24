@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listMaps, setMapCommentLike, validateMapFile } from "./maps-client";
+import { createMap, listMaps, setMapCommentLike, validateMapFile } from "./maps-client";
 import type { RuntimeConfig } from "../../../lib/runtime-config";
 
 function jsonFile(value: unknown) {
@@ -8,6 +8,11 @@ function jsonFile(value: unknown) {
     size: text.length,
     text: async () => text,
   } as File;
+}
+
+function uploadFile(value: unknown) {
+  const text = JSON.stringify(value);
+  return new Blob([text], { type: "application/json" }) as File;
 }
 
 const config = { apiURL: "https://api.test" } as RuntimeConfig;
@@ -60,6 +65,45 @@ describe("listMaps", () => {
     expect(url.searchParams.get("scope")).toBe("community");
     expect(url.searchParams.get("sort")).toBe("trending");
     expect(url.searchParams.get("search")).toBe("source world");
+  });
+});
+
+describe("createMap", () => {
+  it("sends the selected visibility with uploads", async () => {
+    const map = {
+      id: "map-1",
+      displayName: "Hidden Corners",
+      visibility: "unlisted",
+      status: "ready",
+      difficulty: "normal",
+      thumbnailVariant: 1,
+      thumbnailKey: "generic/variant-1",
+      locationCount: 5,
+      system: false,
+      playCount: 0,
+      favoriteCount: 0,
+      commentCount: 0,
+      trendingScore: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => map,
+    } as Response);
+
+    await expect(createMap(config, "token", {
+      file: uploadFile([{ lat: 1, lng: 1 }]),
+      displayName: "Hidden Corners",
+      description: "",
+      visibility: "unlisted",
+      difficulty: "normal",
+      thumbnailKey: "generic/variant-1",
+    })).resolves.toEqual(map);
+
+    const body = fetchMock.mock.calls[0][1]?.body;
+    expect(body).toBeInstanceOf(FormData);
+    expect((body as FormData).get("visibility")).toBe("unlisted");
   });
 });
 

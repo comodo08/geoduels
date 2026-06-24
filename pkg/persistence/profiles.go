@@ -142,16 +142,15 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 	return p, nil
 }
 
-func (s *pgStore) GetPublicPlayerProfile(userID string) (PublicPlayerProfile, error) {
-	userID = strings.TrimSpace(userID)
+func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlayerProfile, error) {
+	nickname = strings.TrimSpace(nickname)
 	p := PublicPlayerProfile{
-		UserID:      userID,
-		DisplayName: userID,
+		DisplayName: nickname,
 		MMR:         initialMMR,
 		RatingRD:    initialRatingRD,
 	}
-	if userID == "" {
-		return p, errors.New("user id required")
+	if nickname == "" {
+		return p, errors.New("nickname required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
@@ -164,6 +163,7 @@ func (s *pgStore) GetPublicPlayerProfile(userID string) (PublicPlayerProfile, er
 	var selectedBadgeSeasonID string
 	err = s.pool.QueryRow(ctx, `
 		select
+			u.id::text,
 			coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text),
 			coalesce(u.avatar_url, ui.avatar_url, ''),
 			coalesce(r.mmr, $4),
@@ -185,8 +185,11 @@ func (s *pgStore) GetPublicPlayerProfile(userID string) (PublicPlayerProfile, er
 		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $3
 		left join user_stats us on us.user_id = u.id
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
-		where u.id = $1
-	`, userID, modeDuel, seasonID, initialMMR, initialRatingRD).Scan(
+		where u.account_type = 'registered'
+		  and u.nickname_claimed_at is not null
+		  and lower(u.display_name) = lower($1)
+	`, nickname, modeDuel, seasonID, initialMMR, initialRatingRD).Scan(
+		&p.UserID,
 		&p.DisplayName,
 		&p.AvatarURL,
 		&p.MMR,
@@ -201,7 +204,7 @@ func (s *pgStore) GetPublicPlayerProfile(userID string) (PublicPlayerProfile, er
 	if err != nil {
 		return p, err
 	}
-	badges, selected, err := s.profileBadges(ctx, userID, badgeIDFromParts(selectedBadgeCode, selectedBadgeSeasonID))
+	badges, selected, err := s.profileBadges(ctx, p.UserID, badgeIDFromParts(selectedBadgeCode, selectedBadgeSeasonID))
 	if err != nil {
 		return p, err
 	}

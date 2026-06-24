@@ -541,57 +541,65 @@ export default function LobbyScreen({
         >
           {partyErrorNotice}
 
-          <AnimatePresence mode="popLayout">
-            {showPartyPanel ? partyPanel : null}
+          <div
+            className={`flex w-full justify-center ${
+              !showPartyPanel && contentRoute === "play"
+                ? "md:min-h-[calc(100svh-21.25rem)] md:items-center"
+                : ""
+            }`}
+          >
+            <AnimatePresence mode="popLayout">
+              {showPartyPanel ? partyPanel : null}
 
-            {!showPartyPanel && contentRoute === "play" && (
-              <PlayPanel
-                isQueueing={isQueueing}
-                isSingleplayerLoading={isSingleplayerLoading}
-                queueError={queueError}
-                onDuelsPlay={onDuelsPlay}
-                cancelQueue={cancelQueue}
-                onSingleplayerPlay={() => setOpenModal("singleplayer")}
-                duelDisabled={duelDisabled}
-                singleplayerDisabled={singleplayerDisabled}
-                queuePaused={queuePaused}
-                playPaused={playPaused}
-                maintenanceIsActive={maintenanceIsActive}
-                primaryButtonLabel={primaryButtonLabel}
-                queueElapsedLabel={queueElapsedLabel}
-                duelModeLabel={duelModeLabel}
-                updatesPanel={
-                  <LobbyUpdatesPanel
-                    newsPanel={newsPanel}
-                    donateCard={donateCard}
-                    socialLinksCard={socialLinksCard}
-                  />
-                }
-              />
-            )}
+              {!showPartyPanel && contentRoute === "play" && (
+                <PlayPanel
+                  isQueueing={isQueueing}
+                  isSingleplayerLoading={isSingleplayerLoading}
+                  queueError={queueError}
+                  onDuelsPlay={onDuelsPlay}
+                  cancelQueue={cancelQueue}
+                  onSingleplayerPlay={() => setOpenModal("singleplayer")}
+                  duelDisabled={duelDisabled}
+                  singleplayerDisabled={singleplayerDisabled}
+                  queuePaused={queuePaused}
+                  playPaused={playPaused}
+                  maintenanceIsActive={maintenanceIsActive}
+                  primaryButtonLabel={primaryButtonLabel}
+                  queueElapsedLabel={queueElapsedLabel}
+                  duelModeLabel={duelModeLabel}
+                  updatesPanel={
+                    <LobbyUpdatesPanel
+                      newsPanel={newsPanel}
+                      donateCard={donateCard}
+                      socialLinksCard={socialLinksCard}
+                    />
+                  }
+                />
+              )}
 
-            {!showPartyPanel && contentRoute === "top" && (
-              <motion.div
-                key="top"
-                {...tabPanelMotion}
-                className="flex w-full justify-center pointer-events-auto"
-              >
-                {leaderboardPanel}
-              </motion.div>
-            )}
+              {!showPartyPanel && contentRoute === "top" && (
+                <motion.div
+                  key="top"
+                  {...tabPanelMotion}
+                  className="flex w-full justify-center pointer-events-auto"
+                >
+                  {leaderboardPanel}
+                </motion.div>
+              )}
 
-            {!showPartyPanel && mapRouteSurface}
+              {!showPartyPanel && mapRouteSurface}
 
-            {!showPartyPanel && contentRoute === "friends" && (
-              <motion.div
-                key="friends"
-                {...tabPanelMotion}
-                className="flex w-full max-w-[520px] flex-col gap-5 pointer-events-auto"
-              >
-                {invitePartyCard}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              {!showPartyPanel && contentRoute === "friends" && (
+                <motion.div
+                  key="friends"
+                  {...tabPanelMotion}
+                  className="flex w-full max-w-[520px] flex-col gap-5 pointer-events-auto"
+                >
+                  {invitePartyCard}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {!showPartyPanel && contentRoute === "play" ? (
             <div className="mt-10 w-full sm:mt-16">

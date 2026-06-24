@@ -37,7 +37,9 @@ export function useOptionalViewer() {
       if (!session?.user?.id || !session.accessToken) return null;
       let profile: PublicPlayerProfile | null = null;
       try {
-        profile = await requestPlayerProfile(config, session.user.id);
+        if (session.user.display_name) {
+          profile = await requestPlayerProfile(config, session.user.display_name);
+        }
       } catch {
         // The shell can still show the session identity if the public profile is unavailable.
       }
