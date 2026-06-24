@@ -4,6 +4,7 @@ import type {
   GameRuleset,
   StreetNamesVisibility,
 } from "../../matchmaking/lib/queue-client";
+import type { ExtensionAvailabilityStatus } from "../../browser-extension/hooks/use-extension-availability";
 import type { DuelStreetNamesChoice } from "../hooks/usePlayPreferences";
 import { PlayModeActionButton } from "./PlayPanel";
 
@@ -11,6 +12,7 @@ type Props =
   | {
       kind: "duel";
       extensionAvailable: boolean;
+      extensionStatus: ExtensionAvailabilityStatus;
       modes: GameRuleset[];
       streetNames: DuelStreetNamesChoice;
       disabled: boolean;
@@ -22,6 +24,7 @@ type Props =
   | {
       kind: "singleplayer";
       extensionAvailable: boolean;
+      extensionStatus: ExtensionAvailabilityStatus;
       mode: GameRuleset;
       streetNames: StreetNamesVisibility;
       disabled: boolean;
@@ -57,24 +60,31 @@ const modes: Array<{
   },
 ];
 
-function ExtensionInstallCallout() {
+function ExtensionInstallCallout({
+  status,
+}: {
+  status: ExtensionAvailabilityStatus;
+}) {
+  const outdated = status.state === "outdated";
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center">
       <p className="text-xs font-semibold leading-5 text-white/70">
-        Unlock more options by installing the official GeoDuels browser extension.
+        {outdated
+          ? "Update the official GeoDuels browser extension to unlock these options."
+          : "Unlock more options by installing the official GeoDuels browser extension."}
       </p>
       <div className="mt-2 flex flex-wrap justify-center gap-2">
         <a
           href="chrome://extensions"
           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-black text-white transition-colors hover:bg-white/15"
         >
-          Chrome setup
+          {outdated ? "Chrome update" : "Chrome setup"}
         </a>
         <a
           href="about:debugging#/runtime/this-firefox"
           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-black text-white transition-colors hover:bg-white/15"
         >
-          Firefox setup
+          {outdated ? "Firefox update" : "Firefox setup"}
         </a>
       </div>
     </div>
@@ -218,7 +228,7 @@ export function PlayLaunchModal(props: Props) {
           ) : (
             <>
               <DisabledStreetNamesToggle />
-              <ExtensionInstallCallout />
+              <ExtensionInstallCallout status={props.extensionStatus} />
             </>
           )}
         </div>

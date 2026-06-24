@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   if (window.top === window) return;
-  const VERSION = 1, EXTENSION = "geoduels-extension", APP = "geoduels-app";
+  const VERSION = 1, EXTENSION_VERSION = "0.1.3", EXTENSION = "geoduels-extension", APP = "geoduels-app";
   const STYLE_ID = "geoduels-hidden-streetnames";
   const instances = new Set();
   const initialPano = new URLSearchParams(location.search).get("pano");
@@ -34,7 +34,7 @@
     }
   }
   function post(message) {
-    window.top.postMessage({ source: EXTENSION, version: VERSION, ...message }, "*");
+    window.top.postMessage({ source: EXTENSION, version: VERSION, extensionVersion: EXTENSION_VERSION, ...message }, "*");
   }
   function syncAddressStyle() {
     let style = document.getElementById(STYLE_ID);
@@ -63,6 +63,16 @@
   function samePosition(a, b) {
     const one = latLng(a), two = latLng(b);
     return !!one && !!two && Math.abs(one.lat - two.lat) < 0.0000001 && Math.abs(one.lng - two.lng) < 0.0000001;
+  }
+  function isMovementKey(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return false;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    return ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(key);
+  }
+  function blockMovementKey(event) {
+    if (config.ruleset !== "no_move" || !isMovementKey(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }
   function rememberSpawn(panorama) {
     const state = panorama.__geoduels;
@@ -173,6 +183,10 @@
     instances.forEach(apply);
     instances.forEach(reportHeading);
     post({ type: "configured", ...config });
+  });
+  ["keydown", "keyup"].forEach((type) => {
+    window.addEventListener(type, blockMovementKey, true);
+    document.addEventListener(type, blockMovementKey, true);
   });
   syncAddressStyle();
   hook(window, "google", hookGoogle);

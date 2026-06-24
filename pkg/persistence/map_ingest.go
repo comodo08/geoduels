@@ -204,7 +204,7 @@ func (s *pgStore) SetMapFavorite(userID, mapID string, favorite bool) (contracts
 	var ownerUserID string
 	if err := tx.QueryRow(ctx, `
 		select
-			exists(select 1 from maps where id=$1 and archived_at is null and (published_at is not null or owner_user_id is null or owner_user_id=$2)),
+			exists(select 1 from maps where id=$1 and archived_at is null and `+mapVisibleToUserSQL("maps", 2, true)+`),
 			coalesce((select owner_user_id::text from maps where id=$1 and archived_at is null), '')
 	`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible, &ownerUserID); err != nil {
 		return contracts.CustomMap{}, err

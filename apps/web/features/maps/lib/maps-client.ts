@@ -57,6 +57,14 @@ export type MapComment = {
   replies?: MapComment[];
 };
 export type MapDetails = { map: CustomMap; countryStats: MapCountryStat[]; comments: MapComment[] };
+export type MapUpdateInput = {
+  displayName: string;
+  description: string;
+  visibility: MapVisibility;
+  difficulty: CustomMap["difficulty"];
+  thumbnailKey: string;
+  thumbnailVariant?: number;
+};
 export type MapUploadQuota = {
   tier: "base" | "trusted" | "established";
   tierOverride?: "base" | "trusted" | "established";
@@ -108,6 +116,21 @@ export async function createMap(config: RuntimeConfig, accessToken: string, inpu
   body.set("thumbnailKey", input.thumbnailKey);
   body.set("thumbnailVariant", String(input.thumbnailVariant || 1));
   return expectJSON(await apiFetch(config, "/v1/maps", { method: "POST", headers: headers(accessToken), body }), "Map request failed");
+}
+
+export async function updateMap(config: RuntimeConfig, accessToken: string, mapId: string, input: MapUpdateInput): Promise<CustomMap> {
+  return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}`, {
+    method: "PATCH",
+    headers: mergeHeaders(headers(accessToken), { "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      displayName: input.displayName,
+      description: input.description,
+      visibility: input.visibility,
+      difficulty: input.difficulty,
+      thumbnailKey: input.thumbnailKey,
+      thumbnailVariant: input.thumbnailVariant || 1,
+    }),
+  }), "Map request failed");
 }
 
 export async function replaceMapLocations(config: RuntimeConfig, accessToken: string, mapId: string, file: File): Promise<CustomMap> {

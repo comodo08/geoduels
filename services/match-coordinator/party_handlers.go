@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -592,8 +593,8 @@ func (q *matchCoordinator) partyMatchFound(snap contracts.PartySnapshot) (contra
 			active = append(active, member)
 		}
 	}
-	if len(active) < 2 || len(active) > 8 {
-		return contracts.MatchFound{}, errors.New("party requires 2 to 8 players")
+	if len(active) < contracts.MinPartyMembers || len(active) > contracts.MaxPartyMembers {
+		return contracts.MatchFound{}, fmt.Errorf("party requires %d to %d players", contracts.MinPartyMembers, contracts.MaxPartyMembers)
 	}
 	switch snap.Mode {
 	case contracts.ModeDuel:

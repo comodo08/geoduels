@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMap, listMaps, setMapCommentLike, validateMapFile } from "./maps-client";
+import { createMap, listMaps, setMapCommentLike, updateMap, validateMapFile } from "./maps-client";
 import type { RuntimeConfig } from "../../../lib/runtime-config";
 
 function jsonFile(value: unknown) {
@@ -104,6 +104,57 @@ describe("createMap", () => {
     const body = fetchMock.mock.calls[0][1]?.body;
     expect(body).toBeInstanceOf(FormData);
     expect((body as FormData).get("visibility")).toBe("unlisted");
+  });
+});
+
+describe("updateMap", () => {
+  it("patches map metadata as JSON", async () => {
+    const map = {
+      id: "map-1",
+      displayName: "Better Corners",
+      description: "Updated route notes",
+      visibility: "public",
+      status: "ready",
+      difficulty: "hard",
+      thumbnailVariant: 1,
+      thumbnailKey: "countries/japan",
+      locationCount: 5,
+      system: false,
+      playCount: 0,
+      favoriteCount: 0,
+      commentCount: 0,
+      trendingScore: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => map,
+    } as Response);
+
+    await expect(updateMap(config, "token", "map-1", {
+      displayName: "Better Corners",
+      description: "Updated route notes",
+      visibility: "public",
+      difficulty: "hard",
+      thumbnailKey: "countries/japan",
+      thumbnailVariant: 1,
+    })).resolves.toEqual(map);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/v1/maps/map-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          displayName: "Better Corners",
+          description: "Updated route notes",
+          visibility: "public",
+          difficulty: "hard",
+          thumbnailKey: "countries/japan",
+          thumbnailVariant: 1,
+        }),
+      }),
+    );
   });
 });
 

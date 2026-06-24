@@ -201,12 +201,12 @@ const (
 
 var allQueuePools = []QueuePool{QueuePoolRegistered}
 var AllQueueVariants = []QueueVariant{
-	QueueMoving,
-	QueueNoMove,
-	QueueNMPZ,
 	QueueMovingHidden,
 	QueueNoMoveHidden,
 	QueueNMPZHidden,
+	QueueMoving,
+	QueueNoMove,
+	QueueNMPZ,
 }
 
 func NormalizeQueueVariant(value QueueVariant) QueueVariant {

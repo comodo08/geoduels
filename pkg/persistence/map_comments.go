@@ -20,6 +20,13 @@ func (s *pgStore) ListMapComments(userID, mapID string) ([]contracts.MapComment,
 	if err != nil {
 		return nil, err
 	}
+	var visible bool
+	if err := s.pool.QueryRow(ctx, `select exists(select 1 from maps where id=$1 and archived_at is null and `+mapVisibleToUserSQL("maps", 2, true)+`)`, canonicalID, strings.TrimSpace(userID)).Scan(&visible); err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, pgx.ErrNoRows
+	}
 	return s.listMapComments(ctx, strings.TrimSpace(userID), canonicalID)
 }
 
@@ -42,7 +49,7 @@ func (s *pgStore) CreateMapComment(userID, mapID string, input contracts.MapComm
 	}
 	mapID = canonicalID
 	var visible bool
-	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where id=$1 and archived_at is null and (published_at is not null or owner_user_id is null or owner_user_id=$2))`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible); err != nil {
+	if err := tx.QueryRow(ctx, `select exists(select 1 from maps where id=$1 and archived_at is null and `+mapVisibleToUserSQL("maps", 2, true)+`)`, strings.TrimSpace(mapID), strings.TrimSpace(userID)).Scan(&visible); err != nil {
 		return contracts.MapComment{}, err
 	}
 	if !visible {
@@ -151,7 +158,7 @@ func (s *pgStore) SetMapCommentLike(userID, mapID, commentID string, liked bool)
 			join maps m on m.id=c.map_id
 			where c.id=$1 and c.map_id=$2 and c.status='visible'
 			  and m.archived_at is null
-			  and (m.published_at is not null or m.owner_user_id is null or m.owner_user_id=nullif($3,'')::uuid)
+			  and `+mapVisibleToUserSQL("m", 3, true)+`
 		)
 	`, commentID, mapID, userID).Scan(&visible); err != nil {
 		return contracts.MapComment{}, err

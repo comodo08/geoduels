@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useExtensionAvailability } from "./use-extension-availability";
 
 function Harness() {
-  const available = useExtensionAvailability();
-  return <div>{available === null ? "checking" : available ? "available" : "missing"}</div>;
+  const status = useExtensionAvailability();
+  return <div>{status.state}</div>;
 }
 
 describe("useExtensionAvailability", () => {
@@ -29,16 +29,38 @@ describe("useExtensionAvailability", () => {
           data: {
             source: "geoduels-extension",
             version: 1,
+            extensionVersion: "0.1.3",
             type: "extension_ready",
           },
         }),
       );
     });
-    expect(screen.getByText("available")).toBeInTheDocument();
+    expect(screen.getByText("ready")).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(6_100);
     });
     expect(screen.getByText("missing")).toBeInTheDocument();
+  });
+
+  it("marks older extension releases as outdated", () => {
+    render(<Harness />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: window,
+          origin: window.location.origin,
+          data: {
+            source: "geoduels-extension",
+            version: 1,
+            extensionVersion: "0.1.2",
+            type: "extension_ready",
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByText("outdated")).toBeInTheDocument();
   });
 });

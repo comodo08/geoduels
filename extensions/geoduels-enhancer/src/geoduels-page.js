@@ -1,7 +1,8 @@
 (() => {
   "use strict";
+  const EXTENSION_VERSION = "0.1.3";
   const ready = () => {
-    window.postMessage({ source: "geoduels-extension", version: 1, type: "extension_ready" }, location.origin);
+    window.postMessage({ source: "geoduels-extension", version: 1, extensionVersion: EXTENSION_VERSION, type: "extension_ready" }, location.origin);
   };
   addEventListener("message", (event) => {
     if (

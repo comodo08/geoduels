@@ -350,6 +350,14 @@ export function MapRouteSurface({
                 }),
             })
           }
+          onUpdateMap={async (itemId, input) => {
+            const item = await mapManagement.updateMap.mutateAsync({ mapId: itemId, input });
+            setMapActionNotice({
+              title: "Map Updated",
+              message: `${item.displayName} was updated.`,
+            });
+            return item;
+          }}
           onLocationFile={(itemId, file) => mapManagement.replaceLocations.mutate({ mapId: itemId, file })}
           onSetMapOfficial={(itemId, official) => mapManagement.setOfficial.mutate({ mapId: itemId, official })}
           onSetMapRole={(itemId, role) => mapManagement.setRole.mutate({ mapId: itemId, role })}

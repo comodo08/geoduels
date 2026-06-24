@@ -13,10 +13,12 @@ import {
   setMapFavorite,
   setMapOfficial,
   replaceMapLocations,
+  updateMap,
   validateMapFile,
   type GameplayMapRole,
   type MapComment,
   type MapDetails,
+  type MapUpdateInput,
   type MapSort,
   type MapScope,
 } from "./maps-client";
@@ -178,6 +180,14 @@ export function useMapManagement(config: RuntimeConfig, accessToken: string | un
     publishMap: useMutation({
       mutationFn: (mapId: string) => publishMap(config, accessToken || "", mapId),
       onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["maps"] }),
+    }),
+    updateMap: useMutation({
+      mutationFn: ({ mapId, input }: { mapId: string; input: MapUpdateInput }) =>
+        updateMap(config, accessToken || "", mapId, input),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: ["maps"] });
+        void queryClient.invalidateQueries({ queryKey: ["map-details"] });
+      },
     }),
     setOfficial: useMutation({
       mutationFn: ({ mapId, official }: { mapId: string; official: boolean }) =>

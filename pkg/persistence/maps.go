@@ -18,6 +18,7 @@ const (
 	minMapLocations         = 5
 	plannedRoundCount       = 20
 	mapTrendingWindowDays   = 7
+	communityMapListPredicate = "m.owner_user_id is not null and m.visibility='public' and m.status='ready'"
 )
 
 type MapCatalog interface {
@@ -67,7 +68,7 @@ func (s *pgStore) ListMaps(userID string, opts contracts.MapListOptions) ([]cont
 	case "official":
 		query += ` and (m.owner_user_id is null or m.official_at is not null)`
 	case "community":
-		query += ` and m.owner_user_id is not null and m.published_at is not null and m.status='ready'`
+		query += ` and ` + communityMapListPredicate
 	case "favorites":
 		query += ` and exists(select 1 from map_favorites mf where mf.map_id=m.id and mf.user_id=nullif($1,'')::uuid)`
 	case "mine":
@@ -130,7 +131,7 @@ func (s *pgStore) GetMap(userID, mapID string) (contracts.MapDetails, bool, erro
 		left join users u on u.id = m.owner_user_id
 		left join player_map_bests pb on pb.map_id=m.id and pb.user_id=nullif($2,'')::uuid and pb.ruleset=0
 		where (m.id::text=$1 or m.map_key=$1 or exists(select 1 from map_aliases a where a.map_id=m.id and a.alias=$1)) and m.archived_at is null
-		  and (m.owner_user_id is null or m.official_at is not null or m.owner_user_id = nullif($2,'')::uuid or m.published_at is not null or m.visibility = 'unlisted')
+		  and `+mapVisibleToUserSQL("m", 2, true)+`
 	`, strings.TrimSpace(mapID), strings.TrimSpace(userID))
 	item, err := scanCustomMap(row)
 	if errors.Is(err, pgx.ErrNoRows) {

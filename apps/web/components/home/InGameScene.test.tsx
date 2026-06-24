@@ -170,6 +170,7 @@ describe('InGameScene', () => {
         data: {
           source: 'geoduels-extension',
           version: 1,
+          extensionVersion: '0.1.3',
           type: 'ready',
           capabilities: { heading: true, roadLabels: true },
         },
@@ -182,6 +183,7 @@ describe('InGameScene', () => {
         data: {
           source: 'geoduels-extension',
           version: 1,
+          extensionVersion: '0.1.3',
           type: 'pov',
           heading: 359,
         },
@@ -204,6 +206,7 @@ describe('InGameScene', () => {
         data: {
           source: 'geoduels-extension',
           version: 1,
+          extensionVersion: '0.1.3',
           type: 'pov',
           heading: 1,
         },
@@ -237,6 +240,7 @@ describe('InGameScene', () => {
           data: {
             source: 'geoduels-extension',
             version: 1,
+            extensionVersion: '0.1.3',
             type: 'pov',
             heading,
           },
@@ -268,6 +272,7 @@ describe('InGameScene', () => {
         data: {
           source: 'geoduels-extension',
           version: 1,
+          extensionVersion: '0.1.3',
           type: 'ready',
           capabilities: { heading: true, roadLabels: true },
         },
@@ -280,6 +285,7 @@ describe('InGameScene', () => {
         data: {
           source: 'geoduels-extension',
           version: 1,
+          extensionVersion: '0.1.3',
           type: 'configured',
           ruleset: 'no_move',
           streetNames: 'hidden',
@@ -291,6 +297,49 @@ describe('InGameScene', () => {
       expect(
         screen.queryByText('Preparing official extension…'),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps extension-required Street View covered for outdated extension releases', async () => {
+    render(
+      <InGameScene
+        {...createProps({ ruleset: 'no_move', streetNames: 'hidden' })}
+      />,
+    );
+    const streetViewFrame = screen.getByTitle('Street View') as HTMLIFrameElement;
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          extensionVersion: '0.1.2',
+          type: 'ready',
+          capabilities: { heading: true, roadLabels: true },
+        },
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.google.com',
+        source: streetViewFrame.contentWindow,
+        data: {
+          source: 'geoduels-extension',
+          version: 1,
+          extensionVersion: '0.1.2',
+          type: 'configured',
+          ruleset: 'no_move',
+          streetNames: 'hidden',
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Update the official extension to keep playing this mode.'),
+      ).toBeInTheDocument();
     });
   });
 

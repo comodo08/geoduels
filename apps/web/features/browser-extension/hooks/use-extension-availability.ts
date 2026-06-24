@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import { isExtensionVersionSupported } from "../lib/geoduels-extension-protocol";
 
 const PING_INTERVAL_MS = 2_000;
 const EXPIRY_MS = 5_000;
 const INITIAL_DISCOVERY_MS = 750;
 
+export type ExtensionAvailabilityStatus = {
+  state: "checking" | "ready" | "missing" | "outdated";
+  version: string | null;
+};
+
 export function useExtensionAvailability() {
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<ExtensionAvailabilityStatus>({
+    state: "checking",
+    version: null,
+  });
   const lastSeenRef = useRef(0);
 
   useEffect(() => {
@@ -18,7 +27,7 @@ export function useExtensionAvailability() {
         lastSeenRef.current > 0 &&
         Date.now() - lastSeenRef.current > EXPIRY_MS
       ) {
-        setAvailable(false);
+        setStatus({ state: "missing", version: null });
       }
     };
     const onMessage = (event: MessageEvent<unknown>) => {
@@ -36,8 +45,17 @@ export function useExtensionAvailability() {
         message.version === 1 &&
         message.type === "extension_ready"
       ) {
+        const extensionVersion =
+          typeof message.extensionVersion === "string"
+            ? message.extensionVersion
+            : null;
         lastSeenRef.current = Date.now();
-        setAvailable(true);
+        setStatus({
+          state: isExtensionVersionSupported(extensionVersion)
+            ? "ready"
+            : "outdated",
+          version: extensionVersion,
+        });
       }
     };
 
@@ -45,7 +63,7 @@ export function useExtensionAvailability() {
     ping();
     const timer = window.setInterval(ping, PING_INTERVAL_MS);
     const discoveryTimer = window.setTimeout(() => {
-      if (lastSeenRef.current === 0) setAvailable(false);
+      if (lastSeenRef.current === 0) setStatus({ state: "missing", version: null });
     }, INITIAL_DISCOVERY_MS);
     return () => {
       window.removeEventListener("message", onMessage);
@@ -54,5 +72,5 @@ export function useExtensionAvailability() {
     };
   }, []);
 
-  return available;
+  return status;
 }

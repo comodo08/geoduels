@@ -58,6 +58,8 @@ const (
 	ModeSingleplayer MatchMode = "singleplayer"
 	ModeTeamDuel     MatchMode = "team_duel"
 	ModeFreeForAll   MatchMode = "free_for_all"
+	MinPartyMembers  = 2
+	MaxPartyMembers  = 64
 )
 
 func IsPrivatePartyMode(mode MatchMode) bool {

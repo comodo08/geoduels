@@ -8,7 +8,9 @@ import {
 import {
   GEODUELS_APP_SOURCE,
   GEODUELS_EXTENSION_PROTOCOL_VERSION,
+  GEODUELS_EXTENSION_SOURCE,
   isGeoDuelsExtensionMessage,
+  isExtensionVersionSupported,
   isTrustedGoogleMapsOrigin,
   type GeoDuelsExtensionCapabilities,
   type GeoDuelsExtensionConfigMessage,
@@ -25,6 +27,7 @@ export function useGeoDuelsExtension(
   const [heading, setHeading] = useState(0);
   const headingRef = useRef(0);
   const [configured, setConfigured] = useState(false);
+  const [unsupportedVersion, setUnsupportedVersion] = useState<string | null>(null);
 
   const sendConfiguration = useCallback(() => {
     const target = streetViewFrameRef.current?.contentWindow;
@@ -42,6 +45,7 @@ export function useGeoDuelsExtension(
   useEffect(() => {
     setCapabilities(null);
     setConfigured(false);
+    setUnsupportedVersion(null);
   }, [streetViewSrc, ruleset, streetNames]);
 
   useEffect(() => {
@@ -49,11 +53,30 @@ export function useGeoDuelsExtension(
       if (
         event.source !== streetViewFrameRef.current?.contentWindow ||
         !isTrustedGoogleMapsOrigin(event.origin) ||
-        !isGeoDuelsExtensionMessage(event.data)
+        !event.data ||
+        typeof event.data !== "object"
       ) {
         return;
       }
+      const rawMessage = event.data as Record<string, unknown>;
+      if (
+        rawMessage.source === GEODUELS_EXTENSION_SOURCE &&
+        rawMessage.version === GEODUELS_EXTENSION_PROTOCOL_VERSION &&
+        typeof rawMessage.type === "string" &&
+        !isExtensionVersionSupported(rawMessage.extensionVersion)
+      ) {
+        setUnsupportedVersion(
+          typeof rawMessage.extensionVersion === "string"
+            ? rawMessage.extensionVersion
+            : null,
+        );
+        return;
+      }
+      if (!isGeoDuelsExtensionMessage(event.data)) {
+        return;
+      }
       const message = event.data;
+      setUnsupportedVersion(null);
 
       if (message.type === "ready") {
         setCapabilities(message.capabilities);
@@ -93,5 +116,6 @@ export function useGeoDuelsExtension(
     capabilities,
     heading,
     configured,
+    unsupportedVersion,
   };
 }

@@ -181,7 +181,7 @@ func (s *pgStore) JoinParty(partyID, userID string) (contracts.PartySnapshot, er
 	`, partyID, userID).Scan(&activeMembers); err != nil {
 		return contracts.PartySnapshot{}, err
 	}
-	if activeMembers >= 8 {
+	if activeMembers >= contracts.MaxPartyMembers {
 		return contracts.PartySnapshot{}, errors.New("party is full")
 	}
 	role := "member"

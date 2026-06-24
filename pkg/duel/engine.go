@@ -2,6 +2,7 @@ package duel
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -94,8 +95,8 @@ func (e *Engine) CreateMatchWithOptions(matchID string, playerIDs []string, prof
 			return nil, errors.New("duel requires exactly two players")
 		}
 	case contracts.ModeTeamDuel, contracts.ModeFreeForAll:
-		if len(playerIDs) < 2 || len(playerIDs) > 8 {
-			return nil, errors.New("party match requires 2 to 8 players")
+		if len(playerIDs) < contracts.MinPartyMembers || len(playerIDs) > contracts.MaxPartyMembers {
+			return nil, fmt.Errorf("party match requires %d to %d players", contracts.MinPartyMembers, contracts.MaxPartyMembers)
 		}
 	default:
 		return nil, errors.New("unsupported duel mode")

@@ -189,9 +189,9 @@ export default function LobbyScreen({
 }: Props) {
   const [openModal, setOpenModal] = useState<PartyModal>(null);
   const extensionStatus = useExtensionAvailability();
-  const extensionAvailable = extensionStatus === true;
+  const extensionAvailable = extensionStatus.state === "ready";
   const { duel, setDuel, singleplayer, setSingleplayer } =
-    usePlayPreferences(extensionStatus);
+    usePlayPreferences(extensionStatus.state === "checking" ? null : extensionAvailable);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
@@ -283,11 +283,11 @@ export default function LobbyScreen({
     }
     const queues: QueueVariant[] = [];
     for (const mode of duel.modes) {
-      if (duel.streetNames === "shown" || duel.streetNames === "any") {
-        queues.push(mode);
-      }
       if (duel.streetNames === "hidden" || duel.streetNames === "any") {
         queues.push(`${mode}_hidden` as QueueVariant);
+      }
+      if (duel.streetNames === "shown" || duel.streetNames === "any") {
+        queues.push(mode);
       }
     }
     setOpenModal(null);
@@ -450,6 +450,7 @@ export default function LobbyScreen({
         <PlayLaunchModal
           kind="duel"
           extensionAvailable={extensionAvailable}
+          extensionStatus={extensionStatus}
           modes={duel.modes}
           streetNames={duel.streetNames}
           disabled={duelDisabled}
@@ -467,6 +468,7 @@ export default function LobbyScreen({
         <PlayLaunchModal
           kind="singleplayer"
           extensionAvailable={extensionAvailable}
+          extensionStatus={extensionStatus}
           mode={singleplayer.mode}
           streetNames={singleplayer.streetNames}
           disabled={singleplayerDisabled}

@@ -274,7 +274,9 @@ export default function InGameScene({
           {!streetViewInteractive ? <div className="absolute inset-0 z-[1]" aria-hidden="true" /> : null}
           {!streetViewReady ? (
             <div className="absolute inset-0 z-[2] grid place-items-center bg-[#071018] text-sm font-bold text-white/75">
-              Preparing official extension…
+              {extension.unsupportedVersion
+                ? "Update the official extension to keep playing this mode."
+                : "Preparing official extension…"}
             </div>
           ) : null}
         </div>

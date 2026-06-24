@@ -16,7 +16,7 @@ function resetStoredQueueRulesets() {
   window.localStorage.removeItem('geoduels.play.singleplayer');
 }
 
-function reportExtensionAvailable() {
+function reportExtensionAvailable(extensionVersion = '0.1.3') {
   window.dispatchEvent(
     new MessageEvent('message', {
       source: window,
@@ -24,6 +24,7 @@ function reportExtensionAvailable() {
       data: {
         source: 'geoduels-extension',
         version: 1,
+        extensionVersion,
         type: 'extension_ready',
       },
     }),
@@ -196,6 +197,18 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('link', { name: /Firefox setup/i })).toBeInTheDocument();
   });
 
+  it('requires users with an outdated extension to update before extension-only modes', () => {
+    renderLobbyScreen();
+    reportExtensionAvailable('0.1.2');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(screen.getByRole('button', { name: 'No Move' })).toBeDisabled();
+    expect(screen.getByText(/update the official GeoDuels browser extension/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Chrome update/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Firefox update/i })).toBeInTheDocument();
+  });
+
   it('migrates legacy duel mode selections and defaults street names to shown', () => {
     window.localStorage.setItem(
       'geoduels.queueRulesets',
@@ -233,12 +246,12 @@ describe('LobbyScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     expect(joinQueue).toHaveBeenCalledWith([
-      'moving',
       'moving_hidden',
-      'no_move',
+      'moving',
       'no_move_hidden',
-      'nmpz',
+      'no_move',
       'nmpz_hidden',
+      'nmpz',
     ]);
   });
 

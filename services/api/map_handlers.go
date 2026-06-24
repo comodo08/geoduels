@@ -449,6 +449,10 @@ func (a *api) listMapComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := catalog.ListMapComments(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
 		http.Error(w, "comments unavailable", http.StatusInternalServerError)
 		return

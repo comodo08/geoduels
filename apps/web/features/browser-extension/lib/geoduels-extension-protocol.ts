@@ -1,6 +1,7 @@
 export const GEODUELS_EXTENSION_PROTOCOL_VERSION = 1;
 export const GEODUELS_EXTENSION_SOURCE = "geoduels-extension";
 export const GEODUELS_APP_SOURCE = "geoduels-app";
+export const GEODUELS_MIN_EXTENSION_VERSION = "0.1.3";
 
 export type GeoDuelsExtensionCapabilities = {
   heading: boolean;
@@ -11,18 +12,21 @@ export type GeoDuelsExtensionMessage =
   | {
       source: typeof GEODUELS_EXTENSION_SOURCE;
       version: typeof GEODUELS_EXTENSION_PROTOCOL_VERSION;
+      extensionVersion: string;
       type: "ready";
       capabilities: GeoDuelsExtensionCapabilities;
     }
   | {
       source: typeof GEODUELS_EXTENSION_SOURCE;
       version: typeof GEODUELS_EXTENSION_PROTOCOL_VERSION;
+      extensionVersion: string;
       type: "pov";
       heading: number;
     }
   | {
       source: typeof GEODUELS_EXTENSION_SOURCE;
       version: typeof GEODUELS_EXTENSION_PROTOCOL_VERSION;
+      extensionVersion: string;
       type: "configured";
       ruleset: "moving" | "no_move" | "nmpz";
       streetNames: "shown" | "hidden";
@@ -43,7 +47,8 @@ export function isGeoDuelsExtensionMessage(
   const message = value as Partial<GeoDuelsExtensionMessage>;
   if (
     message.source !== GEODUELS_EXTENSION_SOURCE ||
-    message.version !== GEODUELS_EXTENSION_PROTOCOL_VERSION
+    message.version !== GEODUELS_EXTENSION_PROTOCOL_VERSION ||
+    !isExtensionVersionSupported(message.extensionVersion)
   ) {
     return false;
   }
@@ -62,6 +67,24 @@ export function isGeoDuelsExtensionMessage(
       message.ruleset === "no_move" ||
       message.ruleset === "nmpz") &&
     (message.streetNames === "shown" || message.streetNames === "hidden")
+  );
+}
+
+export function compareExtensionVersions(a: string, b: string) {
+  const left = a.split(".").map((part) => Number.parseInt(part, 10));
+  const right = b.split(".").map((part) => Number.parseInt(part, 10));
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const diff = (left[index] || 0) - (right[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+export function isExtensionVersionSupported(version: unknown) {
+  return (
+    typeof version === "string" &&
+    /^\d+\.\d+\.\d+$/.test(version) &&
+    compareExtensionVersions(version, GEODUELS_MIN_EXTENSION_VERSION) >= 0
   );
 }
 

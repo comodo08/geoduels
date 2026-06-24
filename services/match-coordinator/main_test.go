@@ -807,7 +807,7 @@ func queueWSURL(serverURL string) string {
 
 func TestParseQueueVariantsSupportsSixQueuesAndLegacyRulesets(t *testing.T) {
 	got := parseQueueVariants(
-		"moving,no_move,nmpz,moving_hidden,no_move_hidden,nmpz_hidden",
+		"moving_hidden,no_move_hidden,nmpz_hidden,moving,no_move,nmpz",
 		"",
 	)
 	if !reflect.DeepEqual(got, matchstore.AllQueueVariants) {

@@ -1,11 +1,11 @@
 import Link from "next/link";
-import type React from "react";
-import { ArrowLeft, ChartNoAxesColumnIncreasing, Check, Heart, Loader2, Map as MapIcon, Play, Search, Star, Trash2, Trophy, Upload, X } from "lucide-react";
+import React, { useState } from "react";
+import { ArrowLeft, ChartNoAxesColumnIncreasing, Check, Heart, Loader2, Map as MapIcon, Pencil, Play, Search, Star, Trophy, Upload, X } from "lucide-react";
 import PlayerProfileLink from "../../../../components/ui/PlayerProfileLink";
 import { Tooltip } from "../../../../components/ui/Tooltip";
 import { cn } from "../../../../lib/cn";
 import { toPublicEntityId } from "../../../../lib/entity-id";
-import type { CustomMap, GameplayMapRole, MapDetails, MapScope, MapSort } from "../../../maps/lib/maps-client";
+import type { CustomMap, GameplayMapRole, MapDetails, MapScope, MapSort, MapUpdateInput } from "../../../maps/lib/maps-client";
 import {
   LobbyActionButton,
   LobbyInput,
@@ -16,6 +16,7 @@ import {
 } from "../lobby-primitives";
 import { MapAdminOperations } from "./MapAdminOperations";
 import { MapComments } from "./MapComments";
+import { MapEditMetadataModal } from "./MapEditMetadataModal";
 
 export type MapScopeLabel = { scope: MapScope; label: string };
 type MapActionNotice = { title: string; message: string };
@@ -383,6 +384,7 @@ export function MapDetailsPanel({
   onPostComment,
   onPostReply,
   onPublishMap,
+  onUpdateMap,
   onLocationFile,
   onSetMapOfficial,
   onSetMapRole,
@@ -426,6 +428,7 @@ export function MapDetailsPanel({
   onPostComment: () => void;
   onPostReply: (commentId: string) => void;
   onPublishMap: (mapId: string) => void;
+  onUpdateMap: (mapId: string, input: MapUpdateInput) => Promise<CustomMap>;
   onLocationFile: (mapId: string, file: File) => void;
   onSetMapOfficial: (mapId: string, official: boolean) => void;
   onSetMapRole: (mapId: string, role: GameplayMapRole) => void;
@@ -450,6 +453,8 @@ export function MapDetailsPanel({
   userEmail: string;
   userId: string;
 }) {
+  const [editMetadataOpen, setEditMetadataOpen] = useState(false);
+
   if (selectedMapLoading || !selectedMapDetails) {
     return (
       <LobbyPanel className="p-4 sm:p-6">
@@ -573,6 +578,9 @@ export function MapDetailsPanel({
                   Publish
                 </button>
               ) : null}
+              <button type="button" onClick={() => setEditMetadataOpen(true)} className="min-h-[42px] rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
+                <Pencil className="mr-1.5 inline-block align-[-2px]" size={14} /> Edit
+              </button>
               <label className="inline-flex min-h-[42px] cursor-pointer items-center rounded-[14px] border border-white/10 bg-white/[0.06] px-4 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-white/[0.1]">
                 <Upload className="mr-1.5" size={14} /> New Version
                 <input type="file" accept=".json,application/json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onLocationFile(map.id, file); event.currentTarget.value = ""; }} />
@@ -590,6 +598,14 @@ export function MapDetailsPanel({
             onDeleteMap={onDeleteMap}
             onSetOfficial={onSetMapOfficial}
             onSetRole={onSetMapRole}
+          />
+        ) : null}
+
+        {editMetadataOpen ? (
+          <MapEditMetadataModal
+            map={map}
+            onClose={() => setEditMetadataOpen(false)}
+            onSave={onUpdateMap}
           />
         ) : null}
 
