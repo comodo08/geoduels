@@ -597,16 +597,7 @@ func (s *pgStore) getParty(whereClause, value string) (contracts.PartySnapshot, 
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	var snap contracts.PartySnapshot
-	row := s.pool.QueryRow(ctx, `
-		select l.id, l.invite_code, l.owner_user_id, l.state, l.mode, l.map_scope,
-		       coalesce(l.active_match_id::text, l.started_match_id::text, ''),
-		       coalesce(l.last_match_id::text, ''),
-		       coalesce(l.started_match_id::text, ''),
-		       l.created_at, l.expires_at, l.config_json::text, coalesce(l.map_id, ''),
-		       coalesce(mp.display_name, ''), coalesce(mp.location_count, 0)
-		from parties l
-		left join maps mp on mp.id = l.map_id
-		where `+whereClause, value)
+	row := s.pool.QueryRow(ctx, partyReadQuery(whereClause), value)
 	var configJSON, mapID string
 	if err := row.Scan(&snap.ID, &snap.InviteCode, &snap.OwnerUserID, &snap.State, &snap.Mode, &snap.MapScope, &snap.ActiveMatchID, &snap.LastMatchID, &snap.StartedMatchID, &snap.CreatedAt, &snap.ExpiresAt, &configJSON, &mapID, &snap.MapName, &snap.MapLocationCount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -629,6 +620,19 @@ func (s *pgStore) getParty(whereClause, value string) (contracts.PartySnapshot, 
 	}
 	snap.Members = members
 	return snap, true, nil
+}
+
+func partyReadQuery(whereClause string) string {
+	return `
+		select l.id, l.invite_code, l.owner_user_id, l.state, l.mode, l.map_scope,
+		       coalesce(l.active_match_id::text, l.started_match_id::text, ''),
+		       coalesce(l.last_match_id::text, ''),
+		       coalesce(l.started_match_id::text, ''),
+		       l.created_at, l.expires_at, l.config_json::text, coalesce(l.map_id::text, ''),
+		       coalesce(mp.display_name, ''), coalesce(mp.location_count, 0)
+		from parties l
+		left join maps mp on mp.id = l.map_id
+		where ` + whereClause
 }
 
 func (s *pgStore) listPartyMembers(ctx context.Context, partyID string) ([]contracts.PartyMember, error) {
