@@ -38,8 +38,7 @@ export const getServerSideProps: GetServerSideProps<ChangelogPostPageProps> = as
 export default function ChangelogPostPage({ post }: ChangelogPostPageProps) {
   const siteURL = getSiteURL();
   const canonicalURL = `${siteURL}/changelog/${post.slug}`;
-  const description =
-    post.summary || `Read the ${post.title} update notes for GeoDuels.`;
+  const description = `Read the ${post.title} update notes for GeoDuels.`;
 
   return (
     <>
@@ -63,9 +62,6 @@ export default function ChangelogPostPage({ post }: ChangelogPostPageProps) {
             <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-5xl">
               {post.title}
             </h1>
-            {post.summary ? (
-              <MarkdownContent markdown={post.summary} compact className="mt-5 text-lg" />
-            ) : null}
           </header>
           <MarkdownContent markdown={post.markdown} className="mt-8" />
         </article>

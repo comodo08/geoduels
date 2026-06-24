@@ -524,7 +524,7 @@ export function MapDetailsPanel({
             ) : (
               <>
                 <LobbyMutedBox className="flex min-h-[46px] items-center gap-2 px-3 py-0 text-sm font-extrabold">
-                  <Trophy className="text-[#ffd166]" size={17} aria-hidden="true" />
+                  <Trophy size={17} aria-hidden="true" />
                   <span>
                     <span className="sr-only">Personal best: </span>
                     {map.personalBest ? map.personalBest.score.toLocaleString() : "No PB yet"}

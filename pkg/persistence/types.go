@@ -217,7 +217,6 @@ type ChangelogPost struct {
 	ID        int64     `json:"id"`
 	Slug      string    `json:"slug"`
 	Title     string    `json:"title"`
-	Summary   string    `json:"summary"`
 	Markdown  string    `json:"markdown"`
 	Published bool      `json:"published"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -227,7 +226,6 @@ type ChangelogPost struct {
 type ChangelogPostInput struct {
 	Slug      string `json:"slug"`
 	Title     string `json:"title"`
-	Summary   string `json:"summary"`
 	Markdown  string `json:"markdown"`
 	Published bool   `json:"published"`
 }

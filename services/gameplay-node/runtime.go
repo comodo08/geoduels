@@ -134,7 +134,7 @@ type singleplayerRuntime struct {
 func (r singleplayerRuntime) Mode() contracts.MatchMode { return contracts.ModeSingleplayer }
 
 func (r singleplayerRuntime) CreateMatch(matchID string, playerIDs []string, profiles map[string]contracts.PlayerProfile, unranked bool, seasonID string, config contracts.MatchConfig, teams map[string]string) error {
-	_, err := r.engine.CreateMatch(matchID, playerIDs, profiles)
+	_, err := r.engine.CreateMatchWithConfig(matchID, playerIDs, profiles, config)
 	return err
 }
 

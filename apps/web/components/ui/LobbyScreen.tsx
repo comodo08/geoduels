@@ -278,6 +278,9 @@ export default function LobbyScreen({
   };
 
   const startDuelQueue = () => {
+    if (!extensionAvailable && (duel.streetNames !== "shown" || duel.modes.includes("no_move"))) {
+      return;
+    }
     const queues: QueueVariant[] = [];
     for (const mode of duel.modes) {
       if (duel.streetNames === "shown" || duel.streetNames === "any") {
@@ -292,6 +295,9 @@ export default function LobbyScreen({
   };
 
   const startSingleplayerFromModal = () => {
+    if (!extensionAvailable && (singleplayer.streetNames !== "shown" || singleplayer.mode === "no_move")) {
+      return;
+    }
     setOpenModal(null);
     void startSingleplayer({
       ruleset: singleplayer.mode,

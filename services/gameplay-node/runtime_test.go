@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"geoduels/pkg/contracts"
+	"geoduels/pkg/singleplayer"
 )
 
 func TestRoundPlanRegistryReturnsPinnedRounds(t *testing.T) {
@@ -21,5 +22,41 @@ func TestRoundPlanRegistryReturnsPinnedRounds(t *testing.T) {
 	}
 	if _, err := registry.Get("match", 2); err == nil {
 		t.Fatal("expected exhausted plan error")
+	}
+}
+
+func TestSingleplayerRuntimePreservesMatchConfig(t *testing.T) {
+	runtime := singleplayerRuntime{
+		engine: singleplayer.New(func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
+			return contracts.LocationPoint{Lat: 1, Lng: 2, Country: "US"}, nil
+		}),
+	}
+	err := runtime.CreateMatch(
+		"solo-config",
+		[]string{"u1"},
+		map[string]contracts.PlayerProfile{
+			"u1": {UserID: "u1", DisplayName: "Solo"},
+		},
+		false,
+		"",
+		contracts.MatchConfig{
+			Ruleset:     contracts.RulesetNoMove,
+			StreetNames: contracts.StreetNamesHidden,
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create match: %v", err)
+	}
+
+	snap, err := runtime.GetSnapshot("solo-config")
+	if err != nil {
+		t.Fatalf("get snapshot: %v", err)
+	}
+	if snap.Config.Ruleset != contracts.RulesetNoMove {
+		t.Fatalf("ruleset = %q, want %q", snap.Config.Ruleset, contracts.RulesetNoMove)
+	}
+	if snap.Config.StreetNames != contracts.StreetNamesHidden {
+		t.Fatalf("street names = %q, want %q", snap.Config.StreetNames, contracts.StreetNamesHidden)
 	}
 }

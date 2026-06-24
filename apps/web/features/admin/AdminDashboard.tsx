@@ -12,7 +12,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { toPublicEntityId } from "../../lib/entity-id";
 import { AdminDetailRow as DetailRow, AdminMetric as Metric, AdminPanel as Panel } from "./components/admin-primitives";
 import { ModerationMatchReviewList } from "./components/ModerationMatchReviewList";
-import { formatAdminDate, fromLocalDateTime, localDateTime, slugify } from "./lib/admin-format";
+import { formatAdminDate, fromLocalDateTime, localDateTime, sanitizeSlugInput, slugify } from "./lib/admin-format";
 import {
   requestAdminAddIPSignupBan,
   requestAdminBanPlayer,
@@ -55,6 +55,14 @@ import { getRuntimeConfig } from "../../lib/runtime-config";
 const SimpleMDE = dynamic(() => import("react-simplemde-editor"), {
   ssr: false,
 });
+
+const changelogMarkdownOptions = {
+  autofocus: false,
+  spellChecker: false,
+  status: false,
+  minHeight: "460px",
+  previewClass: ["editor-preview", "markdown-content"],
+};
 
 export default function AdminPage() {
   const config = getRuntimeConfig();
@@ -792,7 +800,6 @@ function OperationsRoute(props: {
   const [changelogDraft, setChangelogDraft] = useState<ChangelogPostInput>({
     slug: "",
     title: "",
-    summary: "",
     markdown: "",
     published: true,
   });
@@ -865,7 +872,6 @@ function OperationsRoute(props: {
     setChangelogDraft({
       slug: latest.slug,
       title: latest.title,
-      summary: latest.summary,
       markdown: latest.markdown,
       published: latest.published,
     });
@@ -876,7 +882,6 @@ function OperationsRoute(props: {
     setChangelogDraft({
       slug: post.slug,
       title: post.title,
-      summary: post.summary,
       markdown: post.markdown,
       published: post.published,
     });
@@ -887,7 +892,6 @@ function OperationsRoute(props: {
     setChangelogDraft({
       slug: "",
       title: "",
-      summary: "",
       markdown: "",
       published: true,
     });
@@ -939,7 +943,6 @@ function OperationsRoute(props: {
       setChangelogDraft({
         slug: post.slug,
         title: post.title,
-        summary: post.summary,
         markdown: post.markdown,
         published: post.published,
       });
@@ -1176,33 +1179,19 @@ function OperationsRoute(props: {
                     onChange={(event) =>
                       setChangelogDraft((draft) => ({
                         ...draft,
-                        slug: slugify(event.target.value),
+                        slug: sanitizeSlugInput(event.target.value),
                       }))
                     }
                     placeholder="url-slug"
                   />
                 </div>
-                <Textarea
-                  className="min-h-24 w-full"
-                  value={changelogDraft.summary}
-                  onChange={(event) =>
-                    setChangelogDraft((draft) => ({ ...draft, summary: event.target.value }))
-                  }
-                  placeholder="Short homepage/list summary"
-                />
                 <div className="admin-markdown-editor overflow-hidden rounded-lg border border-slate-800">
                   <SimpleMDE
                     value={changelogDraft.markdown}
                     onChange={(value) =>
                       setChangelogDraft((draft) => ({ ...draft, markdown: value || "" }))
                     }
-                    options={{
-                      autofocus: false,
-                      spellChecker: false,
-                      status: false,
-                      minHeight: "460px",
-                      previewClass: ["editor-preview", "markdown-content"],
-                    }}
+                    options={changelogMarkdownOptions}
                   />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">

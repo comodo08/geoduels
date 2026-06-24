@@ -917,7 +917,6 @@ func (a *api) adminGetChangelog(w http.ResponseWriter, r *http.Request) {
 
 func normalizeChangelogPostInput(req persistence.ChangelogPostInput) (persistence.ChangelogPostInput, error) {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Summary = strings.TrimSpace(req.Summary)
 	req.Markdown = strings.TrimSpace(req.Markdown)
 	req.Slug = slugifyChangelogPost(req.Slug)
 	if req.Slug == "" {
@@ -934,9 +933,6 @@ func normalizeChangelogPostInput(req persistence.ChangelogPostInput) (persistenc
 	}
 	if len(req.Title) > 160 {
 		return persistence.ChangelogPostInput{}, errors.New("title is too long")
-	}
-	if len(req.Summary) > 400 {
-		return persistence.ChangelogPostInput{}, errors.New("summary is too long")
 	}
 	return req, nil
 }

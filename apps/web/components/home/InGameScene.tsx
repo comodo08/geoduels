@@ -66,6 +66,30 @@ export type InGameSceneProps = {
   selfUserId: string;
 };
 
+function buildExtensionStreetViewSrc(
+  streetViewSrc: string,
+  ruleset: InGameSceneProps["ruleset"],
+  streetNames: InGameSceneProps["streetNames"],
+) {
+  if (!streetViewSrc) return streetViewSrc;
+  try {
+    const url = new URL(streetViewSrc);
+    const hashParams = new URLSearchParams(url.hash.slice(1));
+    hashParams.set(
+      "geoduels",
+      JSON.stringify({
+        version: 1,
+        ruleset,
+        streetNames,
+      }),
+    );
+    url.hash = hashParams.toString();
+    return url.toString();
+  } catch {
+    return streetViewSrc;
+  }
+}
+
 export default function InGameScene({
   uiPhase,
   streetViewSrc,
@@ -121,9 +145,13 @@ export default function InGameScene({
   const [streetViewResetCount, setStreetViewResetCount] = useState(0);
   const sceneRef = useRef<HTMLElement | null>(null);
   const streetViewFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const streetViewFrameSrc = useMemo(
+    () => buildExtensionStreetViewSrc(streetViewSrc, ruleset, streetNames),
+    [streetNames, streetViewSrc, ruleset],
+  );
   const extension = useGeoDuelsExtension(
     streetViewFrameRef,
-    streetViewSrc,
+    streetViewFrameSrc,
     ruleset,
     streetNames,
   );
@@ -233,10 +261,10 @@ export default function InGameScene({
       {(uiPhase === 'live_round' || uiPhase === 'prematch_countdown') && (
         <div className="absolute inset-0 overflow-hidden">
           <iframe
-            key={`${streetViewSrc}-${streetViewResetCount}`}
+            key={`${streetViewFrameSrc}-${streetViewResetCount}`}
             ref={streetViewFrameRef}
             title="Street View"
-            src={streetViewSrc}
+            src={streetViewFrameSrc}
             tabIndex={disableStreetViewTabbing ? -1 : undefined}
             onFocus={disableStreetViewTabbing ? releaseStreetViewFocus : undefined}
             className={`absolute left-0 top-[-75px] h-[calc(100%+75px)] w-full border-0 ${streetViewInteractive ? '' : 'pointer-events-none'}`}

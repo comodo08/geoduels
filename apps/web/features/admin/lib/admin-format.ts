@@ -22,6 +22,14 @@ export function slugify(value: string) {
     .slice(0, 120);
 }
 
+export function sanitizeSlugInput(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 120);
+}
+
 export function formatAdminDate(value?: string) {
   if (!value) return "Never";
   const date = new Date(value);

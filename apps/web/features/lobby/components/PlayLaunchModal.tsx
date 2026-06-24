@@ -61,7 +61,7 @@ function ExtensionInstallCallout() {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center">
       <p className="text-xs font-semibold leading-5 text-white/70">
-        Extension required for No Move and hidden street names.
+        Unlock more options by installing the official GeoDuels browser extension.
       </p>
       <div className="mt-2 flex flex-wrap justify-center gap-2">
         <a
@@ -102,6 +102,9 @@ function DisabledStreetNamesToggle() {
 export function PlayLaunchModal(props: Props) {
   const selectedModes =
     props.kind === "duel" ? props.modes : [props.mode];
+  const hasLockedSelection =
+    !props.extensionAvailable &&
+    (selectedModes.includes("no_move") || props.streetNames !== "shown");
   const streetOptions: Array<{
     value: DuelStreetNamesChoice;
     label: string;
@@ -231,6 +234,7 @@ export function PlayLaunchModal(props: Props) {
           onClick={props.onStart}
           disabled={
             props.disabled ||
+            hasLockedSelection ||
             (props.kind === "duel" && props.modes.length === 0)
           }
         >

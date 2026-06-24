@@ -110,6 +110,26 @@ describe('InGameScene', () => {
     expect(streetViewFrame).not.toHaveAttribute('tabindex');
   });
 
+  it('embeds extension rules in the Street View iframe hash', () => {
+    render(
+      <InGameScene
+        {...createProps({ ruleset: 'no_move', streetNames: 'hidden' })}
+      />,
+    );
+
+    const streetViewFrame = screen.getByTitle('Street View') as HTMLIFrameElement;
+    const url = new URL(streetViewFrame.src);
+    const config = JSON.parse(
+      new URLSearchParams(url.hash.slice(1)).get('geoduels') || '{}',
+    );
+
+    expect(config).toEqual({
+      version: 1,
+      ruleset: 'no_move',
+      streetNames: 'hidden',
+    });
+  });
+
   it('keeps NMPZ Street View iframes out of keyboard tab navigation', () => {
     render(<InGameScene {...createProps({ streetViewInteractive: false })} />);
 

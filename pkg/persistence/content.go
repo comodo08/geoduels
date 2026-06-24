@@ -16,14 +16,10 @@ func (s *pgStore) GetLobbyChangelog(defaultContent LobbyChangelogContent) (Lobby
 	posts, err := s.ListChangelogPosts(false)
 	if err == nil && len(posts) > 0 {
 		post := posts[0]
-		preview := strings.TrimSpace(post.Summary)
-		if preview == "" {
-			preview = post.Markdown
-		}
 		return LobbyChangelogContent{
 			Eyebrow:   "Latest News",
 			Title:     post.Title,
-			Markdown:  preview,
+			Markdown:  post.Markdown,
 			Slug:      post.Slug,
 			UpdatedAt: post.UpdatedAt,
 		}, nil
@@ -77,7 +73,7 @@ func (s *pgStore) ListChangelogPosts(includeUnpublished bool) ([]ChangelogPost, 
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	query := `
-		select id, slug, title, summary, markdown, published, created_at, updated_at
+		select id, slug, title, markdown, published, created_at, updated_at
 		from changelog_posts
 		where ($1::boolean or published = true)
 		order by updated_at desc, id desc
@@ -94,7 +90,6 @@ func (s *pgStore) ListChangelogPosts(includeUnpublished bool) ([]ChangelogPost, 
 			&post.ID,
 			&post.Slug,
 			&post.Title,
-			&post.Summary,
 			&post.Markdown,
 			&post.Published,
 			&post.CreatedAt,
@@ -112,14 +107,13 @@ func (s *pgStore) GetChangelogPostBySlug(slug string, publishedOnly bool) (Chang
 	defer cancel()
 	var post ChangelogPost
 	err := s.pool.QueryRow(ctx, `
-		select id, slug, title, summary, markdown, published, created_at, updated_at
+		select id, slug, title, markdown, published, created_at, updated_at
 		from changelog_posts
 		where slug = $1 and ($2::boolean = false or published = true)
 	`, slug, publishedOnly).Scan(
 		&post.ID,
 		&post.Slug,
 		&post.Title,
-		&post.Summary,
 		&post.Markdown,
 		&post.Published,
 		&post.CreatedAt,
@@ -139,14 +133,13 @@ func (s *pgStore) CreateChangelogPost(input ChangelogPostInput) (ChangelogPost, 
 	defer cancel()
 	var post ChangelogPost
 	err := s.pool.QueryRow(ctx, `
-		insert into changelog_posts(slug, title, summary, markdown, published, updated_at)
-		values($1, $2, $3, $4, $5, now())
-		returning id, slug, title, summary, markdown, published, created_at, updated_at
-	`, input.Slug, input.Title, input.Summary, input.Markdown, input.Published).Scan(
+		insert into changelog_posts(slug, title, markdown, published, updated_at)
+		values($1, $2, $3, $4, now())
+		returning id, slug, title, markdown, published, created_at, updated_at
+	`, input.Slug, input.Title, input.Markdown, input.Published).Scan(
 		&post.ID,
 		&post.Slug,
 		&post.Title,
-		&post.Summary,
 		&post.Markdown,
 		&post.Published,
 		&post.CreatedAt,
@@ -163,17 +156,15 @@ func (s *pgStore) UpdateChangelogPost(id int64, input ChangelogPostInput) (Chang
 		update changelog_posts
 		set slug = $2,
 			title = $3,
-			summary = $4,
-			markdown = $5,
-			published = $6,
+			markdown = $4,
+			published = $5,
 			updated_at = now()
 		where id = $1
-		returning id, slug, title, summary, markdown, published, created_at, updated_at
-	`, id, input.Slug, input.Title, input.Summary, input.Markdown, input.Published).Scan(
+		returning id, slug, title, markdown, published, created_at, updated_at
+	`, id, input.Slug, input.Title, input.Markdown, input.Published).Scan(
 		&post.ID,
 		&post.Slug,
 		&post.Title,
-		&post.Summary,
 		&post.Markdown,
 		&post.Published,
 		&post.CreatedAt,

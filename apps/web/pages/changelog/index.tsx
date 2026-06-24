@@ -70,9 +70,9 @@ export default function ChangelogIndexPage({ posts }: ChangelogIndexProps) {
                     {post.title}
                   </Link>
                 </h2>
-                {post.summary ? (
-                  <MarkdownContent markdown={post.summary} compact className="mt-3" />
-                ) : null}
+                <div className="mt-3 max-h-32 overflow-hidden [mask-image:linear-gradient(180deg,black_62%,transparent_100%)] [-webkit-mask-image:linear-gradient(180deg,black_62%,transparent_100%)]">
+                  <MarkdownContent markdown={post.markdown || "No changelog content yet."} compact />
+                </div>
               </Surface>
             ))}
             {posts.length === 0 ? (
