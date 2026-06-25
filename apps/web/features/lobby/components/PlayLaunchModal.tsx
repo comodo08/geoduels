@@ -75,13 +75,13 @@ function ExtensionInstallCallout({
       </p>
       <div className="mt-2 flex flex-wrap justify-center gap-2">
         <a
-          href="chrome://extensions"
+          href="https://chromewebstore.google.com/detail/geoduels-enhancer/ecdjkhpicnccgbkdimbbjbnppnkeelmd"
           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-black text-white transition-colors hover:bg-white/15"
         >
           {outdated ? "Chrome update" : "Chrome setup"}
         </a>
         <a
-          href="about:debugging#/runtime/this-firefox"
+          href="https://addons.mozilla.org/en-US/firefox/addon/geoduels-enhancer/"
           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-black text-white transition-colors hover:bg-white/15"
         >
           {outdated ? "Firefox update" : "Firefox setup"}
