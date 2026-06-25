@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,6 +101,11 @@ func (e *Engine) CreateMatchWithOptions(matchID string, playerIDs []string, prof
 		}
 	default:
 		return nil, errors.New("unsupported duel mode")
+	}
+	for _, id := range playerIDs {
+		if strings.TrimSpace(id) == "" {
+			return nil, errors.New("player id required")
+		}
 	}
 	if e.roundProvider == nil {
 		return nil, errors.New("round provider required")

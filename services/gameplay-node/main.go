@@ -198,6 +198,12 @@ func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid match", http.StatusBadRequest)
 		return
 	}
+	for _, playerID := range found.Players {
+		if strings.TrimSpace(playerID) == "" {
+			http.Error(w, "invalid match: blank player id", http.StatusBadRequest)
+			return
+		}
+	}
 	if len(found.PlannedRounds) == 0 || found.ResolvedMap.MapID == "" {
 		http.Error(w, "match has no resolved round plan", http.StatusBadRequest)
 		return

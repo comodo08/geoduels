@@ -56,6 +56,15 @@ func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 		return snap, nil
 	}
 
+	// Guarantee the users rows referenced by match_players (and the ranked
+	// bookkeeping tables) exist before we write anything that points at them.
+	// A player can reach finalize without a users row: GetProfile never inserts
+	// one, and the guest-cleanup job can hard-delete a guest mid-match. Without
+	// this, recordMatchHistory's match_players insert fails the user_id foreign
+	// key and the match retries finalize forever.
+	if err := ensureMatchUsersTx(ctx, tx, snap); err != nil {
+		return snap, err
+	}
 	if err := recordMatchHistory(
 		ctx,
 		tx,
@@ -106,6 +115,13 @@ func finalizeDuelResultTx(ctx context.Context, tx pgx.Tx, snap *contracts.MatchS
 		winner = p2.UserID
 	}
 
+	if strings.TrimSpace(p1.UserID) == "" || strings.TrimSpace(p2.UserID) == "" {
+		// Corrupt snapshot (a player joined without a user id). We cannot
+		// compute a valid ranked result, so skip ranking and let the caller
+		// finish recording the match instead of looping on finalize.
+		return nil
+	}
+
 	seasonID := strings.TrimSpace(snap.SeasonID)
 	if seasonID == "" {
 		var err error
@@ -113,51 +129,6 @@ func finalizeDuelResultTx(ctx context.Context, tx pgx.Tx, snap *contracts.MatchS
 		if err != nil {
 			return err
 		}
-	}
-
-	ensure := func(p contracts.PlayerState) error {
-		if p.UserID == "" {
-			return errors.New("player user id missing")
-		}
-		name := p.DisplayName
-		if name == "" {
-			name = p.UserID
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into users (id, email, display_name, avatar_url, account_type)
-			values ($1, $2, $3, null, 'guest')
-			on conflict (id) do nothing
-		`, p.UserID, nil, name); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into ranks (user_id, mode, mmr, season_id)
-			values ($1, $2, $4, $3)
-			on conflict (user_id, mode, season_id) do nothing
-			`, p.UserID, modeDuel, seasonID, initialMMR); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into user_stats (user_id, games_played, wins)
-			values ($1, 0, 0)
-			on conflict (user_id) do nothing
-		`, p.UserID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into ranked_stats (user_id, mode, season_id, games_played, wins)
-			values ($1, $2, $3, 0, 0)
-			on conflict (user_id, mode, season_id) do nothing
-		`, p.UserID, modeDuel, seasonID); err != nil {
-			return err
-		}
-		return nil
-	}
-	if err := ensure(p1); err != nil {
-		return err
-	}
-	if err := ensure(p2); err != nil {
-		return err
 	}
 
 	var (
@@ -446,6 +417,64 @@ func matchBelongsToPartyTx(ctx context.Context, tx pgx.Tx, matchID string) (bool
 	return exists, nil
 }
 
+// ensureMatchUsersTx upserts the users row (and the season-scoped ranked
+// bookkeeping rows) for every player in the snapshot so that subsequent inserts
+// into user-referencing tables satisfy their foreign keys. It is idempotent and
+// safe to call for any mode. Blank user ids are skipped rather than inserted —
+// they would fail the uuid cast and never belong in a match snapshot.
+func ensureMatchUsersTx(ctx context.Context, tx pgx.Tx, snap contracts.MatchSnapshot) error {
+	if len(snap.Players) == 0 {
+		return nil
+	}
+	seasonID := strings.TrimSpace(snap.SeasonID)
+	if seasonID == "" {
+		var err error
+		seasonID, err = activeSeasonIDTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+	}
+	for _, p := range snap.Players {
+		userID := strings.TrimSpace(p.UserID)
+		if userID == "" {
+			continue
+		}
+		name := p.DisplayName
+		if name == "" {
+			name = userID
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into users (id, email, display_name, avatar_url, account_type)
+			values ($1, null, $2, null, 'guest')
+			on conflict (id) do nothing
+		`, userID, name); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into ranks (user_id, mode, mmr, season_id)
+			values ($1, $2, $4, $3)
+			on conflict (user_id, mode, season_id) do nothing
+		`, userID, modeDuel, seasonID, initialMMR); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into user_stats (user_id, games_played, wins)
+			values ($1, 0, 0)
+			on conflict (user_id) do nothing
+		`, userID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into ranked_stats (user_id, mode, season_id, games_played, wins)
+			values ($1, $2, $3, 0, 0)
+			on conflict (user_id, mode, season_id) do nothing
+		`, userID, modeDuel, seasonID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func recordMatchHistory(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -553,6 +582,11 @@ func recordMatchHistory(
 		return err
 	}
 	for userID, player := range snap.Players {
+		if strings.TrimSpace(userID) == "" {
+			// A blank user id never has a users row and would fail the uuid
+			// cast; skip it so the rest of the match still records.
+			continue
+		}
 		displayName := player.DisplayName
 		if displayName == "" {
 			displayName = userID
@@ -599,6 +633,9 @@ func recordMatchHistory(
 			continue
 		}
 		for userID, result := range round.Players {
+			if strings.TrimSpace(userID) == "" {
+				continue
+			}
 			if snap.Mode == contracts.ModeDuel && !snap.Unranked && !privatePartyMatch && result.GuessMS > 0 {
 				occurredAt := endedAt
 				if result.GuessUnixMS > 0 {

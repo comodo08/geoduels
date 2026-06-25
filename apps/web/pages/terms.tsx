@@ -40,11 +40,12 @@ const sections = [
     ],
   },
   {
-    title: "6. Fair Play and Ranked Integrity",
+    title: "6. Fair Play and Competitive Integrity",
     body: [
-      "Ranked integrity is central to GeoDuels. You may not cheat, automate, manipulate, or gain an unfair advantage in any match, party, queue, leaderboard, or ranking system.",
-      "Prohibited conduct includes bots, scripts, macros, overlays, location hint tools, external databases used during a match, unauthorized browser extensions, automated guessing, account sharing, boosting, smurf abuse, coordinated win-trading, intentionally throwing matches, MMR manipulation, and exploiting bugs or system behavior. The official GeoDuels browser extension is authorized only for the gameplay features presented by GeoDuels.",
-      "You may not tamper with clients, network traffic, tokens, matchmaking, game state APIs, maps, location data, or any infrastructure used by GeoDuels.",
+      "Competitive integrity is central to GeoDuels. You may not obtain or attempt to obtain an unfair advantage over other players in any context where your conduct affects other players' experience, ratings, standings, or outcomes. This rule applies regardless of the method used — including software, hardware, information sources, coordination with other users, or exploitation of bugs, design quirks, or system behavior.",
+      "This rule does not apply to a friendly match — a match, lobby, or party in which every participant has knowingly and mutually agreed to the rules of play, and which remains confined to those participants. For example, two friends in a private lobby who agree in advance that one of them may use a location-revealing tool while playing against the other are not gaining an unfair advantage, because the disadvantaged participant consented. Friendly matches may not feed into ranked systems, public leaderboards, or any other setting that affects players outside the agreed participants.",
+      "Conduct that typically violates the rule above includes — without limitation — bots, scripts, macros, overlays, location hint tools, external databases used during a match, unauthorized browser extensions, automated guessing, account sharing, boosting, smurf abuse, coordinated win-trading, intentionally throwing matches, MMR manipulation, and exploiting bugs or system behavior. The official GeoDuels browser extension is authorized only for the gameplay features presented by GeoDuels.",
+      "Separately, you may not tamper with clients, network traffic, tokens, matchmaking, game state APIs, maps, location data, or any infrastructure used by GeoDuels. This rule protects the service itself and applies regardless of consent, because it is not about competitive fairness between specific players.",
     ],
   },
   {
@@ -127,7 +128,7 @@ export default function TermsPage() {
   return (
     <LegalDocumentPage
       title="Terms of Service"
-      updatedAt="May 10, 2026"
+      updatedAt="June 25, 2026"
       description="These Terms explain the rules for using GeoDuels and help protect the game, players, and ranked integrity."
       sections={sections}
     />
