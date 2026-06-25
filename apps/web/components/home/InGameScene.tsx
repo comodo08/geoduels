@@ -273,10 +273,26 @@ export default function InGameScene({
           />
           {!streetViewInteractive ? <div className="absolute inset-0 z-[1]" aria-hidden="true" /> : null}
           {!streetViewReady ? (
-            <div className="absolute inset-0 z-[2] grid place-items-center bg-[#071018] text-sm font-bold text-white/75">
-              {extension.unsupportedVersion
-                ? "Update the official extension to keep playing this mode."
-                : "Preparing official extension…"}
+            <div className="absolute inset-0 z-[2] grid place-items-center bg-[#071018] px-6 text-center text-sm font-bold text-white/75">
+              {extension.unsupportedVersion ? (
+                "Update the official extension to keep playing this mode."
+              ) : extension.timedOut ? (
+                <div className="flex flex-col items-center gap-3">
+                  <span>Couldn&apos;t reach the official extension.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      extension.retry();
+                      setStreetViewResetCount((count) => count + 1);
+                    }}
+                    className="rounded-full bg-white/10 px-4 py-2 text-white transition hover:bg-white/20"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                "Preparing official extension…"
+              )}
             </div>
           ) : null}
         </div>

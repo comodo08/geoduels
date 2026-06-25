@@ -28,6 +28,7 @@ export function useGeoDuelsExtension(
   const headingRef = useRef(0);
   const [configured, setConfigured] = useState(false);
   const [unsupportedVersion, setUnsupportedVersion] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
 
   const sendConfiguration = useCallback(() => {
     const target = streetViewFrameRef.current?.contentWindow;
@@ -42,11 +43,16 @@ export function useGeoDuelsExtension(
     target.postMessage(message, "https://www.google.com");
   }, [ruleset, streetNames, streetViewFrameRef]);
 
-  useEffect(() => {
+  const retry = useCallback(() => {
     setCapabilities(null);
     setConfigured(false);
     setUnsupportedVersion(null);
-  }, [streetViewSrc, ruleset, streetNames]);
+    setTimedOut(false);
+  }, []);
+
+  useEffect(() => {
+    retry();
+  }, [streetViewSrc, ruleset, streetNames, retry]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
@@ -107,9 +113,29 @@ export function useGeoDuelsExtension(
     return () => window.removeEventListener("message", onMessage);
   }, [ruleset, sendConfiguration, streetNames, streetViewFrameRef]);
 
+  // Actively drive the handshake instead of waiting for the extension's
+  // one-shot `ready` message. That message can arrive before this hook's
+  // listener is attached (slow hydration / slow devices), in which case it is
+  // lost and nothing ever retries — leaving the player stuck on "Preparing
+  // official extension…" forever. Re-sending `configure` on an interval makes a
+  // missed `ready` or a dropped `configure` self-correct, and a timeout
+  // surfaces an actionable error instead of hanging indefinitely.
   useEffect(() => {
-    if (capabilities) sendConfiguration();
-  }, [capabilities, sendConfiguration]);
+    if (configured || unsupportedVersion) return;
+    let attempts = 0;
+    const maxAttempts = 40; // ~12s at 300ms
+    sendConfiguration();
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        window.clearInterval(interval);
+        setTimedOut(true);
+        return;
+      }
+      sendConfiguration();
+    }, 300);
+    return () => window.clearInterval(interval);
+  }, [configured, unsupportedVersion, sendConfiguration]);
 
   return {
     available: capabilities !== null,
@@ -117,5 +143,7 @@ export function useGeoDuelsExtension(
     heading,
     configured,
     unsupportedVersion,
+    timedOut,
+    retry,
   };
 }
