@@ -11,7 +11,7 @@ const (
 	MinimumRatingRD  = 110.0
 	MaximumRatingRD  = 220.0
 	MinimumRankedMMR = 500
-	MaxDuelMMRDelta  = 80
+	MaxDuelMMRDelta  = 40
 
 	LowMMRForgivenessEndMMR = 1000
 
