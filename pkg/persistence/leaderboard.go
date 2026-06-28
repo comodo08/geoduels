@@ -53,7 +53,7 @@ func (s *pgStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]L
 		where r.mode = $1
 			and r.season_id = $2
 			and coalesce(u.account_type, 'registered') <> 'guest'
-			and u.banned_at is null
+			and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
 		order by r.mmr desc, r.updated_at asc, r.user_id asc
 		limit $3 offset $4
 	`, mode, seasonID, limit, offset)
@@ -123,7 +123,7 @@ func (s *pgStore) GetLeaderboardOverview(userID, mode, seasonID string, limit in
 				where r.mode = $1
 					and r.season_id = $2
 					and coalesce(u.account_type, 'registered') <> 'guest'
-					and u.banned_at is null
+					and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
 			)
 		select
 			coalesce(max(rank) filter (where user_id = nullif($3,'')::uuid), 0) as self_rank,

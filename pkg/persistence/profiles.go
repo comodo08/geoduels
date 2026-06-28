@@ -85,14 +85,14 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 			coalesce(u.avatar_url, ui.avatar_url, '') as avatar_url,
 			coalesce(r.mmr, $4) as mmr,
 			coalesce(r.rd, $5) as rating_rd,
-			coalesce(us.games_played, 0) as games_played,
-			coalesce(us.wins, 0) as wins,
+			greatest(coalesce(us.games_played, 0), coalesce(history_stats.games_played, 0)) as games_played,
+			greatest(coalesce(us.wins, 0), coalesce(history_stats.wins, 0)) as wins,
 			coalesce(rs.games_played, 0) as ranked_games_played,
 				coalesce(rs.wins, 0) as ranked_wins,
 				coalesce(u.account_type = 'guest', false) as is_guest,
 				coalesce(u.is_admin, false) as is_admin,
 				coalesce(u.is_moderator, false) as is_moderator,
-				coalesce(u.banned_at is not null, false) as is_banned,
+				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false) as is_banned,
 				coalesce(u.ban_reason, '') as ban_reason,
 				coalesce(u.selected_badge_code, 0) as selected_badge_code,
 				coalesce(u.selected_badge_season_id, '') as selected_badge_season_id
@@ -107,6 +107,14 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 		) ui on true
 		left join ranks r on r.user_id = seed.user_id and r.mode = $2 and r.season_id = $3
 		left join user_stats us on us.user_id = seed.user_id
+		left join lateral (
+			select
+				count(*)::int as games_played,
+				count(*) filter (where h.winner_user_id = seed.user_id)::int as wins
+			from match_players mp
+			join match_history h on h.match_id = mp.match_id
+			where mp.user_id = seed.user_id
+		) history_stats on true
 		left join ranked_stats rs on rs.user_id = seed.user_id and rs.mode = $2 and rs.season_id = $3
 	`, userID, modeDuel, seasonID, initialMMR, initialRatingRD)
 	var selectedBadgeCode int16
@@ -168,8 +176,8 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 			coalesce(u.avatar_url, ui.avatar_url, ''),
 			coalesce(r.mmr, $4),
 			coalesce(r.rd, $5),
-			coalesce(us.games_played, 0),
-			coalesce(us.wins, 0),
+			greatest(coalesce(us.games_played, 0), coalesce(history_stats.games_played, 0)),
+			greatest(coalesce(us.wins, 0), coalesce(history_stats.wins, 0)),
 			coalesce(rs.games_played, 0),
 			coalesce(rs.wins, 0),
 			coalesce(u.selected_badge_code, 0),
@@ -184,6 +192,14 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 		) ui on true
 		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $3
 		left join user_stats us on us.user_id = u.id
+		left join lateral (
+			select
+				count(*)::int as games_played,
+				count(*) filter (where h.winner_user_id = u.id)::int as wins
+			from match_players mp
+			join match_history h on h.match_id = mp.match_id
+			where mp.user_id = u.id
+		) history_stats on true
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
 		where u.account_type = 'registered'
 		  and u.nickname_claimed_at is not null

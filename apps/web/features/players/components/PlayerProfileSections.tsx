@@ -6,6 +6,7 @@ import { Input } from "../../../components/ui/input";
 import { MmrDisplay } from "../../../components/ui/MmrDisplay";
 import PlayerBadge from "../../../components/ui/PlayerBadge";
 import { Surface } from "../../../components/ui/Surface";
+import { Tabs } from "../../../components/ui/Tabs";
 import type { useProfileEditor } from "../hooks/use-profile-editor";
 import type { PlayerMatchSummary, PublicPlayerProfile } from "../types";
 import {
@@ -203,8 +204,12 @@ export function ProfileBadges({
 export function ProfileHistory({
   matches,
   query,
+  filter,
+  onFilterChange,
 }: {
   matches: PlayerMatchSummary[];
+  filter: "all" | "ranked";
+  onFilterChange: (filter: "all" | "ranked") => void;
   query: {
     isLoading: boolean;
     isError: boolean;
@@ -215,13 +220,24 @@ export function ProfileHistory({
 }) {
   return (
     <Surface variant="gameGlass" className="rounded-3xl p-4 sm:p-6">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="text-xl font-black text-white">Match history</h2>
-        {matches.length ? (
-          <span className="text-xs font-bold text-[#8caab0]">
-            {matches.length} shown
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs
+            value={filter}
+            onChange={onFilterChange}
+            items={[
+              { id: "all", label: "All" },
+              { id: "ranked", label: "Ranked" },
+            ]}
+            className="grid-cols-2"
+          />
+          {matches.length ? (
+            <span className="text-xs font-bold text-[#8caab0]">
+              {matches.length} shown
+            </span>
+          ) : null}
+        </div>
       </div>
       {query.isLoading ? <HistorySkeleton /> : null}
       {query.isError ? (
@@ -230,7 +246,11 @@ export function ProfileHistory({
         </p>
       ) : null}
       {!query.isLoading && !query.isError && !matches.length ? (
-        <p className="mt-4 text-sm text-[#8caab0]">No persisted matches yet.</p>
+        <p className="mt-4 text-sm text-[#8caab0]">
+          {filter === "ranked"
+            ? "No ranked matches yet."
+            : "No persisted matches yet."}
+        </p>
       ) : null}
       <div className="mt-4 space-y-2">
         {matches.map((match) => (

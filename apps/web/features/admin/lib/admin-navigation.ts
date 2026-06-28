@@ -1,53 +1,26 @@
 import type { NextRouter } from "next/router";
 import {
-  Archive,
   Ban,
   Bell,
-  Bug,
   ClipboardList,
   FileText,
   Gavel,
   History,
   KeyRound,
   MessageCircle,
-  PlayCircle,
   Search,
-  Shield,
   UserCog,
-  Users,
   Wrench,
 } from "lucide-react";
 
 export const moderationViews = new Set([
-  "active",
+  "queue",
   "mine",
-  "unclaimed",
-  "watching",
-  "auto-detection",
-  "escalated",
-  "archive",
+  "watchlist",
+  "closed",
 ]);
 
 export const adminNav = [
-  {
-    title: "Moderation",
-    items: [
-      { href: "/admin/moderation/active", label: "Active Cases", icon: ClipboardList },
-      { href: "/admin/moderation/mine", label: "Mine", icon: UserCog },
-      { href: "/admin/moderation/unclaimed", label: "Unclaimed", icon: PlayCircle },
-      { href: "/admin/moderation/watching", label: "Watching", icon: Search },
-      { href: "/admin/moderation/escalated", label: "Escalated", icon: Gavel },
-      { href: "/admin/moderation/auto-detection", label: "Auto Detection", icon: Shield },
-      { href: "/admin/moderation/archive", label: "Archive", icon: Archive },
-    ],
-  },
-  {
-    title: "Players",
-    items: [
-      { href: "/admin/players", label: "Player Search", icon: Users },
-      { href: "/admin/enforcement", label: "Enforcement", icon: Gavel },
-    ],
-  },
   {
     title: "Operations",
     items: [
@@ -63,9 +36,22 @@ export const adminNav = [
     title: "Access",
     items: [{ href: "/admin/access/roles", label: "Roles", icon: KeyRound }],
   },
+];
+
+export const moderatorNav = [
   {
-    title: "Debug",
-    items: [{ href: "/admin/debug/test-reports", label: "Test Reports", icon: Bug }],
+    title: "Review",
+    items: [
+      { href: "/moderator/queue", label: "Queue", icon: ClipboardList },
+      { href: "/moderator/reviews", label: "Mine", icon: UserCog },
+      { href: "/moderator/watchlist", label: "Watchlist", icon: Search },
+      { href: "/moderator/closed", label: "Closed", icon: History },
+      { href: "/moderator/subjects", label: "Subjects", icon: Search },
+    ],
+  },
+  {
+    title: "History",
+    items: [{ href: "/moderator/enforcement", label: "Enforcement", icon: Gavel }],
   },
 ];
 
@@ -74,5 +60,32 @@ export function pathFromRouter(router: NextRouter) {
   if (Array.isArray(rawPath) && rawPath.length > 0) return rawPath;
   const tab = router.query.tab;
   if (typeof tab === "string") return [tab];
-  return ["moderation", "active"];
+  return ["operations", "maintenance"];
+}
+
+export function moderatorPathFromRouter(router: NextRouter) {
+  const rawPath = router.query.path;
+  if (Array.isArray(rawPath) && rawPath.length > 0) return rawPath;
+  const tab = router.query.tab;
+  if (typeof tab === "string") return [tab];
+  return ["queue"];
+}
+
+export function isModerationReviewSection(section: string) {
+  return section === "queue" || section === "reviews" || section === "watchlist" || section === "closed";
+}
+
+export function moderationViewForRoute(section: string, leaf: string) {
+  if (section === "reviews") return "mine";
+  if (section === "watchlist") return "watchlist";
+  if (section === "closed") return "closed";
+  if (moderationViews.has(leaf)) return leaf;
+  return "queue";
+}
+
+export function moderationTitleForRoute(section: string, leaf: string) {
+  if (section === "reviews") return "My Reviews";
+  if (section === "watchlist") return "Watchlist";
+  if (section === "closed") return "Closed";
+  return "Review Queue";
 }

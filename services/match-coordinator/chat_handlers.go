@@ -15,6 +15,7 @@ import (
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/entityid"
 	"geoduels/pkg/observability"
+	"geoduels/pkg/persistence"
 )
 
 const (
@@ -92,6 +93,20 @@ func (q *matchCoordinator) chatWS(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(70 * time.Second))
+			restriction, restricted, err := q.persist.GetActiveChatRestriction(claims.Sub)
+			if err != nil {
+				observability.Log("warn", "chat restriction lookup failed", map[string]any{
+					"conversationId": scope.ConversationID,
+					"userId":         claims.Sub,
+					"error":          err.Error(),
+				})
+				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "chat unavailable"})
+				continue
+			}
+			if restricted {
+				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": chatRestrictionErrorMessage(restriction)})
+				continue
+			}
 			message, err := q.buildCoordinatorChatMessage(scope, claims.Sub, profile.DisplayName, cmd)
 			if err != nil {
 				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": err.Error()})
@@ -217,6 +232,21 @@ func (q *matchCoordinator) buildCoordinatorChatMessage(scope chatScope, userID, 
 		return contracts.ChatMessage{}, errors.New("unsupported chat command")
 	}
 	return message, nil
+}
+
+func chatRestrictionErrorMessage(restriction persistence.ChatRestriction) string {
+	switch restriction.ActionType {
+	case "temporary_ban", "permanent_ban":
+		if restriction.EndsAt.IsZero() {
+			return "your account is banned"
+		}
+		return "your account is banned until " + restriction.EndsAt.UTC().Format(time.RFC3339)
+	default:
+		if restriction.EndsAt.IsZero() {
+			return "chat access is restricted"
+		}
+		return "chat access is restricted until " + restriction.EndsAt.UTC().Format(time.RFC3339)
+	}
 }
 
 func sanitizeCoordinatorChatBody(body string) string {

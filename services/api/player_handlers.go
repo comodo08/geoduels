@@ -54,6 +54,8 @@ func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
 	}
 	var beforeEndedAt time.Time
 	var beforeMatchID string
+	rankedOnly := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("filter")), "ranked") ||
+		strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("ranked")), "true")
 	if rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor")); rawCursor != "" {
 		cursor, err := decodePlayerMatchesCursor(rawCursor)
 		if err != nil {
@@ -67,7 +69,7 @@ func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
 		}
 		beforeMatchID = a.resolveEntityID("match", cursor.MatchID)
 	}
-	page, err := a.store.ListPlayerMatchHistoryPage(profile.UserID, limit, beforeEndedAt, beforeMatchID)
+	page, err := a.store.ListPlayerMatchHistoryPage(profile.UserID, limit, beforeEndedAt, beforeMatchID, rankedOnly)
 	if err != nil {
 		http.Error(w, "match history unavailable", http.StatusInternalServerError)
 		return

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Shield } from "lucide-react";
+import { ClipboardList, Shield } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import AvatarBadge from "../../../components/ui/AvatarBadge";
@@ -66,6 +66,7 @@ type AppShellProps = {
   viewer?: AppShellViewer | null;
   signedOutAction?: ReactNode;
   isAdmin?: boolean;
+  isModerator?: boolean;
   maintenanceBanner?: ReactNode;
   contentClassName?: string;
 };
@@ -79,6 +80,7 @@ export function AppShell({
   viewer,
   signedOutAction,
   isAdmin = false,
+  isModerator = false,
   maintenanceBanner,
   contentClassName,
 }: AppShellProps) {
@@ -109,6 +111,7 @@ export function AppShell({
       <AppBackground ready={highQualityBackgroundReady} />
       <AppShellHeader
         isAdmin={isAdmin}
+        isModerator={isModerator}
         maintenanceBanner={maintenanceBanner}
         signedOutAction={signedOutAction}
         viewer={viewer}
@@ -165,11 +168,13 @@ function AppBackground({ ready }: { ready: boolean }) {
 
 function AppShellHeader({
   isAdmin,
+  isModerator,
   maintenanceBanner,
   signedOutAction,
   viewer,
 }: {
   isAdmin: boolean;
+  isModerator: boolean;
   maintenanceBanner?: ReactNode;
   signedOutAction?: ReactNode;
   viewer?: AppShellViewer | null;
@@ -197,6 +202,18 @@ function AppShellHeader({
                 className={circularIconButtonClassName()}
               >
                 <Shield size={17} aria-hidden="true" />
+              </Link>
+            </Tooltip>
+          ) : null}
+          {isAdmin || isModerator ? (
+            <Tooltip content="Moderator" side="bottom">
+              <Link
+                href="/moderator"
+                prefetch={false}
+                aria-label="Moderator"
+                className={circularIconButtonClassName()}
+              >
+                <ClipboardList size={17} aria-hidden="true" />
               </Link>
             </Tooltip>
           ) : null}

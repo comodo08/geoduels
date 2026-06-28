@@ -61,7 +61,24 @@ deploy the UUID-compatible application before reopening traffic.
 ## Post-Deploy Checks
 
 - `/health`, `/health/live`, and `/health/ready` for API and all deployed workers/services
+- risk-engine health, when enabled in the private production overlay: `/health/ready`
 - browser auth bootstrap and refresh
 - queue join, assignment, realtime websocket connection, and match completion
 - public match history and player profile routes
 - map browse/upload flow when map-related migrations changed
+
+## Private Risk Engine
+
+Live moderation detector thresholds and scoring are deployed as a private
+`geoduels-risk-engine` service. This public repository only owns the narrow
+client integration and persisted opaque moderation signals.
+
+Production overlays in `geoduels-prod` should provide:
+
+- `RISK_ENGINE_URL`, usually `http://risk-engine:8096`
+- `RISK_ENGINE_TOKEN`
+- `RISK_ENGINE_TIMEOUT`, default-compatible value `750ms`
+
+Keep the risk engine off the live gameplay path. The moderation worker calls it
+asynchronously after ranked match facts have been persisted; player reports and
+manual moderation continue to work when the risk engine is disabled or down.

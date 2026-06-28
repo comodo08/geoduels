@@ -80,32 +80,36 @@ type Identity struct {
 
 type AdminPlayerSummary = contracts.AdminPlayerSummary
 
-type ModerationCaseSummary = contracts.ModerationCaseSummary
-type ModerationReportSummary = contracts.ModerationReportSummary
-type ModerationCaseEvent = contracts.ModerationCaseEvent
-type ModerationActionSummary = contracts.ModerationActionSummary
-type ModerationEvidenceSummary = contracts.ModerationEvidenceSummary
-type ModerationCaseLogEntry = contracts.ModerationCaseLogEntry
+type ModerationSignalSummary = contracts.ModerationSignalSummary
+type ModerationIncidentSummary = contracts.ModerationIncidentSummary
+type ModerationReviewTaskSummary = contracts.ModerationReviewTaskSummary
+type ModerationVerdictSummary = contracts.ModerationVerdictSummary
+type ModerationAuditLogEntry = contracts.ModerationAuditLogEntry
+type ModerationReporterState = contracts.ModerationReporterState
 type ModerationMatchSummary = contracts.ModerationMatchSummary
 type ModerationMatchPlayerSummary = contracts.ModerationMatchPlayerSummary
-type ModerationCaseDetail = contracts.ModerationCaseDetail
-type ModerationReportCreated = contracts.ModerationReportCreated
-type ModerationCaseNotificationPayload = contracts.ModerationCaseNotificationPayload
+type ModerationIncidentDetail = contracts.ModerationIncidentDetail
+type ModerationSubjectProfile = contracts.ModerationSubjectProfile
+type ModerationSignalCreated = contracts.ModerationSignalCreated
+type ModerationVerdictInput = contracts.ModerationVerdictInput
+type ModerationIncidentNotificationPayload = contracts.ModerationIncidentNotificationPayload
 type EnforcementActionSummary = contracts.EnforcementActionSummary
 type UserRoleGrant = contracts.UserRoleGrant
 
 type MapImportSummary = contracts.MapImportSummary
 
 type MatchHistorySummary struct {
-	MatchID      string    `json:"matchId"`
-	Mode         string    `json:"mode"`
-	StartedAt    time.Time `json:"startedAt"`
-	EndedAt      time.Time `json:"endedAt"`
-	WinnerUserID string    `json:"winnerUserId,omitempty"`
-	Outcome      string    `json:"outcome"`
-	Ranked       bool      `json:"ranked"`
-	RatingDelta  int       `json:"ratingDelta,omitempty"`
-	TotalScore   int       `json:"totalScore,omitempty"`
+	MatchID             string    `json:"matchId"`
+	Mode                string    `json:"mode"`
+	StartedAt           time.Time `json:"startedAt"`
+	EndedAt             time.Time `json:"endedAt"`
+	WinnerUserID        string    `json:"winnerUserId,omitempty"`
+	Outcome             string    `json:"outcome"`
+	Ranked              bool      `json:"ranked"`
+	RatingDelta         int       `json:"ratingDelta,omitempty"`
+	TotalScore          int       `json:"totalScore,omitempty"`
+	OpponentUserID      string    `json:"opponentUserId,omitempty"`
+	OpponentDisplayName string    `json:"opponentDisplayName,omitempty"`
 }
 
 type MatchHistoryPage struct {
@@ -115,37 +119,12 @@ type MatchHistoryPage struct {
 	NextMatchID string
 }
 
-type CreateModerationReportParams struct {
+type CreatePlayerReportSignalParams struct {
 	MatchID        string
 	ReporterUserID string
 	ReportedUserID string
 	Category       string
 	Reason         string
-}
-
-type ModerationCaseActionParams struct {
-	CaseID      int64
-	ActorUserID string
-	ActionType  string
-	Reason      string
-	Status      string
-	AssignedTo  string
-	MuteUserID  string
-	MuteUntil   time.Time
-}
-
-type CreateDebugModerationReportsParams struct {
-	ReportedUserID string
-	Count          int
-	Category       string
-	Reason         string
-	CreatedBy      string
-}
-
-type DebugModerationReportsResult struct {
-	CaseID          int64    `json:"caseId"`
-	ReportsCreated  int      `json:"reportsCreated"`
-	ReporterUserIDs []string `json:"reporterUserIds"`
 }
 
 type NotificationOutboxItem struct {
@@ -155,17 +134,24 @@ type NotificationOutboxItem struct {
 	Attempts    int
 }
 
+type ChatRestriction struct {
+	ActionType string
+	ReasonCode string
+	ReasonNote string
+	EndsAt     time.Time
+}
+
 type EloRefundSummary struct {
 	RefundsIssued int `json:"refundsIssued"`
 	TotalRefunded int `json:"totalRefunded"`
 }
 
 type CheatingBanSummary struct {
-	UserID          string           `json:"userId"`
-	Reason          string           `json:"reason,omitempty"`
-	Refunds         EloRefundSummary `json:"refunds"`
-	IPSignupBanned  bool             `json:"ipSignupBanned"`
-	ArchivedCaseIDs []int64          `json:"archivedCaseIds,omitempty"`
+	UserID         string           `json:"userId"`
+	Reason         string           `json:"reason,omitempty"`
+	Refunds        EloRefundSummary `json:"refunds"`
+	IPSignupBanned bool             `json:"ipSignupBanned"`
+	IncidentIDs    []int64          `json:"incidentIds,omitempty"`
 }
 
 type AdminPlayerStats struct {

@@ -476,7 +476,7 @@ func (a *api) createMatchReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reportedUserID := strings.TrimSpace(req.ReportedUserID)
-	created, err := a.store.CreateModerationReport(persistence.CreateModerationReportParams{
+	created, err := a.store.CreatePlayerReportSignal(persistence.CreatePlayerReportSignalParams{
 		MatchID:        matchID,
 		ReporterUserID: claims.Sub,
 		ReportedUserID: reportedUserID,

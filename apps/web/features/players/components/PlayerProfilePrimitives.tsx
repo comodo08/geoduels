@@ -150,7 +150,11 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
       <div className="col-start-1 flex min-w-0 flex-wrap items-center gap-2 pl-12 sm:col-start-auto sm:pl-0">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-bold text-white">
           <Gamepad2 size={15} className="shrink-0 text-[#77f0be]" aria-hidden="true" />
-          <span className="truncate">{formatMode(match.mode)}</span>
+          <span className="truncate">
+            {match.opponentDisplayName
+              ? `vs ${match.opponentDisplayName}`
+              : formatMode(match.mode)}
+          </span>
         </span>
         {match.ranked ? (
           <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-[#a9bfd4]">

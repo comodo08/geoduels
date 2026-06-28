@@ -18,9 +18,11 @@ export async function requestPlayerMatches(
   nickname: string,
   limit = 20,
   cursor = "",
+  filter: "all" | "ranked" = "all",
 ): Promise<PlayerMatchesPage> {
   const query = new URLSearchParams({ limit: String(limit) });
   if (cursor) query.set("cursor", cursor);
+  if (filter === "ranked") query.set("filter", "ranked");
   const resp = await apiFetch(
     config,
     `/v1/players/${encodeURIComponent(nickname)}/matches?${query.toString()}`,

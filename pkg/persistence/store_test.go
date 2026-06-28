@@ -34,17 +34,17 @@ func TestRecordMatchHistoryCastsReplayExpirationParameters(t *testing.T) {
 	}
 }
 
-func TestModerationProjectionCastsUUIDBeforeAggregate(t *testing.T) {
-	body, err := os.ReadFile("moderation_scoring.go")
+func TestRiskEngineSignalsDoNotCreateLegacyCases(t *testing.T) {
+	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if strings.Contains(source, "max(reported_user_id)::text") {
-		t.Fatal("PostgreSQL cannot aggregate UUID values with max before casting")
+	if strings.Contains(source, "createAutoDetectionCase") {
+		t.Fatal("risk-engine ingestion must not create legacy moderation cases")
 	}
-	if !strings.Contains(source, "max(reported_user_id::text)") {
-		t.Fatal("moderation projection must cast UUID values before max")
+	if !strings.Contains(source, "upsertIncidentForSignal") {
+		t.Fatal("risk-engine ingestion must create or update v2 incidents")
 	}
 }
 

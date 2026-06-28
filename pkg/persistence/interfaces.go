@@ -57,19 +57,19 @@ type MatchRepository interface {
 	FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error)
 	GetFinalMatchSnapshot(matchID string) ([]byte, bool, error)
 	ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error)
-	ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (MatchHistoryPage, error)
+	ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (MatchHistoryPage, error)
 	PlayerParticipatedInMatch(userID, matchID string) (bool, error)
 }
 
 type ModerationRepository interface {
-	CreateModerationReport(params CreateModerationReportParams) (ModerationReportCreated, error)
-	CreateDebugModerationReports(params CreateDebugModerationReportsParams) (DebugModerationReportsResult, error)
-	RecomputeModerationProjections(limit int) (int, error)
-	ListModerationCases(status string, limit int) ([]ModerationCaseSummary, error)
-	GetModerationCase(caseID int64) (ModerationCaseDetail, error)
-	AddModerationCaseAction(params ModerationCaseActionParams) (ModerationCaseDetail, error)
-	ClaimModerationCase(caseID int64, actorUserID string) (ModerationCaseDetail, error)
-	ReleaseModerationCase(caseID int64, actorUserID string) (ModerationCaseDetail, error)
+	CreatePlayerReportSignal(params CreatePlayerReportSignalParams) (ModerationSignalCreated, error)
+	ListReviewTasks(view, actorUserID string, limit int) ([]ModerationReviewTaskSummary, error)
+	GetIncidentDetail(incidentID int64) (ModerationIncidentDetail, error)
+	ClaimReviewTask(taskID int64, actorUserID string) (ModerationIncidentDetail, error)
+	ReleaseReviewTask(taskID int64, actorUserID string) (ModerationIncidentDetail, error)
+	SubmitVerdict(incidentID int64, actorUserID string, input ModerationVerdictInput) (ModerationIncidentDetail, error)
+	ListSubjectModerationProfile(userID string) (ModerationSubjectProfile, error)
+	ListModerationSignals(limit int) ([]ModerationSignalSummary, error)
 	SetPlayerBan(userID, reason string, banned bool) error
 	BanPlayerForCheating(userID, reason, actorUserID string) (CheatingBanSummary, error)
 	ClearReporterMute(userID string) error
@@ -160,6 +160,7 @@ type StorageMaintenance interface {
 type ChatRepository interface {
 	RecordChatMessage(conversationID, scopeKind, scopeID string, message ChatMessage) error
 	ListChatMessages(conversationID string, limit int) ([]ChatMessage, error)
+	GetActiveChatRestriction(userID string) (ChatRestriction, bool, error)
 }
 
 type PartyRepository interface {

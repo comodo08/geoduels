@@ -510,7 +510,7 @@ func recordMatchHistory(
 	`, matchID).Scan(&privatePartyMatch); err != nil {
 		return err
 	}
-	ranked := !snap.Unranked && !privatePartyMatch
+	ranked := snap.Mode == contracts.ModeDuel && !snap.Unranked && !privatePartyMatch
 	sourceKind := "queue"
 	var sourcePartyID any
 	if privatePartyMatch {

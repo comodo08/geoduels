@@ -77,6 +77,7 @@ export async function requestAdminBanPlayer(
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to ban player"));
   }
+  return resp.json();
 }
 
 export async function requestAdminUnbanPlayer(
@@ -151,69 +152,6 @@ export async function requestAdminDemoteModerator(
   }
 }
 
-export async function requestAdminModerationCases(
-  config: RuntimeConfig,
-  accessToken: string,
-  status = "",
-) {
-  const qs = status ? `?view=${encodeURIComponent(status)}` : "";
-  const resp = await apiFetch(config, `/v1/admin/moderation/cases${qs}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load moderation cases"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminClaimModerationCase(
-  config: RuntimeConfig,
-  accessToken: string,
-  caseId: number,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/claim`,
-    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to claim moderation case"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminReleaseModerationCase(
-  config: RuntimeConfig,
-  accessToken: string,
-  caseId: number,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/release`,
-    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to release moderation case"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminModerationCase(
-  config: RuntimeConfig,
-  accessToken: string,
-  caseId: number,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load moderation case"));
-  }
-  return resp.json();
-}
-
 export async function requestAdminMatchChat(
   config: RuntimeConfig,
   accessToken: string,
@@ -226,50 +164,6 @@ export async function requestAdminMatchChat(
   );
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load match chat"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminModerationCaseAction(
-  config: RuntimeConfig,
-  accessToken: string,
-  caseId: number,
-  action: {
-    actionType: string;
-    reason?: string;
-    status?: string;
-    assignedTo?: string;
-    muteUserId?: string;
-    muteUntil?: string;
-  },
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/actions`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(action),
-    },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to update moderation case"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminEnforcementActions(
-  config: RuntimeConfig,
-  accessToken: string,
-) {
-  const resp = await apiFetch(config, `/v1/admin/enforcement/actions`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load enforcement actions"));
   }
   return resp.json();
 }
@@ -327,34 +221,6 @@ export async function requestAdminRevokeRole(
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to revoke role"));
   }
-}
-
-export async function requestAdminDebugTestReports(
-  config: RuntimeConfig,
-  accessToken: string,
-  payload: {
-    reportedUserId: string;
-    count: number;
-    category: string;
-    reason?: string;
-  },
-) {
-  const resp = await apiFetch(config, `/v1/admin/debug/test-reports`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to send test reports"));
-  }
-  return resp.json() as Promise<{
-    caseId: number;
-    reportsCreated: number;
-    reporterUserIds: string[];
-  }>;
 }
 
 export async function requestAdminIPSignupBans(

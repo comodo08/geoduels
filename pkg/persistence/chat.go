@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/entityid"
 )
@@ -83,4 +85,43 @@ func (s *pgStore) ListChatMessages(conversationID string, limit int) ([]ChatMess
 		messages = append(messages, message)
 	}
 	return messages, rows.Err()
+}
+
+func (s *pgStore) GetActiveChatRestriction(userID string) (ChatRestriction, bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return ChatRestriction{}, false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var restriction ChatRestriction
+	err := s.pool.QueryRow(ctx, `
+		select
+			action_type,
+			reason_code,
+			coalesce(reason_note, ''),
+			coalesce(ends_at, '0001-01-01 00:00:00+00'::timestamptz)
+		from enforcement_actions
+		where target_user_id = $1
+			and action_type in ('chat_mute', 'temporary_ban', 'permanent_ban')
+			and starts_at <= now()
+			and (ends_at is null or ends_at > now())
+			and revoked_at is null
+		order by
+			case action_type
+				when 'permanent_ban' then 0
+				when 'temporary_ban' then 1
+				else 2
+			end,
+			created_at desc,
+			id desc
+		limit 1
+	`, userID).Scan(&restriction.ActionType, &restriction.ReasonCode, &restriction.ReasonNote, &restriction.EndsAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ChatRestriction{}, false, nil
+	}
+	if err != nil {
+		return ChatRestriction{}, false, err
+	}
+	return restriction, true, nil
 }

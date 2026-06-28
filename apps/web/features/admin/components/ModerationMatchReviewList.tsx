@@ -28,7 +28,8 @@ export function ModerationMatchReviewList(props: {
   return (
     <div className="mt-3 space-y-1.5">
       {props.matches.map((match) => {
-        const winner = match.players.find((player) => player.userId === match.winnerUserId);
+        const players = Array.isArray(match.players) ? match.players : [];
+        const winner = players.find((player) => player.userId === match.winnerUserId);
         const outcome = match.winnerUserId
           ? `${winner?.displayName || match.winnerUserId} won`
           : match.mode === "singleplayer"
@@ -48,7 +49,7 @@ export function ModerationMatchReviewList(props: {
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-slate-400">
-                  {match.players.map((player) => `${player.displayName} ${player.totalScore} pts / ${player.finalHp} HP`).join(" · ") || "Result details unavailable"}
+                  {players.map((player) => `${player.displayName} ${player.totalScore} pts / ${player.finalHp} HP`).join(" · ") || "Result details unavailable"}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {match.mode || "unknown"} · {match.roundCount} rnd{match.roundCount === 1 ? "" : "s"} · {formatAdminDate(match.endedAt)}

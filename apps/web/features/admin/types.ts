@@ -27,55 +27,95 @@ export type AdminUserIdentity = {
   deletedAt?: string;
 };
 
-export type ModerationCase = {
+export type ModerationIncident = {
   id: number;
-  targetUserId: string;
-  targetDisplayName: string;
+  subjectUserId: string;
+  subjectName?: string;
   status: string;
-  queue?: string;
-  source?: string;
-  priority: string;
-  score: number;
-  riskScore?: number;
-  riskBreakdown?: Record<string, unknown>;
-  confidence?: number;
-  reportCount: number;
+  severity: string;
+  evidenceStrength: string;
+  reasonCode: string;
+  summary?: string;
+  signalCount: number;
   uniqueReporterCount: number;
-  categories: Record<string, number>;
+  latestSignalAt: string;
   assignedTo?: string;
-  latestActivityAt: string;
+  watchUntil?: string;
+  resolvedAt?: string;
+  resolutionNote?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type PlayerReport = {
+export type ModerationTask = {
   id: number;
-  matchId: string;
-  reporterUserId: string;
-  reporterName: string;
-  category: string;
-  reason?: string;
-  reporterWeight: number;
+  incidentId: number;
+  status: string;
+  queue: string;
+  priority: string;
+  assignedTo?: string;
+  claimedAt?: string;
+  claimExpiresAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  incident: ModerationIncident;
+};
+
+export type ModerationSignal = {
+  id: number;
+  subjectUserId: string;
+  subjectName?: string;
+  signalType: string;
+  source: string;
+  severity: string;
+  evidenceStrength: string;
+  detectorKey?: string;
+  detectorVersion?: string;
+  reasonCode: string;
+  score: number;
+  recommendedQueue: boolean;
+  reporterUserId?: string;
+  reporterName?: string;
+  matchId?: string;
+  payload?: Record<string, unknown>;
+  occurredAt: string;
   createdAt: string;
 };
 
-export type ModerationEvidence = {
+export type ModerationVerdict = {
   id: number;
-  evidenceType: string;
-  matchId?: string;
-  roundId?: string;
-  detectorVersion?: string;
-  ruleId?: string;
-  score: number;
-  weight: number;
-  payload?: Record<string, unknown>;
+  incidentId: number;
+  taskId?: number;
+  actorUserId?: string;
+  actorName?: string;
+  verdict: string;
+  reasonCode: string;
+  note?: string;
+  enforcementAction?: string;
+  createdAt: string;
 };
 
 export type ModerationTimelineItem = {
   id: number;
-  eventType: string;
+  incidentId?: number;
+  taskId?: number;
   actorUserId?: string;
+  eventType: string;
   reasonCode?: string;
   body?: string;
   createdAt: string;
+};
+
+export type ModerationReporterState = {
+  userId: string;
+  reportsSubmitted: number;
+  reportsUseful: number;
+  reportsDismissed: number;
+  reportsInconclusive: number;
+  reportsAbusive: number;
+  reportWeight: number;
+  mutedUntil?: string;
 };
 
 export type ModerationMatch = {
@@ -125,11 +165,41 @@ export type EnforcementAction = {
   targetName?: string;
   actorUserId?: string;
   actorName?: string;
-  sourceCaseId?: number;
+  sourceIncidentId?: number;
+  sourceVerdictId?: number;
   actionType: string;
   reasonCode?: string;
   reasonNote?: string;
   createdAt: string;
+};
+
+export type CheatingBanSummary = {
+  userId: string;
+  reason?: string;
+  refunds?: {
+    refundsIssued: number;
+    totalRefunded: number;
+  };
+  ipSignupBanned?: boolean;
+  incidentIds?: number[];
+};
+
+export type ModerationIncidentDetail = {
+  incident: ModerationIncident;
+  subjectPlayer?: Player;
+  tasks: ModerationTask[];
+  signals: ModerationSignal[];
+  matches: ModerationMatch[];
+  verdicts: ModerationVerdict[];
+  auditLog: ModerationTimelineItem[];
+  reporterState?: ModerationReporterState[];
+};
+
+export type ModerationSubjectProfile = {
+  player: Player;
+  incidents: ModerationIncident[];
+  signals: ModerationSignal[];
+  enforcement: EnforcementAction[];
 };
 
 export type UserRoleGrant = {

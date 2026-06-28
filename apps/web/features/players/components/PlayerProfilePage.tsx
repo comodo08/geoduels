@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Head from "next/head";
 import { useRouter } from "next/router";
+import { useState } from "react";
 import { AppShell } from "../../app-shell/components/AppShell";
 import { AppContentRail } from "../../app-shell/components/AppContentRail";
 import { Surface } from "../../../components/ui/Surface";
@@ -22,7 +23,12 @@ export function PlayerProfilePage({
   playerId: string;
   initialProfile?: PublicPlayerProfile;
 }) {
-  const { profileQuery, matchesQuery } = usePlayerProfile(playerId, initialProfile);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "ranked">("all");
+  const { profileQuery, matchesQuery } = usePlayerProfile(
+    playerId,
+    initialProfile,
+    historyFilter,
+  );
   const viewer = useOptionalViewer().data;
   const router = useRouter();
   const profile = profileQuery.data;
@@ -57,7 +63,7 @@ export function PlayerProfilePage({
 
   if (!playerId || profileQuery.isLoading) {
     return (
-      <AppShell activeNavRoute={null} viewer={shellViewer}>
+      <AppShell activeNavRoute={null} viewer={shellViewer} isAdmin={!!viewer?.isAdmin} isModerator={!!viewer?.isModerator}>
         <ProfileMain>
           <div className="h-[520px] animate-pulse rounded-3xl bg-white/[0.06]" />
         </ProfileMain>
@@ -66,7 +72,7 @@ export function PlayerProfilePage({
   }
   if (profileQuery.isError || !profile) {
     return (
-      <AppShell activeNavRoute={null} viewer={shellViewer}>
+      <AppShell activeNavRoute={null} viewer={shellViewer} isAdmin={!!viewer?.isAdmin} isModerator={!!viewer?.isModerator}>
         <Head>
           <title>Player not found | GeoDuels</title>
           <meta name="robots" content="noindex" />
@@ -88,6 +94,8 @@ export function PlayerProfilePage({
       <AppShell
         activeNavRoute={null}
         viewer={shellViewer}
+        isAdmin={!!viewer?.isAdmin}
+        isModerator={!!viewer?.isModerator}
       >
         <ProfileMetadata profile={profile} path={profilePath} />
         <ProfileMain>
@@ -99,7 +107,12 @@ export function PlayerProfilePage({
               onSettings={() => setSettings(true)}
             />
             <ProfileBadges profile={profile} editor={editor} owner={owner} />
-            <ProfileHistory matches={matches} query={matchesQuery} />
+            <ProfileHistory
+              matches={matches}
+              query={matchesQuery}
+              filter={historyFilter}
+              onFilterChange={setHistoryFilter}
+            />
           </ProfileContent>
         </ProfileMain>
       </AppShell>

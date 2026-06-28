@@ -63,11 +63,11 @@ func equalBytes(a, b []byte) bool {
 }
 
 func (s *pgStore) ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error) {
-	page, err := s.ListPlayerMatchHistoryPage(userID, limit, time.Time{}, "")
+	page, err := s.ListPlayerMatchHistoryPage(userID, limit, time.Time{}, "", false)
 	return page.Matches, err
 }
 
-func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (MatchHistoryPage, error) {
+func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (MatchHistoryPage, error) {
 	if userID == "" {
 		return MatchHistoryPage{}, errors.New("userID required")
 	}
@@ -89,14 +89,30 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 				when h.winner_user_id = p.user_id then 'win'
 				else 'loss'
 			end,
-			coalesce(h.ranked, false),
+			coalesce(h.ranked, false) and h.mode = 'duel',
 			coalesce(p.final_ranked_delta, 0),
-			coalesce(p.total_score, 0)
+			coalesce(p.total_score, 0),
+			coalesce(opponent.user_id, ''),
+			coalesce(opponent.display_name, '')
 		from match_players p
 		join match_history h on h.match_id = p.match_id
+		left join lateral (
+			select
+				op.user_id::text as user_id,
+				coalesce(nullif(op.display_name, ''), nullif(u.display_name, ''), op.user_id::text) as display_name
+			from match_players op
+			left join users u on u.id = op.user_id
+			where op.match_id = p.match_id
+			  and op.user_id <> p.user_id
+			order by op.total_score desc, op.user_id
+			limit 1
+		) opponent on true
 		where p.user_id = $1
 	`
 	args := []any{userID, limit + 1}
+	if rankedOnly {
+		query += ` and h.mode = 'duel' and coalesce(h.ranked, false)`
+	}
 	if !beforeEndedAt.IsZero() && beforeMatchID != "" {
 		query += ` and (p.ended_at, p.match_id) < ($3, $4::uuid)`
 		args = append(args, beforeEndedAt, beforeMatchID)
@@ -123,6 +139,8 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 			&item.Ranked,
 			&item.RatingDelta,
 			&item.TotalScore,
+			&item.OpponentUserID,
+			&item.OpponentDisplayName,
 		); err != nil {
 			return MatchHistoryPage{}, err
 		}

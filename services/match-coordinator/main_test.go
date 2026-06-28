@@ -284,7 +284,7 @@ func (s *recoverTestStore) ListPlayerMatchHistory(userID string, limit int) ([]p
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (persistence.MatchHistoryPage, error) {
+func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (persistence.MatchHistoryPage, error) {
 	panic("unexpected call")
 }
 
@@ -296,35 +296,35 @@ func (s *recoverTestStore) GetAdminPlayerDetail(userID string) (persistence.Admi
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) CreateModerationReport(params persistence.CreateModerationReportParams) (persistence.ModerationReportCreated, error) {
+func (s *recoverTestStore) CreatePlayerReportSignal(params persistence.CreatePlayerReportSignalParams) (persistence.ModerationSignalCreated, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) CreateDebugModerationReports(params persistence.CreateDebugModerationReportsParams) (persistence.DebugModerationReportsResult, error) {
+func (s *recoverTestStore) ListReviewTasks(view, actorUserID string, limit int) ([]persistence.ModerationReviewTaskSummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) RecomputeModerationProjections(limit int) (int, error) {
+func (s *recoverTestStore) GetIncidentDetail(incidentID int64) (persistence.ModerationIncidentDetail, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListModerationCases(status string, limit int) ([]persistence.ModerationCaseSummary, error) {
+func (s *recoverTestStore) ClaimReviewTask(taskID int64, actorUserID string) (persistence.ModerationIncidentDetail, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetModerationCase(caseID int64) (persistence.ModerationCaseDetail, error) {
+func (s *recoverTestStore) ReleaseReviewTask(taskID int64, actorUserID string) (persistence.ModerationIncidentDetail, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) AddModerationCaseAction(params persistence.ModerationCaseActionParams) (persistence.ModerationCaseDetail, error) {
+func (s *recoverTestStore) SubmitVerdict(incidentID int64, actorUserID string, input persistence.ModerationVerdictInput) (persistence.ModerationIncidentDetail, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ClaimModerationCase(caseID int64, actorUserID string) (persistence.ModerationCaseDetail, error) {
+func (s *recoverTestStore) ListSubjectModerationProfile(userID string) (persistence.ModerationSubjectProfile, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ReleaseModerationCase(caseID int64, actorUserID string) (persistence.ModerationCaseDetail, error) {
+func (s *recoverTestStore) ListModerationSignals(limit int) ([]persistence.ModerationSignalSummary, error) {
 	panic("unexpected call")
 }
 
@@ -413,6 +413,10 @@ func (s *recoverTestStore) RecordChatMessage(conversationID, scopeKind, scopeID 
 
 func (s *recoverTestStore) ListChatMessages(conversationID string, limit int) ([]persistence.ChatMessage, error) {
 	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetActiveChatRestriction(userID string) (persistence.ChatRestriction, bool, error) {
+	return persistence.ChatRestriction{}, false, nil
 }
 
 func (s *recoverTestStore) ExpireStaleRuntimeMatches(prefix string, olderThan time.Duration) error {

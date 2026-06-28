@@ -518,6 +518,7 @@ export default function LobbyScreen({
       <AppShell
         activeNavRoute={currentNavRoute}
         isAdmin={isAdmin}
+        isModerator={isModerator}
         maintenanceBanner={maintenanceBanner}
         navigationDisabled={isQueueing}
         navigationHidden={showPartyPanel}

@@ -25,6 +25,8 @@ export type PlayerMatchSummary = {
   ranked: boolean;
   ratingDelta?: number;
   totalScore?: number;
+  opponentUserId?: string;
+  opponentDisplayName?: string;
 };
 
 export type PlayerMatchesPage = {
@@ -36,6 +38,8 @@ export type OptionalViewer = {
   userId: string;
   accessToken: string;
   isGuest: boolean;
+  isAdmin?: boolean;
+  isModerator?: boolean;
   displayName: string;
   avatarUrl?: string;
   mmr?: number;

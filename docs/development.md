@@ -38,6 +38,10 @@ docker compose up -d discord-worker
 ```
 
 `discord-worker` requires the Discord bot, guild, channel, and role IDs in `.env`.
+`moderation-worker` can run without the private risk engine. To exercise private
+detector integration locally, run the sibling `../geoduels-risk-engine` service
+and set `RISK_ENGINE_URL=http://host.docker.internal:8096` plus
+`RISK_ENGINE_TOKEN` before starting Docker Compose.
 
 ## Start the web app
 

@@ -19,4 +19,19 @@ describe("player client", () => {
       undefined,
     );
   });
+
+  it("passes the ranked match filter", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      matches: [],
+      nextCursor: "",
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestPlayerMatches(createRuntimeConfig(), "Explorer", 20, "", "ranked");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/players/Explorer/matches?limit=20&filter=ranked",
+      undefined,
+    );
+  });
 });

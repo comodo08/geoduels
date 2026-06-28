@@ -25,7 +25,7 @@ func (s *pgStore) DeleteAccount(userID string) error {
 	var isBanned bool
 	var banReason string
 	if err := tx.QueryRow(ctx, `
-		select banned_at is not null, coalesce(ban_reason, '')
+		select coalesce(banned_at is not null and (ban_expires_at is null or ban_expires_at > now()), false), coalesce(ban_reason, '')
 		from users
 		where id = $1
 	`, userID).Scan(&isBanned, &banReason); err != nil {

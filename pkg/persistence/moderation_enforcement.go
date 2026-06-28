@@ -59,7 +59,8 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 	tag, err := tx.Exec(ctx, `
 		update users
 		set banned_at = coalesce(banned_at, now()),
-			ban_reason = $2
+			ban_reason = $2,
+			ban_expires_at = null
 		where id = $1
 	`, userID, reason)
 	if err != nil {
@@ -86,69 +87,75 @@ func (s *pgStore) BanPlayerForCheating(userID, reason, actorUserID string) (Chea
 	}
 	summary.Refunds = refunds
 
-	caseRows, err := tx.Query(ctx, `
-		update moderation_cases
+	incidentRows, err := tx.Query(ctx, `
+		update moderation_incidents
 		set status = 'actioned',
-			queue = 'archive',
 			resolved_at = coalesce(resolved_at, now()),
 			resolved_by = nullif($2, '')::uuid,
-			resolution = $3,
-			resolution_code = 'ban_refund',
 			resolution_note = $3,
-			updated_at = now(),
-			latest_activity_at = now()
-		where target_user_id = $1
-			and status in ('new', 'triaged', 'reviewing', 'watching')
+			updated_at = now()
+		where subject_user_id = $1
+			and status in ('open', 'watching')
 		returning id
 	`, userID, actorUserID, reason)
 	if err != nil {
 		return CheatingBanSummary{}, err
 	}
-	for caseRows.Next() {
-		var caseID int64
-		if err := caseRows.Scan(&caseID); err != nil {
-			caseRows.Close()
+	for incidentRows.Next() {
+		var incidentID int64
+		if err := incidentRows.Scan(&incidentID); err != nil {
+			incidentRows.Close()
 			return CheatingBanSummary{}, err
 		}
-		summary.ArchivedCaseIDs = append(summary.ArchivedCaseIDs, caseID)
+		summary.IncidentIDs = append(summary.IncidentIDs, incidentID)
 	}
-	if err := caseRows.Err(); err != nil {
-		caseRows.Close()
+	if err := incidentRows.Err(); err != nil {
+		incidentRows.Close()
 		return CheatingBanSummary{}, err
 	}
-	caseRows.Close()
-	for _, caseID := range summary.ArchivedCaseIDs {
-		if err := updateReporterReputationForCase(ctx, tx, caseID, "confirmed"); err != nil {
+	incidentRows.Close()
+	for _, incidentID := range summary.IncidentIDs {
+		var verdictID int64
+		if err := tx.QueryRow(ctx, `
+			insert into moderation_verdicts(
+				incident_id, actor_user_id, verdict, reason_code, note,
+				enforcement_action, metadata
+			)
+			values($1, nullif($2, '')::uuid, 'confirmed', 'cheating', nullif($3, ''), 'permanent_ban', $4::jsonb)
+			returning id
+		`, incidentID, actorUserID, reason, mustJSON(map[string]any{
+			"refundsIssued": summary.Refunds.RefundsIssued,
+			"totalRefunded": summary.Refunds.TotalRefunded,
+		})).Scan(&verdictID); err != nil {
 			return CheatingBanSummary{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into moderation_actions(case_id, actor_user_id, target_user_id, action_type, reason)
-			values($1, nullif($2, '')::uuid, $3, 'ban', nullif($4, ''))
-		`, caseID, actorUserID, userID, reason); err != nil {
+			update moderation_review_tasks
+			set status = 'done', completed_at = coalesce(completed_at, now()), updated_at = now()
+			where incident_id = $1
+				and status in ('open', 'claimed', 'blocked')
+		`, incidentID); err != nil {
+			return CheatingBanSummary{}, err
+		}
+		if err := updateReporterStateForVerdict(ctx, tx, incidentID, "confirmed"); err != nil {
 			return CheatingBanSummary{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			insert into moderation_case_events(case_id, actor_user_id, event_type, body)
-			values($1, nullif($2, '')::uuid, 'action_ban', nullif($3, ''))
-		`, caseID, actorUserID, reason); err != nil {
-			return CheatingBanSummary{}, err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into moderation_case_log(case_id, actor_user_id, event_type, reason_code, body)
-			values($1, nullif($2, '')::uuid, 'action_ban', 'ban_refund', nullif($3, ''))
-		`, caseID, actorUserID, reason); err != nil {
+			insert into moderation_audit_log(incident_id, actor_user_id, event_type, reason_code, body, metadata)
+			values($1, nullif($2, '')::uuid, 'verdict_submitted', 'cheating', nullif($3, ''), jsonb_build_object('verdictId', $4::bigint, 'enforcementAction', 'permanent_ban'))
+		`, incidentID, actorUserID, reason, verdictID); err != nil {
 			return CheatingBanSummary{}, err
 		}
 	}
 
-	var sourceCaseID any
-	if len(summary.ArchivedCaseIDs) == 1 {
-		sourceCaseID = summary.ArchivedCaseIDs[0]
+	var sourceIncidentID any
+	if len(summary.IncidentIDs) == 1 {
+		sourceIncidentID = summary.IncidentIDs[0]
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into enforcement_actions(target_user_id, actor_user_id, source_case_id, action_type, reason_code, reason_note, metadata)
-		values($1, nullif($2, '')::uuid, $3, 'ban', 'cheating', nullif($4, ''), jsonb_build_object('refundsIssued', $5::int, 'totalRefunded', $6::int, 'caseIds', $7::jsonb))
-	`, userID, actorUserID, sourceCaseID, reason, summary.Refunds.RefundsIssued, summary.Refunds.TotalRefunded, mustJSON(summary.ArchivedCaseIDs)); err != nil {
+		insert into enforcement_actions(target_user_id, actor_user_id, source_incident_id, action_type, reason_code, reason_note, metadata)
+		values($1, nullif($2, '')::uuid, $3, 'permanent_ban', 'cheating', nullif($4, ''), jsonb_build_object('refundsIssued', $5::int, 'totalRefunded', $6::int, 'incidentIds', $7::jsonb))
+	`, userID, actorUserID, sourceIncidentID, reason, summary.Refunds.RefundsIssued, summary.Refunds.TotalRefunded, mustJSON(summary.IncidentIDs)); err != nil {
 		return CheatingBanSummary{}, err
 	}
 
@@ -346,14 +353,19 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
+	return s.listEnforcementActions(ctx, "true", []any{limit})
+}
+
+func (s *pgStore) listEnforcementActions(ctx context.Context, where string, args []any) ([]EnforcementActionSummary, error) {
 	rows, err := s.pool.Query(ctx, `
 		select
 			e.id,
-			e.target_user_id,
+			e.target_user_id::text,
 			coalesce(nullif(target.display_name, ''), e.target_user_id::text),
 			coalesce(e.actor_user_id::text, ''),
 			coalesce(nullif(actor.display_name, ''), e.actor_user_id::text, ''),
-			coalesce(e.source_case_id, 0),
+			coalesce(e.source_incident_id, 0),
+			coalesce(e.source_verdict_id, 0),
 			e.action_type,
 			coalesce(e.reason_code, ''),
 			coalesce(e.reason_note, ''),
@@ -365,9 +377,10 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 		from enforcement_actions e
 		left join users target on target.id = e.target_user_id
 		left join users actor on actor.id = e.actor_user_id
+		where `+where+`
 		order by e.created_at desc, e.id desc
 		limit $1
-	`, limit)
+	`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +389,7 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 	for rows.Next() {
 		var item EnforcementActionSummary
 		var metadata string
-		var sourceCaseID int64
+		var sourceIncidentID, sourceVerdictID int64
 		var endsAt, revokedAt *time.Time
 		if err := rows.Scan(
 			&item.ID,
@@ -384,7 +397,8 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 			&item.TargetName,
 			&item.ActorUserID,
 			&item.ActorName,
-			&sourceCaseID,
+			&sourceIncidentID,
+			&sourceVerdictID,
 			&item.ActionType,
 			&item.ReasonCode,
 			&item.ReasonNote,
@@ -396,7 +410,8 @@ func (s *pgStore) ListEnforcementActions(limit int) ([]EnforcementActionSummary,
 		); err != nil {
 			return nil, err
 		}
-		item.SourceCaseID = sourceCaseID
+		item.SourceIncidentID = sourceIncidentID
+		item.SourceVerdictID = sourceVerdictID
 		item.Metadata = json.RawMessage(metadata)
 		if endsAt != nil {
 			item.EndsAt = *endsAt
@@ -414,168 +429,176 @@ func (s *pgStore) EvaluateAutoCheatBansForMatch(matchID string) error {
 	if matchID == "" {
 		return nil
 	}
+	client, ok := riskEngineClientFromEnv()
+	if !ok {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
+	req, err := s.riskEngineAnalyzeRequest(ctx, matchID)
+	if err != nil {
+		return err
+	}
+	if len(req.Players) == 0 {
+		return nil
+	}
+	resp, err := client.analyze(ctx, req)
+	if err != nil {
+		return err
+	}
+	for _, signal := range resp.Signals {
+		if strings.TrimSpace(signal.SubjectUserID) == "" {
+			continue
+		}
+		if err := s.recordRiskEngineSignal(ctx, matchID, signal); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *pgStore) riskEngineAnalyzeRequest(ctx context.Context, matchID string) (riskEngineAnalyzeRequest, error) {
+	seasonID, err := s.activeSeasonID(ctx)
+	if err != nil {
+		return riskEngineAnalyzeRequest{}, err
+	}
 	rows, err := s.pool.Query(ctx, `
 		select distinct user_id
 		from ranked_guess_events
 		where match_id = $1
 	`, matchID)
 	if err != nil {
-		return err
+		return riskEngineAnalyzeRequest{}, err
 	}
 	userIDs := []string{}
 	for rows.Next() {
 		var userID string
 		if err := rows.Scan(&userID); err != nil {
 			rows.Close()
-			return err
+			return riskEngineAnalyzeRequest{}, err
 		}
 		userIDs = append(userIDs, userID)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return err
+		return riskEngineAnalyzeRequest{}, err
 	}
 	rows.Close()
-	for _, userID := range userIDs {
-		reason, shouldBan, err := s.autoCheatBanReason(ctx, userID)
-		if err != nil {
-			return err
-		}
-		if shouldBan {
-			if err := s.createAutoDetectionCase(ctx, userID, matchID, reason); err != nil {
-				return err
-			}
-		}
+	req := riskEngineAnalyzeRequest{
+		MatchID:      matchID,
+		FactsVersion: "match-facts/2026-01",
+		GeneratedAt:  time.Now().UTC(),
+		Players:      []riskEnginePlayerHistory{},
 	}
-	return nil
+	for _, userID := range userIDs {
+		events, err := s.riskEngineRecentGuessEvents(ctx, userID)
+		if err != nil {
+			return riskEngineAnalyzeRequest{}, err
+		}
+		currentRating, rankedGames, err := s.riskEnginePlayerContext(ctx, userID, seasonID)
+		if err != nil {
+			return riskEngineAnalyzeRequest{}, err
+		}
+		req.Players = append(req.Players, riskEnginePlayerHistory{
+			UserID:        userID,
+			CurrentRating: currentRating,
+			RankedGames:   rankedGames,
+			Events:        events,
+		})
+	}
+	return req, nil
 }
 
-func (s *pgStore) createAutoDetectionCase(ctx context.Context, userID, matchID, reason string) error {
+func (s *pgStore) riskEngineRecentGuessEvents(ctx context.Context, userID string) ([]riskEngineGuessEvent, error) {
+	rows, err := s.pool.Query(ctx, `
+		select match_id, round_number, score, guess_ms, evidence, occurred_at
+		from ranked_guess_events
+		where user_id = $1
+		order by occurred_at desc, round_number desc
+		limit 50
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := []riskEngineGuessEvent{}
+	for rows.Next() {
+		var event riskEngineGuessEvent
+		if err := rows.Scan(&event.MatchID, &event.RoundNumber, &event.Score, &event.GuessMS, &event.Evidence, &event.OccurredAt); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
+func (s *pgStore) riskEnginePlayerContext(ctx context.Context, userID, seasonID string) (int, int, error) {
+	var rating, games int
+	err := s.pool.QueryRow(ctx, `
+		select
+			coalesce(r.mmr, $4)::int,
+			coalesce(rs.games_played, 0)::int
+		from users u
+		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $3
+		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
+		where u.id = $1
+	`, userID, modeDuel, seasonID, initialMMR).Scan(&rating, &games)
+	if err != nil {
+		return 0, 0, err
+	}
+	return rating, games, nil
+}
+
+func (s *pgStore) recordRiskEngineSignal(ctx context.Context, matchID string, signal riskEngineSignal) error {
+	payload, err := json.Marshal(signal.Payload)
+	if err != nil {
+		return err
+	}
+	occurredAt := signal.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = time.Now().UTC()
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var displayName string
-	if err := tx.QueryRow(ctx, `
-		select coalesce(nullif(display_name, ''), id::text)
-		from users
-		where id = $1
-	`, userID).Scan(&displayName); err != nil {
-		return err
-	}
-	var caseID int64
-	if err := tx.QueryRow(ctx, `
-		insert into moderation_cases(
-			target_user_id, target_display_name, status, priority, source, summary,
-			risk_score, risk_breakdown, confidence
+	var signalID int64
+	err = tx.QueryRow(ctx, `
+		insert into moderation_signals(
+			subject_user_id, signal_type, source, severity, evidence_strength,
+			detector_key, detector_version, reason_code, score, recommended_queue,
+			match_id, payload_json, occurred_at
 		)
 		values(
-			$1, $2, 'new', 'urgent', 'auto_detection', 'Automatic cheat detection needs moderator review.',
-			6, jsonb_build_object('gameplayRisk', 6, 'ruleId', $3::text, 'detectorVersion', 'fast-guess-v1'), 0.9
+			$1, $2, 'risk_engine', $3, $4,
+			nullif($5, ''), nullif($6, ''), $7, $8, $9,
+			$10, $11::jsonb, $12
 		)
-		on conflict (target_user_id) where status in ('new', 'triaged', 'reviewing', 'watching')
+		on conflict (subject_user_id, coalesce(match_id, '00000000-0000-0000-0000-000000000000'::uuid), coalesce(detector_key, ''), coalesce(detector_version, ''), reason_code)
+			where source = 'risk_engine'
 		do update set
-			target_display_name = excluded.target_display_name,
-			source = case when moderation_cases.source = 'report' then 'auto_detection' else moderation_cases.source end,
-			priority = 'urgent',
-			risk_score = greatest(moderation_cases.risk_score, excluded.risk_score),
-			risk_breakdown = moderation_cases.risk_breakdown || excluded.risk_breakdown,
-			confidence = greatest(moderation_cases.confidence, excluded.confidence),
-			latest_activity_at = now(),
-			updated_at = now()
+			severity = greatest_severity(moderation_signals.severity, excluded.severity),
+			evidence_strength = greatest_evidence_strength(moderation_signals.evidence_strength, excluded.evidence_strength),
+			score = greatest(moderation_signals.score, excluded.score),
+			recommended_queue = moderation_signals.recommended_queue or excluded.recommended_queue,
+			payload_json = excluded.payload_json,
+			occurred_at = greatest(moderation_signals.occurred_at, excluded.occurred_at)
 		returning id
-	`, userID, displayName, reason).Scan(&caseID); err != nil {
+	`, signal.SubjectUserID, normalizeRiskSignalType(signal.SignalType), normalizeRiskSeverity(signal.Severity), normalizeRiskEvidenceStrength(signal.EvidenceStrength), signal.DetectorKey, signal.DetectorVersion, nonempty(signal.ReasonCode, "risk_engine_signal"), signal.Score, signal.RecommendedQueue, matchID, string(payload), occurredAt).Scan(&signalID)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `
-		insert into moderation_evidence(
-			case_id, evidence_type, match_id, subject_user_id, detector_version, rule_id,
-			score, weight, payload_json, occurred_at
-		)
-		values(
-			$1, 'fast_guess', $2, $3, 'fast-guess-v1', $4, 6, 6,
-			jsonb_build_object('recommendedAction', 'ban_refund', 'reason', $4::text),
-			now()
-		)
-	`, caseID, matchID, userID, reason); err != nil {
+	incidentID, taskID, err := upsertIncidentForSignal(ctx, tx, signalID)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `
-		insert into moderation_case_log(case_id, event_type, reason_code, body, metadata)
-		values($1, 'auto_detection_queued', $2, 'Automatic detection queued this case for review.', jsonb_build_object('matchId', $3::text))
-	`, caseID, reason, matchID); err != nil {
-		return err
+	if riskSignalQueues(signal.Severity) || signal.RecommendedQueue {
+		if err := enqueueIncidentNotification(ctx, tx, incidentID, taskID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
-}
-
-func (s *pgStore) autoCheatBanReason(ctx context.Context, userID string) (string, bool, error) {
-	rows, err := s.pool.Query(ctx, `
-		select score, guess_ms, evidence
-		from ranked_guess_events
-		where user_id = $1
-		order by occurred_at desc, round_number desc
-		limit 20
-	`, userID)
-	if err != nil {
-		return "", false, err
-	}
-	defer rows.Close()
-	type ev struct {
-		score    int
-		guessMS  int64
-		evidence float64
-	}
-	events := []ev{}
-	for rows.Next() {
-		var item ev
-		if err := rows.Scan(&item.score, &item.guessMS, &item.evidence); err != nil {
-			return "", false, err
-		}
-		events = append(events, item)
-	}
-	if err := rows.Err(); err != nil {
-		return "", false, err
-	}
-	if len(events) < 10 {
-		return "", false, nil
-	}
-	var evidence10, evidence20 float64
-	fast4950In10 := 0
-	fast4900In20 := 0
-	highEvidence20 := 0
-	for i, item := range events {
-		if i < 10 {
-			evidence10 += item.evidence
-			if item.score >= 4950 && item.guessMS <= 10000 {
-				fast4950In10++
-			}
-		}
-		evidence20 += item.evidence
-		if item.score >= 4900 && item.guessMS <= 10000 {
-			fast4900In20++
-		}
-		if item.evidence >= 8 {
-			highEvidence20++
-		}
-	}
-	switch {
-	case evidence10 >= 18:
-		return "auto_cheat_fast_guess_evidence_10", true, nil
-	case len(events) >= 20 && evidence20 >= 28:
-		return "auto_cheat_fast_guess_evidence_20", true, nil
-	case highEvidence20 >= 3:
-		return "auto_cheat_repeated_extreme_fast_guesses", true, nil
-	case fast4950In10 >= 5:
-		return "auto_cheat_fast_4950_5_of_10", true, nil
-	case len(events) >= 20 && fast4900In20 >= 19:
-		return "auto_cheat_fast_4900_19_of_20", true, nil
-	default:
-		return "", false, nil
-	}
 }
 
 func (s *pgStore) AddSignupIPBan(ipAddress, reason, createdBy string) error {

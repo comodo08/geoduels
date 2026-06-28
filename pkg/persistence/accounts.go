@@ -591,7 +591,7 @@ func (s *pgStore) GetIdentity(sub string) (Identity, error) {
 				u.account_type,
 				coalesce(u.is_admin, false),
 				coalesce(u.is_moderator, false),
-				coalesce(u.banned_at is not null, false),
+				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false),
 				coalesce(u.ban_reason, '')
 		from users u
 		left join lateral (

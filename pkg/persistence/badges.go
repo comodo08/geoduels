@@ -253,7 +253,7 @@ func (s *pgStore) earnedSeasonRankBadges(ctx context.Context, userIDs []string) 
 			where r.mode = $1
 				and r.season_id <> $2
 				and coalesce(u.account_type, 'registered') <> 'guest'
-				and u.banned_at is null
+				and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
 		)
 		select user_id, season_id, rank
 		from ranked

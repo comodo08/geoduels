@@ -205,6 +205,7 @@ For production PostgreSQL, enable `wal_compression=on` and `track_io_timing=on` 
 - [`docs/architecture.md`](docs/architecture.md) - service ownership, data flow, routing, reconnects, maintenance, and persistence.
 - [`docs/development.md`](docs/development.md) - local macOS setup, service startup, tests, and the k3d development environment.
 - [`docs/deployment.md`](docs/deployment.md) - production release flow, database migration policy, and post-deploy checks.
+- [`docs/moderator-guide.md`](docs/moderator-guide.md) - moderator workbench workflow, verdict guidance, enforcement rules, and safety practices.
 - [`apps/web/docs/frontend-architecture.md`](apps/web/docs/frontend-architecture.md) - frontend ownership, shared UI and styling rules, and file-size budgets.
 - [`infra/k3s/README.md`](infra/k3s/README.md) - reusable Kubernetes manifests and local k3d scaling tests.
 - [`apps/web/assets/source-map-thumbnails/README.md`](apps/web/assets/source-map-thumbnails/README.md) - source requirements and attribution for generated map thumbnails.

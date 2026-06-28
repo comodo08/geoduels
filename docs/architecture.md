@@ -10,6 +10,7 @@ This document describes the current runtime implemented in this repository. Olde
 - `services/realtime-gateway`: public websocket gateway for `/ws/{node}`.
 - `services/gameplay-node`: authoritative in-memory duel and singleplayer execution for assigned matches.
 - `services/moderation-worker`: background moderation projection and enforcement processing.
+- private `risk-engine`, when deployed: opaque ranked-integrity signal generation for moderation.
 - `services/discord-worker`: Discord membership/role reconciliation and badge synchronization.
 - `workers/storage-maintenance`: bounded replay compression and retention cleanup.
 
@@ -88,6 +89,7 @@ This document describes the current runtime implemented in this repository. Olde
 - `realtime-gateway` is only a routing/proxy layer.
 - `gameplay-node` is the in-memory authority for the matches assigned to it.
 - `moderation-worker` and `discord-worker` process background work independently from latency-sensitive request and match paths.
+- `moderation-worker` calls the private risk engine asynchronously after ranked match facts are persisted. Risk-engine outages must not block live gameplay, reports, or manual moderation.
 - Queueing and realtime simulation are intentionally separate scaling boundaries.
 
 ## Reconnect and session model

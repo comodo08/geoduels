@@ -192,7 +192,7 @@ func (s *pgStore) SearchPlayers(query string, limit int) ([]AdminPlayerSummary, 
 				coalesce(u.account_type = 'guest', false),
 				coalesce(u.is_admin, false),
 				coalesce(u.is_moderator, false),
-				coalesce(u.banned_at is not null, false),
+				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false),
 				coalesce(u.ban_reason, ''),
 			u.banned_at,
 			coalesce(latest_session.ip_address, ''),
@@ -215,7 +215,7 @@ func (s *pgStore) SearchPlayers(query string, limit int) ([]AdminPlayerSummary, 
 		left join ranks r on r.user_id = u.id and r.mode = $1 and r.season_id = $2
 		left join user_stats us on us.user_id = u.id
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $1 and rs.season_id = $2
-		left join moderation_reporter_reputation rep on rep.user_id = u.id
+		left join moderation_reporter_state rep on rep.user_id = u.id
 		where $4 = '%%'
 		   or lower(u.id::text) like $4
 		   or lower(coalesce(u.email, '')) like $4
@@ -301,7 +301,7 @@ func (s *pgStore) getAdminPlayerSummary(ctx context.Context, userID string) (Adm
 			coalesce(u.account_type = 'guest', false),
 			coalesce(u.is_admin, false),
 			coalesce(u.is_moderator, false),
-			coalesce(u.banned_at is not null, false),
+				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false),
 			coalesce(u.ban_reason, ''),
 			u.banned_at,
 			coalesce(latest_session.ip_address, ''),
@@ -324,7 +324,7 @@ func (s *pgStore) getAdminPlayerSummary(ctx context.Context, userID string) (Adm
 		left join ranks r on r.user_id = u.id and r.mode = $2 and r.season_id = $3
 		left join user_stats us on us.user_id = u.id
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
-		left join moderation_reporter_reputation rep on rep.user_id = u.id
+		left join moderation_reporter_state rep on rep.user_id = u.id
 		where u.id = $1
 	`, userID, modeDuel, seasonID, initialMMR).Scan(
 		&item.UserID,
@@ -540,7 +540,8 @@ func (s *pgStore) SetPlayerBan(userID, reason string, banned bool) error {
 	tag, err := tx.Exec(ctx, `
 		update users
 		set banned_at = $2,
-			ban_reason = $3
+			ban_reason = $3,
+			ban_expires_at = null
 		where id = $1
 	`, userID, bannedAt, banReason)
 	if err != nil {
@@ -555,7 +556,7 @@ func (s *pgStore) SetPlayerBan(userID, reason string, banned bool) error {
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into enforcement_actions(target_user_id, action_type, reason_code, reason_note)
-			values($1, 'ban', 'manual', nullif($2, ''))
+			values($1, 'permanent_ban', 'manual', nullif($2, ''))
 		`, userID, strings.TrimSpace(reason)); err != nil {
 			return err
 		}
@@ -611,7 +612,7 @@ func (s *pgStore) ClearReporterMute(userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	tag, err := s.pool.Exec(ctx, `
-		update moderation_reporter_reputation
+		update moderation_reporter_state
 		set muted_until = null,
 			report_weight = greatest(report_weight, 0.05),
 			updated_at = now()
@@ -622,7 +623,7 @@ func (s *pgStore) ClearReporterMute(userID string) error {
 	}
 	if tag.RowsAffected() == 0 {
 		_, err = s.pool.Exec(ctx, `
-			insert into moderation_reporter_reputation(user_id, muted_until, report_weight, updated_at)
+			insert into moderation_reporter_state(user_id, muted_until, report_weight, updated_at)
 			values($1, null, 1, now())
 		`, userID)
 	}

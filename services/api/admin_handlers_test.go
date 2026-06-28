@@ -80,6 +80,78 @@ func TestModeratorCanBanPlayer(t *testing.T) {
 	}
 }
 
+func TestModeratorCanCheatingBanFromModeratorRoute(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	token, err := auth.IssueAppAccessToken(secret, "moderator-1", "session-1", time.Minute)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	store := &adminModerationTestStore{
+		identity: persistence.Identity{
+			Sub:         "moderator-1",
+			IsModerator: true,
+		},
+	}
+	a := &api{
+		store:                store,
+		appAuthSecret:        secret,
+		adminBootstrapEmails: map[string]struct{}{},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/moderator/subjects/user-2/cheating-ban", strings.NewReader(`{"reason":"cheating_confirmed: reviewed incident 123"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req = mux.SetURLVars(req, map[string]string{"userId": "user-2"})
+	rec := httptest.NewRecorder()
+
+	a.moderatorSubjectCheatingBan(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	if store.bannedUserID != "user-2" || !store.banned || !store.refundsRequested {
+		t.Fatalf("expected cheating ban with refunds, userID=%q banned=%v refunds=%v", store.bannedUserID, store.banned, store.refundsRequested)
+	}
+	if store.bannedReason != "cheating_confirmed: reviewed incident 123" {
+		t.Fatalf("ban reason = %q", store.bannedReason)
+	}
+}
+
+func TestModeratorCanUnbanFromModeratorRoute(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	token, err := auth.IssueAppAccessToken(secret, "moderator-1", "session-1", time.Minute)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	store := &adminModerationTestStore{
+		identity: persistence.Identity{
+			Sub:         "moderator-1",
+			IsModerator: true,
+		},
+	}
+	a := &api{
+		store:                store,
+		appAuthSecret:        secret,
+		adminBootstrapEmails: map[string]struct{}{},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/moderator/subjects/user-2/unban", strings.NewReader(`{"reason":"appeal accepted"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req = mux.SetURLVars(req, map[string]string{"userId": "user-2"})
+	rec := httptest.NewRecorder()
+
+	a.moderatorSubjectUnban(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	if store.bannedUserID != "user-2" || store.banned {
+		t.Fatalf("expected user-2 to be unbanned, got userID=%q banned=%v", store.bannedUserID, store.banned)
+	}
+	if store.bannedReason != "appeal accepted" {
+		t.Fatalf("unban reason = %q", store.bannedReason)
+	}
+}
+
 func TestNonModeratorCannotBanPlayer(t *testing.T) {
 	secret := []byte("01234567890123456789012345678901")
 	token, err := auth.IssueAppAccessToken(secret, "player-1", "session-1", time.Minute)

@@ -71,13 +71,15 @@ const match = {
   ranked: true,
   ratingDelta: 14,
   totalScore: 19420,
+  opponentUserId: "player-2",
+  opponentDisplayName: "Rival",
 };
 const singleplayerMatch = {
   matchId: "match-2",
   mode: "singleplayer",
   endedAt: "2026-06-23T11:30:00.000Z",
   outcome: "completed" as const,
-  ranked: true,
+  ranked: false,
   ratingDelta: 50,
   totalScore: 10250,
 };
@@ -176,7 +178,10 @@ describe("PlayerProfilePage", () => {
     );
 
     expect(screen.getByText("win")).toBeInTheDocument();
-    expect(screen.getByText("Duel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ranked" })).toBeInTheDocument();
+    expect(screen.getByText("vs Rival")).toBeInTheDocument();
+    expect(screen.getByText("Singleplayer")).toBeInTheDocument();
     expect(screen.getAllByText("Ranked")).toHaveLength(2);
     expect(screen.queryByText("19,420")).not.toBeInTheDocument();
     expect(screen.getByText("+14")).toBeInTheDocument();
@@ -186,6 +191,18 @@ describe("PlayerProfilePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests ranked match history from the Ranked tab", () => {
+    arrange();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ranked" }));
+
+    expect(hookMocks.usePlayerProfile).toHaveBeenLastCalledWith(
+      "player-1",
+      profile,
+      "ranked",
+    );
   });
 
   it("hides owner controls and keeps the empty history state", () => {

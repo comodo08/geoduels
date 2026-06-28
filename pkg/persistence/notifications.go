@@ -118,6 +118,23 @@ func mustJSON(value any) string {
 	return string(body)
 }
 
+func enqueueNotificationOutbox(ctx context.Context, tx pgx.Tx, notificationType, dedupeKey string, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		insert into notification_outbox(type, dedupe_key, payload_json, next_attempt_at)
+		values($1, $2, $3::jsonb, now())
+		on conflict (dedupe_key) do update set
+			payload_json = excluded.payload_json,
+			next_attempt_at = now(),
+			sent_at = null,
+			last_error = null
+	`, notificationType, dedupeKey, string(body))
+	return err
+}
+
 func (s *pgStore) ListUserNotifications(userID string, limit int) ([]UserNotification, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {

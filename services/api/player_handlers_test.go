@@ -19,6 +19,7 @@ type publicPlayerTestStore struct {
 	limit         int
 	cursorEndedAt time.Time
 	cursorMatchID string
+	rankedOnly    bool
 	hasMore       bool
 }
 
@@ -38,10 +39,11 @@ func (s *publicPlayerTestStore) ListPlayerMatchHistory(userID string, limit int)
 	return s.matches, nil
 }
 
-func (s *publicPlayerTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string) (persistence.MatchHistoryPage, error) {
+func (s *publicPlayerTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (persistence.MatchHistoryPage, error) {
 	s.limit = limit
 	s.cursorEndedAt = beforeEndedAt
 	s.cursorMatchID = beforeMatchID
+	s.rankedOnly = rankedOnly
 	page := persistence.MatchHistoryPage{Matches: s.matches, HasMore: s.hasMore}
 	if s.hasMore && len(s.matches) > 0 {
 		last := s.matches[len(s.matches)-1]
@@ -49,6 +51,23 @@ func (s *publicPlayerTestStore) ListPlayerMatchHistoryPage(userID string, limit 
 		page.NextMatchID = last.MatchID
 	}
 	return page, nil
+}
+
+func TestPublicPlayerMatchesPassesRankedFilter(t *testing.T) {
+	store := &publicPlayerTestStore{}
+	a := &api{store: store}
+	req := httptest.NewRequest(http.MethodGet, "/v1/players/Explorer/matches?filter=ranked", nil)
+	req = mux.SetURLVars(req, map[string]string{"nickname": "Explorer"})
+	rec := httptest.NewRecorder()
+
+	a.publicPlayerMatches(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	if !store.rankedOnly {
+		t.Fatal("expected ranked-only match history request")
+	}
 }
 
 func TestPublicPlayerProfileContainsOnlyPublicFields(t *testing.T) {
