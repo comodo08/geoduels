@@ -32,10 +32,10 @@ export function ProfileOverview({
     ? Math.round((profile.wins / profile.gamesPlayed) * 100)
     : 0;
   const stats = [
-    [profileMetrics.games, "Games", profile.gamesPlayed],
-    [profileMetrics.wins, "Wins", profile.wins],
-    [profileMetrics.winRate, "Win rate", `${winRate}%`],
-    [profileMetrics.rankedGames, "Ranked games", profile.rankedGamesPlayed],
+    [profileMetrics.games, "Duels played", profile.gamesPlayed],
+    [profileMetrics.wins, "Duel wins", profile.wins],
+    [profileMetrics.winRate, "Duel win rate", `${winRate}%`],
+    [profileMetrics.rankedGames, "Ranked duels", profile.rankedGamesPlayed],
     [profileMetrics.rankedWins, "Ranked wins", profile.rankedWins],
   ] as const;
 
@@ -249,7 +249,7 @@ export function ProfileHistory({
         <p className="mt-4 text-sm text-[#8caab0]">
           {filter === "ranked"
             ? "No ranked matches yet."
-            : "No persisted matches yet."}
+            : "No match history yet."}
         </p>
       ) : null}
       <div className="mt-4 space-y-2">

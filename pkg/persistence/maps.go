@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	absoluteMaxMapLocations = 1_000_000
-	minMapLocations         = 5
-	plannedRoundCount       = 20
-	mapTrendingWindowDays   = 7
+	absoluteMaxMapLocations   = 1_000_000
+	minMapLocations           = 5
+	plannedRoundCount         = 20
+	mapTrendingWindowDays     = 7
 	communityMapListPredicate = "m.owner_user_id is not null and m.visibility='public' and m.status='ready'"
 )
 
@@ -26,6 +26,7 @@ type MapCatalog interface {
 	GetMap(userID, mapID string) (contracts.MapDetails, bool, error)
 	GetMapUploadQuota(userID string) (contracts.MapUploadQuota, error)
 	CreateCustomMap(userID, displayName, description, visibility, difficulty, thumbnailKey string, thumbnailVariant int, source io.Reader) (contracts.CustomMap, error)
+	ImportOfficialMap(adminUserID string, input OfficialMapImportInput, source io.Reader) (contracts.CustomMap, error)
 	ReplaceCustomMapLocations(userID, mapID string, source io.Reader) (contracts.CustomMap, error)
 	UpdateCustomMap(userID, mapID string, update contracts.CustomMapUpdate) (contracts.CustomMap, error)
 	PublishCustomMap(userID, mapID string) (contracts.CustomMap, error)
@@ -38,6 +39,18 @@ type MapCatalog interface {
 	SetMapCommentLike(userID, mapID, commentID string, liked bool) (contracts.MapComment, error)
 	ArchiveCustomMap(userID, mapID string, allowAnyMap bool) error
 	PrepareMatchPlan(ctx context.Context, found *contracts.MatchFound) error
+}
+
+type OfficialMapImportInput struct {
+	MapKey             string
+	DisplayName        string
+	Description        string
+	Visibility         string
+	Difficulty         string
+	ThumbnailKey       string
+	ThumbnailVariant   int
+	OfficialRegionType string
+	OfficialRegionCode string
 }
 
 func (s *pgStore) ListMaps(userID string, opts contracts.MapListOptions) ([]contracts.CustomMap, error) {

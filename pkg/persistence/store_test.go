@@ -34,6 +34,31 @@ func TestRecordMatchHistoryCastsReplayExpirationParameters(t *testing.T) {
 	}
 }
 
+func TestProfileHistoryStatsCountDuelsOnly(t *testing.T) {
+	body, err := os.ReadFile("profiles.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if got := strings.Count(source, "and h.mode = 'duel'"); got != 2 {
+		t.Fatalf("profile history_stats duel filters = %d, want 2", got)
+	}
+}
+
+func TestRecordMatchHistoryNormalizesSingleplayerSource(t *testing.T) {
+	body, err := os.ReadFile("matches_write.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if !strings.Contains(source, "snap.Mode == contracts.ModeSingleplayer") {
+		t.Fatal("singleplayer match history must be detected explicitly")
+	}
+	if !strings.Contains(source, `sourceKind = "solo"`) {
+		t.Fatal("singleplayer match history must use solo source_kind")
+	}
+}
+
 func TestRiskEngineSignalsDoNotCreateLegacyCases(t *testing.T) {
 	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {

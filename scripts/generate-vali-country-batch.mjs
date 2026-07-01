@@ -15,7 +15,14 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 
-const DEFAULT_TARGET_COUNT = 10_000;
+const DEFAULT_LARGE_TARGET_COUNT = 10_000;
+const DEFAULT_SMALL_TARGET_COUNT = 2_000;
+const DEFAULT_LARGE_COUNTRIES = new Set([
+  "AR", "AU", "AT", "BE", "BR", "CA", "CL", "CO", "CZ", "DK", "FI", "FR",
+  "DE", "GB", "GR", "HU", "ID", "IE", "IL", "IT", "JP", "KR", "MX", "MY",
+  "NL", "NO", "NZ", "PE", "PH", "PL", "PT", "RO", "RS", "RU", "SE", "TH",
+  "TR", "UA", "US", "VN", "ZA",
+]);
 
 function usage() {
   return `Generate one Vali map per country or territory, sequentially and resumably.
@@ -29,7 +36,13 @@ Required:
 
 Options:
   --source-root <dir>      Directory containing downloaded country folders (default: cwd)
-  --target-count <n>       Per-country location goal (default: ${DEFAULT_TARGET_COUNT})
+  --vali-bin <path>        Vali executable to run (default: vali from PATH)
+  --target-count <n>       Override every country to this location goal
+  --large-target-count <n> Target for large-coverage countries (default: ${DEFAULT_LARGE_TARGET_COUNT})
+  --small-target-count <n> Target for smaller countries (default: ${DEFAULT_SMALL_TARGET_COUNT})
+  --large-countries <list> Comma-separated country codes to target as large coverage
+  --target-counts <file>   JSON object of exact per-country goals, e.g. {"US":10000,"MC":500}
+  --manifest-output <file> Manifest path for the production importer (default: <output-root>/country-maps.manifest.json)
   --state-file <file>      Progress log path (default: <output-root>/.progress.jsonl)
   --countries <list>       Comma-separated allowlist, e.g. US,CA,PR
   --keep-staging           Keep staging directories after successful runs
@@ -47,7 +60,9 @@ Behavior:
 function parseArgs(argv) {
   const options = {
     sourceRoot: process.cwd(),
-    targetCount: DEFAULT_TARGET_COUNT,
+    valiBin: "vali",
+    largeTargetCount: DEFAULT_LARGE_TARGET_COUNT,
+    smallTargetCount: DEFAULT_SMALL_TARGET_COUNT,
     keepStaging: false,
   };
 
@@ -76,8 +91,13 @@ function parseArgs(argv) {
   options.template = resolve(options.template);
   options.sourceRoot = resolve(options.sourceRoot);
   options.outputRoot = resolve(options.outputRoot);
-  options.targetCount = parsePositiveInteger(options.targetCount, "--target-count");
+  if (options.targetCount) options.targetCount = parsePositiveInteger(options.targetCount, "--target-count");
+  options.largeTargetCount = parsePositiveInteger(options.largeTargetCount, "--large-target-count");
+  options.smallTargetCount = parsePositiveInteger(options.smallTargetCount, "--small-target-count");
+  options.largeCountries = parseCountries(options.largeCountries) || DEFAULT_LARGE_COUNTRIES;
+  options.targetCountsPath = options.targetCounts ? resolve(options.targetCounts) : "";
   options.stateFile = resolve(options.stateFile || join(options.outputRoot, ".progress.jsonl"));
+  options.manifestOutput = resolve(options.manifestOutput || join(options.outputRoot, "country-maps.manifest.json"));
   options.countries = parseCountries(options.countries);
   return options;
 }
@@ -100,6 +120,19 @@ function parseCountries(value) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+async function readTargetCounts(path) {
+  if (!path) return new Map();
+  const value = await readJson(path);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("--target-counts must be a JSON object keyed by country code");
+  }
+  const out = new Map();
+  for (const [country, raw] of Object.entries(value)) {
+    out.set(country.toUpperCase(), parsePositiveInteger(raw, `target count for ${country}`));
+  }
+  return out;
 }
 
 async function readState(path) {
@@ -152,6 +185,13 @@ function buildCountryConfig(template, country, targetCount) {
   return config;
 }
 
+function targetCountForCountry(country, options, targetCounts) {
+  if (options.targetCount) return options.targetCount;
+  const exact = targetCounts.get(country.toUpperCase());
+  if (exact) return exact;
+  return options.largeCountries.has(country.toUpperCase()) ? options.largeTargetCount : options.smallTargetCount;
+}
+
 async function collectArtifacts(stagingDir, excludedNames) {
   const entries = await readdir(stagingDir, { withFileTypes: true });
   return entries
@@ -160,8 +200,74 @@ async function collectArtifacts(stagingDir, excludedNames) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function runVali(configPath, cwd) {
-  const child = spawn("vali", ["generate", "--file", basename(configPath)], {
+async function pickMapFile(outputDir, artifacts) {
+  const jsonArtifacts = artifacts.filter((artifact) => artifact.toLowerCase().endsWith(".json"));
+  if (jsonArtifacts.length === 0) return "";
+  const withSizes = await Promise.all(jsonArtifacts.map(async (artifact) => {
+    const stat = await lstat(join(outputDir, artifact));
+    return { artifact, size: stat.size };
+  }));
+  withSizes.sort((left, right) => right.size - left.size || left.artifact.localeCompare(right.artifact));
+  return join(outputDir, withSizes[0].artifact);
+}
+
+function countryName(country) {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(country.toUpperCase()) || country.toUpperCase();
+  } catch {
+    return country.toUpperCase();
+  }
+}
+
+function slugify(value) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function writeManifest(path, entries) {
+  await mkdir(dirname(path), { recursive: true });
+  const manifest = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    maps: entries.sort((left, right) => left.countryCode.localeCompare(right.countryCode)),
+  };
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+async function buildManifestEntries(outputRoot, state) {
+  const entries = [];
+  for (const entry of state.values()) {
+    if (entry.status !== "success" || !entry.outputDir || !entry.country) continue;
+    const artifacts = entry.artifacts || [];
+    const mapFile = entry.mapFile || await pickMapFile(entry.outputDir, artifacts);
+    if (!mapFile) continue;
+    const name = countryName(entry.country);
+    const countrySlug = slugify(name);
+    entries.push({
+      countryCode: entry.country.toUpperCase(),
+      displayName: name,
+      mapKey: `country/${countrySlug}`,
+      description: `Official GeoDuels ${name} country map generated from Vali coverage.`,
+      visibility: "public",
+      difficulty: "normal",
+      thumbnailKey: `countries/${countrySlug}`,
+      thumbnailVariant: 1,
+      officialRegionType: "country",
+      officialRegionCode: entry.country.toUpperCase(),
+      targetCount: entry.targetCount || null,
+      file: mapFile,
+    });
+  }
+  return entries;
+}
+
+function runVali(configPath, cwd, valiBin) {
+  const child = spawn(valiBin, ["generate", "--file", basename(configPath)], {
     cwd,
     stdio: "inherit",
   });
@@ -193,6 +299,7 @@ async function main() {
   }
 
   const template = await readJson(options.template);
+  const targetCounts = await readTargetCounts(options.targetCountsPath);
   const countries = await listCountryDirectories(options.sourceRoot, options.countries);
   const state = await readState(options.stateFile);
   const stagingRoot = join(options.outputRoot, ".staging");
@@ -208,6 +315,8 @@ async function main() {
   console.log(`Found ${countries.length} country directories under ${options.sourceRoot}`);
   console.log(`Writing outputs to ${options.outputRoot}`);
   console.log(`Progress log: ${options.stateFile}`);
+  console.log(`Manifest: ${options.manifestOutput}`);
+  console.log(`Vali: ${options.valiBin}`);
 
   for (const country of countries) {
     if (stopRequested) break;
@@ -228,7 +337,8 @@ async function main() {
     }
 
     const stagingDir = join(stagingRoot, country);
-    const configName = `${country.toLowerCase()}-10k-country.json`;
+    const targetCount = targetCountForCountry(country, options, targetCounts);
+    const configName = `${country.toLowerCase()}-${targetCount}-country.json`;
     const configPath = join(stagingDir, configName);
     const linkedCountryDir = join(stagingDir, country);
 
@@ -237,14 +347,14 @@ async function main() {
     await symlink(sourceDir, linkedCountryDir, "dir");
     await writeFile(
       configPath,
-      `${JSON.stringify(buildCountryConfig(template, country, options.targetCount), null, 2)}\n`,
+      `${JSON.stringify(buildCountryConfig(template, country, targetCount), null, 2)}\n`,
       "utf8",
     );
 
-    console.log(`[run ] ${country}`);
-    await appendState(options.stateFile, { country, status: "started", outputDir: finalDir });
+    console.log(`[run ] ${country} target=${targetCount}`);
+    await appendState(options.stateFile, { country, status: "started", outputDir: finalDir, targetCount });
 
-    const run = runVali(configPath, stagingDir);
+    const run = runVali(configPath, stagingDir, options.valiBin);
     activeChild = run.child;
     const result = await run.promise;
     activeChild = null;
@@ -279,14 +389,20 @@ async function main() {
     for (const artifact of artifacts) {
       await rename(join(stagingDir, artifact), join(finalDir, artifact));
     }
+    const mapFile = await pickMapFile(finalDir, artifacts);
 
-    await appendState(options.stateFile, {
+    const successEntry = {
       country,
       status: "success",
       outputDir: finalDir,
       artifacts,
-    });
+      mapFile,
+      targetCount,
+    };
+    state.set(country, successEntry);
+    await appendState(options.stateFile, successEntry);
     console.log(`[done] ${country} -> ${finalDir}`);
+    await writeManifest(options.manifestOutput, await buildManifestEntries(options.outputRoot, state));
 
     if (!options.keepStaging) await rm(stagingDir, { recursive: true, force: true });
   }
@@ -294,6 +410,7 @@ async function main() {
   if (stopRequested) {
     console.log("Stopped. Re-run the same command to resume remaining countries.");
   } else {
+    await writeManifest(options.manifestOutput, await buildManifestEntries(options.outputRoot, state));
     console.log("Batch generation complete.");
   }
 }

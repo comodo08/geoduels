@@ -993,6 +993,42 @@ func (a *api) adminUpdateChangelogPost(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(post)
 }
 
+func (a *api) adminImportOfficialMap(w http.ResponseWriter, r *http.Request) {
+	identity, err := a.adminIdentity(r)
+	if err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	catalog, ok := a.mapCatalog(w)
+	if !ok {
+		return
+	}
+	file, closeFile, err := mapUploadFile(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer closeFile()
+	input := persistence.OfficialMapImportInput{
+		MapKey:             r.FormValue("mapKey"),
+		DisplayName:        r.FormValue("displayName"),
+		Description:        r.FormValue("description"),
+		Visibility:         r.FormValue("visibility"),
+		Difficulty:         r.FormValue("difficulty"),
+		ThumbnailKey:       r.FormValue("thumbnailKey"),
+		ThumbnailVariant:   atoiDefault(r.FormValue("thumbnailVariant"), 1),
+		OfficialRegionType: r.FormValue("officialRegionType"),
+		OfficialRegionCode: r.FormValue("officialRegionCode"),
+	}
+	item, err := catalog.ImportOfficialMap(identity.Sub, input, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	writeJSONResponse(w, item)
+}
+
 func (a *api) adminUploadCurrentMap(w http.ResponseWriter, r *http.Request) {
 	a.uploadMap(w, r, contracts.MapKeyMoving)
 }

@@ -513,7 +513,9 @@ func recordMatchHistory(
 	ranked := snap.Mode == contracts.ModeDuel && !snap.Unranked && !privatePartyMatch
 	sourceKind := "queue"
 	var sourcePartyID any
-	if privatePartyMatch {
+	if snap.Mode == contracts.ModeSingleplayer {
+		sourceKind = "solo"
+	} else if privatePartyMatch {
 		sourceKind = "party"
 		var partyID string
 		if err := tx.QueryRow(ctx, `

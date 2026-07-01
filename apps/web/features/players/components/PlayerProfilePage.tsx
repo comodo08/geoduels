@@ -139,7 +139,7 @@ function ProfileMetadata({
   const winRate = profile.gamesPlayed
     ? Math.round((profile.wins / profile.gamesPlayed) * 100)
     : 0;
-  const description = `${profile.mmr} MMR · ${profile.gamesPlayed} games · ${winRate}% win rate`;
+  const description = `${profile.mmr} MMR · ${profile.gamesPlayed} duels · ${winRate}% duel win rate`;
   return (
     <Head>
       <title>{profile.displayName} | GeoDuels</title>

@@ -114,6 +114,7 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 			from match_players mp
 			join match_history h on h.match_id = mp.match_id
 			where mp.user_id = seed.user_id
+			  and h.mode = 'duel'
 		) history_stats on true
 		left join ranked_stats rs on rs.user_id = seed.user_id and rs.mode = $2 and rs.season_id = $3
 	`, userID, modeDuel, seasonID, initialMMR, initialRatingRD)
@@ -199,6 +200,7 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 			from match_players mp
 			join match_history h on h.match_id = mp.match_id
 			where mp.user_id = u.id
+			  and h.mode = 'duel'
 		) history_stats on true
 		left join ranked_stats rs on rs.user_id = u.id and rs.mode = $2 and rs.season_id = $3
 		where u.account_type = 'registered'

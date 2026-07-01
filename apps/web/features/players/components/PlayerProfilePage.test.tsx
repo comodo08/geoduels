@@ -161,6 +161,10 @@ describe("PlayerProfilePage", () => {
 
     expect(screen.getByRole("heading", { name: "Atlas" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("1432 MMR")).toHaveLength(2);
+    expect(screen.getByText("Duels played")).toBeInTheDocument();
+    expect(screen.getByText("Duel wins")).toBeInTheDocument();
+    expect(screen.getByText("Duel win rate")).toBeInTheDocument();
+    expect(screen.getByText("Ranked duels")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
@@ -209,7 +213,7 @@ describe("PlayerProfilePage", () => {
     arrange({ viewerId: "viewer-2", matches: [], hasNextPage: false });
 
     expect(screen.queryByRole("button", { name: "Account settings" })).not.toBeInTheDocument();
-    expect(screen.getByText("No persisted matches yet.")).toBeInTheDocument();
+    expect(screen.getByText("No match history yet.")).toBeInTheDocument();
     expect(
       screen
         .getAllByRole("link")

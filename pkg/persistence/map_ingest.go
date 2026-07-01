@@ -20,6 +20,128 @@ func (s *pgStore) CreateCustomMap(userID, displayName, description, visibility, 
 	return s.ingestCustomMap(userID, mapID, displayName, description, visibility, difficulty, thumbnailKey, thumbnailVariant, source, true)
 }
 
+func (s *pgStore) ImportOfficialMap(adminUserID string, input OfficialMapImportInput, source io.Reader) (contracts.CustomMap, error) {
+	mapKey := strings.TrimSpace(input.MapKey)
+	displayName := strings.TrimSpace(input.DisplayName)
+	if mapKey == "" {
+		return contracts.CustomMap{}, errors.New("map key required")
+	}
+	if displayName == "" || len(displayName) > 80 {
+		return contracts.CustomMap{}, errors.New("map name must be 1 to 80 characters")
+	}
+	if len(input.Description) > 500 {
+		return contracts.CustomMap{}, errors.New("description must be at most 500 characters")
+	}
+	visibility := normalizeMapVisibility(input.Visibility)
+	difficulty := normalizeMapDifficulty(input.Difficulty)
+	thumbnailVariant := normalizeThumbnailVariant(input.ThumbnailVariant)
+	thumbnailKey := normalizeThumbnailKey(input.ThumbnailKey, thumbnailVariant)
+	regionType := strings.ToLower(strings.TrimSpace(input.OfficialRegionType))
+	regionCode := strings.ToUpper(strings.TrimSpace(input.OfficialRegionCode))
+	if regionType == "" && regionCode != "" {
+		regionType = "country"
+	}
+	if regionType != "" && regionType != "country" && regionType != "continent" {
+		return contracts.CustomMap{}, errors.New("unsupported official region type")
+	}
+	if len(regionCode) > 32 {
+		return contracts.CustomMap{}, errors.New("official region code must be at most 32 characters")
+	}
+
+	parsed, digest, rejected, err := decodeMapRows(source, absoluteMaxMapLocations)
+	if err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if len(parsed) < minMapLocations {
+		return contracts.CustomMap{}, fmt.Errorf("map requires at least %d valid locations", minMapLocations)
+	}
+	digestBytes, err := hex.DecodeString(digest)
+	if err != nil {
+		return contracts.CustomMap{}, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return contracts.CustomMap{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	mapID := entityid.Derive("map", mapKey)
+	if _, err := tx.Exec(ctx, `
+		insert into maps(
+			id,map_key,owner_user_id,display_name,description,visibility,status,difficulty,
+			thumbnail_variant,thumbnail_key,location_count,content_hash,rejected_location_count,
+			published_at,official_at,official_by,official_region_type,official_region_code,created_at,updated_at
+		)
+		values($1,$2,null,$3,$4,$5,'processing',$6,$7,$8,0,$9,$10,case when $5='public' then now() else null end,now(),nullif($11,'')::uuid,$12,$13,now(),now())
+		on conflict(map_key) do update set
+			owner_user_id=null,
+			display_name=excluded.display_name,
+			description=excluded.description,
+			visibility=excluded.visibility,
+			status='processing',
+			difficulty=excluded.difficulty,
+			thumbnail_variant=excluded.thumbnail_variant,
+			thumbnail_key=excluded.thumbnail_key,
+			content_hash=excluded.content_hash,
+			rejected_location_count=excluded.rejected_location_count,
+			published_at=case when excluded.visibility='public' then coalesce(maps.published_at, now()) else null end,
+			official_at=coalesce(maps.official_at, now()),
+			official_by=excluded.official_by,
+			official_region_type=excluded.official_region_type,
+			official_region_code=excluded.official_region_code,
+			archived_at=null,
+			updated_at=now()
+	`, mapID, mapKey, displayName, strings.TrimSpace(input.Description), visibility, difficulty, thumbnailVariant, thumbnailKey, digestBytes, rejected, strings.TrimSpace(adminUserID), regionType, regionCode); err != nil {
+		return contracts.CustomMap{}, err
+	}
+
+	if err := tx.QueryRow(ctx, `select id::text from maps where map_key=$1 for update`, mapKey).Scan(&mapID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	var mapStorageID int32
+	if err := tx.QueryRow(ctx, `select storage_id from maps where id=$1`, mapID).Scan(&mapStorageID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if _, err := tx.Exec(ctx, `delete from locations where map_storage_id=$1`, mapStorageID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	block := make([][]any, 0, len(parsed))
+	for _, row := range parsed {
+		block = append(block, []any{mapStorageID, row.LatE7, row.LngE7, row.Country, row.PanoID, row.HeadingCDeg, row.PitchCDeg, row.RandKey})
+	}
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"locations"}, []string{"map_storage_id", "lat_e7", "lng_e7", "country", "pano_id", "heading_cdeg", "pitch_cdeg", "rand_key_i"}, pgx.CopyFromRows(block)); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if _, err := tx.Exec(ctx, `delete from map_country_stats where map_id=$1`, mapID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into map_country_stats(map_id,country,location_count)
+		select $1,coalesce(nullif(country,''),'Unknown'),count(*)::int
+		from locations where map_storage_id=$2
+		group by coalesce(nullif(country,''), 'Unknown')
+	`, mapID, mapStorageID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if _, err := tx.Exec(ctx, `update maps set status='ready',location_count=$2,updated_at=now() where id=$1`, mapID, len(parsed)); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if _, err := tx.Exec(ctx, `insert into map_aliases(alias,map_id) values($1,$2) on conflict(alias) do update set map_id=excluded.map_id`, mapKey, mapID); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return contracts.CustomMap{}, err
+	}
+	details, ok, err := s.GetMap(adminUserID, mapID)
+	if err != nil || !ok {
+		return contracts.CustomMap{}, err
+	}
+	return details.Map, nil
+}
+
 func (s *pgStore) ReplaceCustomMapLocations(userID, mapID string, source io.Reader) (contracts.CustomMap, error) {
 	return s.ingestCustomMap(userID, strings.TrimSpace(mapID), "", "", "", "", "", 0, source, false)
 }

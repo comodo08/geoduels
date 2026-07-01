@@ -118,6 +118,9 @@ npm run dev
 
 Create and manage maps through the web map administration UI.
 
+For bulk official country maps generated from a local Vali install, use the
+dry-run-first pipeline in [`docs/map-imports.md`](docs/map-imports.md).
+
 To remove stale or unavailable Street View panoramas from a Vali export, validate it before uploading through the web UI:
 
 ```bash
@@ -205,6 +208,7 @@ For production PostgreSQL, enable `wal_compression=on` and `track_io_timing=on` 
 - [`docs/architecture.md`](docs/architecture.md) - service ownership, data flow, routing, reconnects, maintenance, and persistence.
 - [`docs/development.md`](docs/development.md) - local macOS setup, service startup, tests, and the k3d development environment.
 - [`docs/deployment.md`](docs/deployment.md) - production release flow, database migration policy, and post-deploy checks.
+- [`docs/map-imports.md`](docs/map-imports.md) - Vali country-map generation, dry-run validation, and admin production import.
 - [`docs/moderator-guide.md`](docs/moderator-guide.md) - moderator workbench workflow, verdict guidance, enforcement rules, and safety practices.
 - [`apps/web/docs/frontend-architecture.md`](apps/web/docs/frontend-architecture.md) - frontend ownership, shared UI and styling rules, and file-size budgets.
 - [`infra/k3s/README.md`](infra/k3s/README.md) - reusable Kubernetes manifests and local k3d scaling tests.

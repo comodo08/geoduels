@@ -269,6 +269,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/admin/changelog", a.adminGetChangelog).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/changelog", a.adminCreateChangelogPost).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/changelog/{id}", a.adminUpdateChangelogPost).Methods(http.MethodPut)
+	r.HandleFunc("/v1/admin/maps/official/import", a.adminImportOfficialMap).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/maps/current/upload", a.adminUploadCurrentMap).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/maps/{mapKey}/upload", a.adminUploadMap).Methods(http.MethodPost)
 	r.Handle("/metrics", observability.Handler(a.metrics.Registry)).Methods(http.MethodGet)
