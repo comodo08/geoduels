@@ -2,7 +2,7 @@
 
 # GeoDuels
 
-GeoDuels is a production-ready + dev-ready GeoGuessr-style platform built for horizontal scaling.
+GeoDuels is a free GeoGuessr-inspired multiplayer geography game with a focus on user-generated maps and real-time competitive dueling. The game is playable at
 
 https://geoduels.io/
 
