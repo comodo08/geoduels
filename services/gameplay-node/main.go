@@ -32,9 +32,11 @@ import (
 )
 
 const (
-	wsWriteWait  = 10 * time.Second
-	wsPongWait   = 70 * time.Second
-	wsPingPeriod = 25 * time.Second
+	wsWriteWait          = 10 * time.Second
+	wsPongWait           = 70 * time.Second
+	wsPingPeriod         = 25 * time.Second
+	matchLeaseRenewEvery = 10 * time.Second
+	matchLeaseTTL        = 45 * time.Second
 )
 
 var upgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
@@ -143,6 +145,7 @@ func main() {
 	defer g.coord.RemoveNode(context.Background(), g.nodeID)
 
 	go g.registerLoop()
+	go g.matchLeaseLoop()
 	go g.tick()
 
 	r := mux.NewRouter()
@@ -516,14 +519,9 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 
 	finalized, err := g.persist.FinalizeMatch(*snap, g.nodeEpoch)
 	if err != nil {
-		log.Printf("finalize match %s failed: %v", matchID, err)
-		g.mu.Lock()
-		delete(g.finalizing, matchID)
-		g.mu.Unlock()
-		time.AfterFunc(time.Second, func() {
-			if retrySnap, ok := g.getSnapshot(matchID); ok && retrySnap.State == contracts.MatchEnded {
-				g.terminalize(matchID, retrySnap)
-			}
+		g.metrics.DBWriteFailures.Inc()
+		observability.Log("error", "match finalization failed", map[string]any{
+			"matchId": matchID,
 		})
 		return
 	}
@@ -546,6 +544,25 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 		Players: players,
 	}); err != nil {
 		log.Printf("clear assignment failed: %v", err)
+	}
+}
+
+func (g *gameplayNode) matchLeaseLoop() {
+	ticker := time.NewTicker(matchLeaseRenewEvery)
+	defer ticker.Stop()
+	for {
+		g.mu.RLock()
+		matchIDs := make([]string, 0, len(g.matchUsers))
+		for matchID := range g.matchUsers {
+			matchIDs = append(matchIDs, matchID)
+		}
+		g.mu.RUnlock()
+		if len(matchIDs) > 0 {
+			if err := g.persist.RenewMatchSessionLeases(g.nodeID, g.nodeEpoch, matchIDs, matchLeaseTTL); err != nil {
+				g.metrics.DBWriteFailures.Inc()
+			}
+		}
+		<-ticker.C
 	}
 }
 

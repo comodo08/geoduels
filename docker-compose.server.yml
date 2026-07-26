@@ -2,6 +2,19 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - log_statement=none
+      - -c
+      - log_min_error_statement=fatal
+      - -c
+      - log_min_messages=warning
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

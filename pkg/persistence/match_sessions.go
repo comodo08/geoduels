@@ -13,6 +13,8 @@ import (
 	"geoduels/pkg/sessionpolicy"
 )
 
+const defaultMatchLeaseTTL = 45 * time.Second
+
 func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 	found := params.Found
 	found.Mode = sessionpolicy.NormalizeMode(found.Mode, found.MatchID)
@@ -40,13 +42,16 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 	if _, err := tx.Exec(ctx, `
 		insert into match_sessions(
 			match_id, preset_id, mode, state, ranked, source_kind, source_party_id, source_party_invite_code,
-			node_id, node_epoch, public_route, config_json, map_id, updated_at
+			node_id, node_epoch, public_route, config_json, map_id, lease_expires_at, updated_at
 		)
-		values($1,$2,$3,'live',$4,$5,nullif($6,'')::uuid,nullif($7,''),$8,$9,$10,$11::jsonb,nullif($12,'')::uuid,now())
+		values(
+			$1,$2,$3,'live',$4,$5,nullif($6,'')::uuid,nullif($7,''),
+			$8,$9,$10,$11::jsonb,nullif($12,'')::uuid,now()+$13::interval,now()
+		)
 		on conflict (match_id) do update set
 			preset_id = excluded.preset_id,
 			mode = excluded.mode,
-			state = case when match_sessions.state = 'ended' then match_sessions.state else excluded.state end,
+			state = case when match_sessions.state='ended' then match_sessions.state else excluded.state end,
 			ranked = excluded.ranked,
 			source_kind = excluded.source_kind,
 			source_party_id = excluded.source_party_id,
@@ -56,8 +61,12 @@ func (s *pgStore) UpsertMatchSession(params MatchSessionUpsert) error {
 			public_route = excluded.public_route,
 			config_json = excluded.config_json,
 			map_id = excluded.map_id,
+			lease_expires_at = case when match_sessions.state='ended'
+				then match_sessions.lease_expires_at else excluded.lease_expires_at end,
 			updated_at = now()
-	`, found.MatchID, string(presetID), string(found.Mode), ranked, sourceKind, found.SourcePartyID, found.SourcePartyInviteCode, params.NodeID, params.NodeEpoch, params.PublicRoute, string(cfgJSON), resolvedMapID(found)); err != nil {
+	`, found.MatchID, string(presetID), string(found.Mode), ranked, sourceKind,
+		found.SourcePartyID, found.SourcePartyInviteCode, params.NodeID, params.NodeEpoch,
+		params.PublicRoute, string(cfgJSON), resolvedMapID(found), defaultMatchLeaseTTL.String()); err != nil {
 		return err
 	}
 	for _, userID := range found.Players {
@@ -119,6 +128,24 @@ func (s *pgStore) MatchSessionSourceParty(matchID string) (string, string, bool,
 		return "", "", false, err
 	}
 	return partyID, inviteCode, partyID != "", nil
+}
+
+func (s *pgStore) RenewMatchSessionLeases(nodeID string, ownerEpoch int64, matchIDs []string, ttl time.Duration) error {
+	if strings.TrimSpace(nodeID) == "" || ownerEpoch == 0 || len(matchIDs) == 0 {
+		return nil
+	}
+	if ttl <= 0 {
+		ttl = defaultMatchLeaseTTL
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	_, err := s.pool.Exec(ctx, `
+		update match_sessions
+		set lease_expires_at=now()+$4::interval, updated_at=now()
+		where node_id=$1 and node_epoch=$2 and state='live'
+		  and match_id::text=any($3)
+	`, nodeID, ownerEpoch, matchIDs, ttl.String())
+	return err
 }
 
 func matchPresetID(found contracts.MatchFound) contracts.MatchPresetID {

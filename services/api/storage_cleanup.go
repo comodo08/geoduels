@@ -24,6 +24,9 @@ func (a *api) cleanupStorage() {
 	if !ok {
 		return
 	}
+	if _, err := maintenance.ReconcileStaleMatchSessions(a.staleMatchGrace, a.storageCleanupBatchSize); err != nil {
+		observability.Log("warn", "stale match reconciliation failed", map[string]any{"error": err.Error()})
+	}
 	result, err := maintenance.CleanupStorage(a.storageCleanupBatchSize)
 	if err != nil {
 		observability.Log("warn", "storage cleanup failed", map[string]any{"error": err.Error()})

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"geoduels/pkg/contracts"
 )
@@ -15,6 +16,18 @@ import (
 func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error) {
 	if strings.TrimSpace(snap.MatchID) == "" {
 		return snap, errors.New("match id required")
+	}
+	var matchUUID pgtype.UUID
+	if err := matchUUID.Scan(snap.MatchID); err != nil || !matchUUID.Valid {
+		return snap, errors.New("invalid match id")
+	}
+	var result duelResult
+	if snap.Mode == contracts.ModeDuel {
+		var err error
+		result, err = newDuelResult(&snap)
+		if err != nil {
+			return snap, err
+		}
 	}
 	replay, err := finalReplaySnapshotJSON(snap)
 	if err != nil {
@@ -77,7 +90,7 @@ func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 		return snap, err
 	}
 	if snap.Mode == contracts.ModeDuel {
-		if err := finalizeDuelResultTx(ctx, tx, &snap); err != nil {
+		if err := finalizeDuelResultTx(ctx, tx, &snap, &result); err != nil {
 			return snap, err
 		}
 	}
@@ -98,30 +111,12 @@ func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 	return snap, nil
 }
 
-func finalizeDuelResultTx(ctx context.Context, tx pgx.Tx, snap *contracts.MatchSnapshot) error {
-	if snap == nil || len(snap.Players) != 2 {
-		return nil
+func finalizeDuelResultTx(ctx context.Context, tx pgx.Tx, snap *contracts.MatchSnapshot, result *duelResult) error {
+	if snap == nil || result == nil {
+		return errors.New("duel result is required")
 	}
-	ids := make([]string, 0, 2)
-	for id := range snap.Players {
-		ids = append(ids, id)
-	}
-	p1 := snap.Players[ids[0]]
-	p2 := snap.Players[ids[1]]
-	winner := ""
-	if p1.HP > p2.HP {
-		winner = p1.UserID
-	} else if p2.HP > p1.HP {
-		winner = p2.UserID
-	}
-
-	if strings.TrimSpace(p1.UserID) == "" || strings.TrimSpace(p2.UserID) == "" {
-		// Corrupt snapshot (a player joined without a user id). We cannot
-		// compute a valid ranked result, so skip ranking and let the caller
-		// finish recording the match instead of looping on finalize.
-		return nil
-	}
-
+	p1 := &result.participants[0]
+	p2 := &result.participants[1]
 	seasonID := strings.TrimSpace(snap.SeasonID)
 	if seasonID == "" {
 		var err error
@@ -131,167 +126,168 @@ func finalizeDuelResultTx(ctx context.Context, tx pgx.Tx, snap *contracts.MatchS
 		}
 	}
 
-	var (
-		p1Rating, p2Rating RatingState
-		p1Guest, p2Guest   bool
-	)
-	if err := tx.QueryRow(ctx, `
-		select account_type = 'guest'
-		from users
-		where id = $1
-	`, p1.UserID).Scan(&p1Guest); err != nil {
+	rows, err := tx.Query(ctx, `
+		select
+			u.id,
+			u.account_type = 'guest',
+			r.mmr,
+			r.rd,
+			r.updated_at
+		from unnest(array[$1::uuid, $2::uuid]) with ordinality requested(user_id, position)
+		join users u on u.id = requested.user_id
+		join ranks r
+		  on r.user_id = u.id
+		 and r.mode = $3
+		 and r.season_id = $4
+		order by requested.position
+		for update of r
+	`, p1.userID, p2.userID, modeDuel, seasonID)
+	if err != nil {
 		return err
 	}
-	if err := tx.QueryRow(ctx, `
-		select account_type = 'guest'
-		from users
-		where id = $1
-	`, p2.UserID).Scan(&p2Guest); err != nil {
+	defer rows.Close()
+	participants := []*duelParticipantResult{p1, p2}
+	index := 0
+	for rows.Next() {
+		if index >= len(participants) {
+			return errors.New("duel result contains duplicate users")
+		}
+		var userID pgtype.UUID
+		current := participants[index]
+		if err := rows.Scan(
+			&userID,
+			&current.guest,
+			&current.rating.MMR,
+			&current.rating.RD,
+			&current.rating.UpdatedAt,
+		); err != nil {
+			return err
+		}
+		if userID.Bytes != current.userID.Bytes {
+			return errors.New("locked duel players are out of order")
+		}
+		index++
+	}
+	if err := rows.Err(); err != nil {
 		return err
 	}
-	matchWinner := ""
-	if winner == p1.UserID {
-		matchWinner = "p1"
-	} else if winner == p2.UserID {
-		matchWinner = "p2"
+	if index != len(participants) {
+		return errors.New("duel player rating state is missing")
 	}
+
 	privatePartyMatch, err := matchBelongsToPartyTx(ctx, tx, snap.MatchID)
 	if err != nil {
 		return err
 	}
-	ratedMatch := !snap.Unranked && !privatePartyMatch && (!p1Guest || !p2Guest)
+	ratedMatch := !snap.Unranked && !privatePartyMatch && (!p1.guest || !p2.guest)
 	now := time.Now()
-	p1Update := RatingUpdate{MMR: p1.MMR, RD: clampRatingRD(p1.RatingRD)}
-	p2Update := RatingUpdate{MMR: p2.MMR, RD: clampRatingRD(p2.RatingRD)}
 	if ratedMatch {
-		if err := tx.QueryRow(ctx, `
-			select mmr, rd, updated_at
-			from ranks
-			where user_id=$1 and mode=$2 and season_id=$3
-			for update
-		`, p1.UserID, modeDuel, seasonID).Scan(&p1Rating.MMR, &p1Rating.RD, &p1Rating.UpdatedAt); err != nil {
-			return err
-		}
-		if err := tx.QueryRow(ctx, `
-			select mmr, rd, updated_at
-			from ranks
-			where user_id=$1 and mode=$2 and season_id=$3
-			for update
-		`, p2.UserID, modeDuel, seasonID).Scan(&p2Rating.MMR, &p2Rating.RD, &p2Rating.UpdatedAt); err != nil {
-			return err
-		}
-		p1Update, p2Update = CalculateDuelRatingUpdates(p1Rating, p2Rating, matchWinner, now)
-	}
-	if ratedMatch && !p1Guest {
+		p1.update, p2.update = CalculateDuelRatingUpdates(p1.rating, p2.rating, result.ratingWinner(), now)
 		if _, err := tx.Exec(ctx, `
-			update ranks set mmr=$2, rd=$5, updated_at=$6
-			where user_id=$1 and mode=$3 and season_id=$4
-		`, p1.UserID, p1Update.MMR, modeDuel, seasonID, p1Update.RD, now); err != nil {
-			return err
-		}
-	}
-	if ratedMatch && !p2Guest {
-		if _, err := tx.Exec(ctx, `
-			update ranks set mmr=$2, rd=$5, updated_at=$6
-			where user_id=$1 and mode=$3 and season_id=$4
-		`, p2.UserID, p2Update.MMR, modeDuel, seasonID, p2Update.RD, now); err != nil {
+			update ranks r
+			set mmr = next.mmr,
+				rd = next.rd,
+				updated_at = $9
+			from (
+				values
+					($1::uuid, $2::integer, $3::double precision, $4::boolean),
+					($5::uuid, $6::integer, $7::double precision, $8::boolean)
+			) as next(user_id, mmr, rd, apply)
+			where r.user_id = next.user_id
+			  and r.mode = $10
+			  and r.season_id = $11
+			  and next.apply
+		`, p1.userID, p1.update.MMR, p1.update.RD, !p1.guest,
+			p2.userID, p2.update.MMR, p2.update.RD, !p2.guest,
+			now, modeDuel, seasonID); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.Exec(ctx, `
-		update user_stats
-		set games_played = games_played + 1,
-			wins = wins + case when user_id = $2 then 1 else 0 end,
+		update user_stats stats
+		set games_played = stats.games_played + 1,
+			wins = stats.wins + result.won::integer,
 			updated_at = now()
-		where user_id = $1
-	`, p1.UserID, winner); err != nil {
+		from (
+			values
+				($1::uuid, $2::boolean),
+				($3::uuid, $4::boolean)
+		) as result(user_id, won)
+		where stats.user_id = result.user_id
+	`, p1.userID, p1.won, p2.userID, p2.won); err != nil {
 		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		update user_stats
-		set games_played = games_played + 1,
-			wins = wins + case when user_id = $2 then 1 else 0 end,
-			updated_at = now()
-		where user_id = $1
-	`, p2.UserID, winner); err != nil {
-		return err
-	}
-	if ratedMatch && !p1Guest {
-		if _, err := tx.Exec(ctx, `
-			update ranked_stats
-			set games_played = games_played + 1,
-				wins = wins + case when user_id = $2 then 1 else 0 end,
-				updated_at = now()
-			where user_id = $1 and mode = $3 and season_id = $4
-		`, p1.UserID, winner, modeDuel, seasonID); err != nil {
-			return err
-		}
-	}
-	if ratedMatch && !p2Guest {
-		if _, err := tx.Exec(ctx, `
-			update ranked_stats
-			set games_played = games_played + 1,
-				wins = wins + case when user_id = $2 then 1 else 0 end,
-				updated_at = now()
-			where user_id = $1 and mode = $3 and season_id = $4
-		`, p2.UserID, winner, modeDuel, seasonID); err != nil {
-			return err
-		}
 	}
 	if ratedMatch {
 		if _, err := tx.Exec(ctx, `
-			update match_players
-				set
-					rating_before = $2,
-					rating_after = $3,
-					final_ranked_delta = $3::integer - $2::integer
-				where match_id = $1 and user_id = $4 and $5 = false
-		`, snap.MatchID, p1Rating.MMR, p1Update.MMR, p1.UserID, p1Guest); err != nil {
+			update ranked_stats stats
+			set games_played = stats.games_played + 1,
+				wins = stats.wins + result.won::integer,
+				updated_at = now()
+			from (
+				values
+					($1::uuid, $2::boolean, $3::boolean),
+					($4::uuid, $5::boolean, $6::boolean)
+			) as result(user_id, won, apply)
+			where stats.user_id = result.user_id
+			  and stats.mode = $7
+			  and stats.season_id = $8
+			  and result.apply
+		`, p1.userID, p1.won, !p1.guest,
+			p2.userID, p2.won, !p2.guest,
+			modeDuel, seasonID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
-			update match_players
-				set
-					rating_before = $2,
-					rating_after = $3,
-					final_ranked_delta = $3::integer - $2::integer
-				where match_id = $1 and user_id = $4 and $5 = false
-		`, snap.MatchID, p2Rating.MMR, p2Update.MMR, p2.UserID, p2Guest); err != nil {
+			update match_players players
+			set rating_before = result.rating_before,
+				rating_after = result.rating_after,
+				final_ranked_delta = result.rating_after - result.rating_before
+			from (
+				values
+					($2::uuid, $3::integer, $4::integer, $5::boolean),
+					($6::uuid, $7::integer, $8::integer, $9::boolean)
+			) as result(user_id, rating_before, rating_after, apply)
+			where players.match_id = $1
+			  and players.user_id = result.user_id
+			  and result.apply
+		`, snap.MatchID,
+			p1.userID, p1.rating.MMR, p1.update.MMR, !p1.guest,
+			p2.userID, p2.rating.MMR, p2.update.MMR, !p2.guest); err != nil {
 			return err
 		}
 	}
-	if ratedMatch && !p1Guest {
-		if err := awardEloBadgesTx(ctx, tx, p1.UserID, p1Update.MMR); err != nil {
+	if ratedMatch && !p1.guest {
+		if err := awardEloBadgesTx(ctx, tx, p1.userIDText, p1.update.MMR); err != nil {
 			return err
 		}
 	}
-	if ratedMatch && !p2Guest {
-		if err := awardEloBadgesTx(ctx, tx, p2.UserID, p2Update.MMR); err != nil {
+	if ratedMatch && !p2.guest {
+		if err := awardEloBadgesTx(ctx, tx, p2.userIDText, p2.update.MMR); err != nil {
 			return err
 		}
 	}
 	if ratedMatch {
 		fast5000 := rankedSpeedrunnerUsers(*snap)
-		if fast5000[p1.UserID] && !p1Guest {
-			if _, err := awardBadgeTx(ctx, tx, p1.UserID, "speedrunner"); err != nil {
+		if fast5000[p1.userIDText] && !p1.guest {
+			if _, err := awardBadgeTx(ctx, tx, p1.userIDText, "speedrunner"); err != nil {
 				return err
 			}
 		}
-		if fast5000[p2.UserID] && !p2Guest {
-			if _, err := awardBadgeTx(ctx, tx, p2.UserID, "speedrunner"); err != nil {
+		if fast5000[p2.userIDText] && !p2.guest {
+			if _, err := awardBadgeTx(ctx, tx, p2.userIDText, "speedrunner"); err != nil {
 				return err
 			}
 		}
 	}
-	if ratedMatch && !p1Guest {
-		p1.MMR = p1Update.MMR
-		p1.RatingRD = p1Update.RD
-		snap.Players[p1.UserID] = p1
+	if ratedMatch && !p1.guest {
+		p1.player.MMR = p1.update.MMR
+		p1.player.RatingRD = p1.update.RD
+		snap.Players[p1.userIDText] = p1.player
 	}
-	if ratedMatch && !p2Guest {
-		p2.MMR = p2Update.MMR
-		p2.RatingRD = p2Update.RD
-		snap.Players[p2.UserID] = p2
+	if ratedMatch && !p2.guest {
+		p2.player.MMR = p2.update.MMR
+		p2.player.RatingRD = p2.update.RD
+		snap.Players[p2.userIDText] = p2.player
 	}
 	return nil
 }
@@ -308,37 +304,58 @@ func applyPersistedRatingsToSnapshot(ctx context.Context, tx pgx.Tx, snap *contr
 			return err
 		}
 	}
-	for userID, player := range snap.Players {
+	userIDs := make([]string, 0, len(snap.Players))
+	for userID := range snap.Players {
+		userIDs = append(userIDs, userID)
+	}
+	encodedIDs, err := json.Marshal(userIDs)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `
+		select
+			mp.user_id::text,
+			coalesce(mp.rating_after, mp.mmr),
+			coalesce(r.rd, mp.rating_rd, $4)
+		from match_players mp
+		left join ranks r
+		  on r.user_id = mp.user_id
+		 and r.mode = $2
+		 and r.season_id = $3
+		where mp.match_id = $1
+		  and mp.user_id in (
+			select value::uuid from jsonb_array_elements_text($5::jsonb)
+		  )
+	`, snap.MatchID, modeDuel, seasonID, initialRatingRD, string(encodedIDs))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID string
 		var mmr int
 		var rd float64
-		err := tx.QueryRow(ctx, `
-			select
-				coalesce(mp.rating_after, mp.mmr),
-				coalesce(r.rd, mp.rating_rd, $4)
-			from match_players mp
-			left join ranks r
-			  on r.user_id = mp.user_id
-			 and r.mode = $2
-			 and r.season_id = $3
-			where mp.match_id = $1 and mp.user_id = $5
-		`, snap.MatchID, modeDuel, seasonID, initialRatingRD, userID).Scan(&mmr, &rd)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		if err != nil {
+		if err := rows.Scan(&userID, &mmr, &rd); err != nil {
 			return err
+		}
+		player, ok := snap.Players[userID]
+		if !ok {
+			continue
 		}
 		player.MMR = mmr
 		player.RatingRD = rd
 		snap.Players[userID] = player
 	}
-	return nil
+	return rows.Err()
 }
 
 func completeMatchSessionTx(ctx context.Context, tx pgx.Tx, matchID string) error {
 	if _, err := tx.Exec(ctx, `
 		update match_sessions
-		set state = 'ended', ended_at = coalesce(ended_at, now()), updated_at = now()
+		set state = 'ended',
+			ended_at = coalesce(ended_at, now()),
+			lease_expires_at = null,
+			updated_at = now()
 		where match_id = $1
 	`, matchID); err != nil {
 		return err
@@ -434,6 +451,11 @@ func ensureMatchUsersTx(ctx context.Context, tx pgx.Tx, snap contracts.MatchSnap
 			return err
 		}
 	}
+	type playerSeed struct {
+		UserID      string `json:"user_id"`
+		DisplayName string `json:"display_name"`
+	}
+	seeds := make([]playerSeed, 0, len(snap.Players))
 	for _, p := range snap.Players {
 		userID := strings.TrimSpace(p.UserID)
 		if userID == "" {
@@ -443,34 +465,50 @@ func ensureMatchUsersTx(ctx context.Context, tx pgx.Tx, snap contracts.MatchSnap
 		if name == "" {
 			name = userID
 		}
-		if _, err := tx.Exec(ctx, `
-			insert into users (id, email, display_name, avatar_url, account_type)
-			values ($1, null, $2, null, 'guest')
-			on conflict (id) do nothing
-		`, userID, name); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into ranks (user_id, mode, mmr, season_id)
-			values ($1, $2, $4, $3)
-			on conflict (user_id, mode, season_id) do nothing
-		`, userID, modeDuel, seasonID, initialMMR); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into user_stats (user_id, games_played, wins)
-			values ($1, 0, 0)
-			on conflict (user_id) do nothing
-		`, userID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-			insert into ranked_stats (user_id, mode, season_id, games_played, wins)
-			values ($1, $2, $3, 0, 0)
-			on conflict (user_id, mode, season_id) do nothing
-		`, userID, modeDuel, seasonID); err != nil {
-			return err
-		}
+		seeds = append(seeds, playerSeed{UserID: userID, DisplayName: name})
+	}
+	if len(seeds) == 0 {
+		return nil
+	}
+	encodedSeeds, err := json.Marshal(seeds)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into users (id, email, display_name, avatar_url, account_type)
+		select input.user_id, null, input.display_name, null, 'guest'
+		from jsonb_to_recordset($1::jsonb)
+			as input(user_id uuid, display_name text)
+		on conflict (id) do nothing
+	`, string(encodedSeeds)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into ranks (user_id, mode, mmr, season_id)
+		select input.user_id, $2, $3, $4
+		from jsonb_to_recordset($1::jsonb)
+			as input(user_id uuid)
+		on conflict (user_id, mode, season_id) do nothing
+	`, string(encodedSeeds), modeDuel, initialMMR, seasonID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into user_stats (user_id, games_played, wins)
+		select input.user_id, 0, 0
+		from jsonb_to_recordset($1::jsonb)
+			as input(user_id uuid)
+		on conflict (user_id) do nothing
+	`, string(encodedSeeds)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into ranked_stats (user_id, mode, season_id, games_played, wins)
+		select input.user_id, $2, $3, 0, 0
+		from jsonb_to_recordset($1::jsonb)
+			as input(user_id uuid)
+		on conflict (user_id, mode, season_id) do nothing
+	`, string(encodedSeeds), modeDuel, seasonID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -583,6 +621,15 @@ func recordMatchHistory(
 		replayHash, replayRetentionDays, len(snap.RoundResults)); err != nil {
 		return err
 	}
+	type matchPlayerRecord struct {
+		UserID      string  `json:"user_id"`
+		DisplayName string  `json:"display_name"`
+		MMR         int     `json:"mmr"`
+		HP          int     `json:"hp"`
+		RatingRD    float64 `json:"rating_rd"`
+		TotalScore  int     `json:"total_score"`
+	}
+	playerRecords := make([]matchPlayerRecord, 0, len(snap.Players))
 	for userID, player := range snap.Players {
 		if strings.TrimSpace(userID) == "" {
 			// A blank user id never has a users row and would fail the uuid
@@ -599,37 +646,72 @@ func recordMatchHistory(
 				totalScore += round.Players[userID].Score
 			}
 		}
+		playerRecords = append(playerRecords, matchPlayerRecord{
+			UserID:      userID,
+			DisplayName: displayName,
+			MMR:         player.MMR,
+			HP:          player.HP,
+			RatingRD:    clampRatingRD(player.RatingRD),
+			TotalScore:  totalScore,
+		})
+	}
+	encodedPlayers, err := json.Marshal(playerRecords)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into match_players(
+			match_id, user_id, display_name, mmr, hp, rating_rd, total_score, ended_at
+		)
+		select
+			$1, input.user_id, input.display_name, input.mmr, input.hp,
+			input.rating_rd, input.total_score, $2
+		from jsonb_to_recordset($3::jsonb) as input(
+			user_id uuid,
+			display_name text,
+			mmr integer,
+			hp integer,
+			rating_rd double precision,
+			total_score integer
+		)
+		on conflict (match_id, user_id) do update set
+			display_name = excluded.display_name,
+			mmr = excluded.mmr,
+			hp = excluded.hp,
+			rating_rd = excluded.rating_rd,
+			total_score = excluded.total_score,
+			ended_at = excluded.ended_at
+	`, matchID, endedAt, string(encodedPlayers)); err != nil {
+		return err
+	}
+	if snap.Mode == contracts.ModeSingleplayer && len(snap.RoundResults) == 5 && strings.TrimSpace(mapID) != "" {
+		rulesetCode := 0
+		if contracts.NormalizeRuleset(snap.Config.Ruleset) == contracts.RulesetNMPZ {
+			rulesetCode = 1
+		}
 		if _, err := tx.Exec(ctx, `
-			insert into match_players(match_id, user_id, display_name, mmr, hp, rating_rd, total_score, ended_at)
-			values($1, $2, $3, $4, $5, $6, $7, $8)
-			on conflict (match_id, user_id) do update set
-				display_name = excluded.display_name,
-				mmr = excluded.mmr,
-				hp = excluded.hp,
-				rating_rd = excluded.rating_rd,
-				total_score = excluded.total_score,
-				ended_at = excluded.ended_at
-		`, matchID, userID, displayName, player.MMR, player.HP, clampRatingRD(player.RatingRD), totalScore, endedAt); err != nil {
+			insert into player_map_bests(user_id,map_id,ruleset,best_score,match_id,achieved_at)
+			select input.user_id,$2,$3,input.total_score,$1,$4
+			from jsonb_to_recordset($5::jsonb)
+				as input(user_id uuid, total_score integer)
+			on conflict(user_id,map_id,ruleset) do update
+			set best_score=excluded.best_score,
+			    match_id=excluded.match_id,
+			    achieved_at=excluded.achieved_at
+			where excluded.best_score>player_map_bests.best_score
+		`, matchID, mapID, rulesetCode, endedAt, string(encodedPlayers)); err != nil {
 			return err
 		}
-		if snap.Mode == contracts.ModeSingleplayer && len(snap.RoundResults) == 5 && strings.TrimSpace(mapID) != "" {
-			rulesetCode := 0
-			if contracts.NormalizeRuleset(snap.Config.Ruleset) == contracts.RulesetNMPZ {
-				rulesetCode = 1
-			}
-			if _, err := tx.Exec(ctx, `
-				insert into player_map_bests(user_id,map_id,ruleset,best_score,match_id,achieved_at)
-				values($1,$2,$3,$4,$5,$6)
-				on conflict(user_id,map_id,ruleset) do update
-				set best_score=excluded.best_score,
-				    match_id=excluded.match_id,
-				    achieved_at=excluded.achieved_at
-				where excluded.best_score>player_map_bests.best_score
-			`, userID, mapID, rulesetCode, totalScore, matchID, endedAt); err != nil {
-				return err
-			}
-		}
 	}
+	type rankedGuessRecord struct {
+		UserID     string  `json:"user_id"`
+		Round      int     `json:"round_number"`
+		Score      int     `json:"score"`
+		GuessMS    int64   `json:"guess_ms"`
+		Evidence   float64 `json:"evidence"`
+		OccurredAt string  `json:"occurred_at"`
+	}
+	guessRecords := make([]rankedGuessRecord, 0, len(snap.RoundResults)*len(snap.Players))
 	for _, round := range snap.RoundResults {
 		if round == nil {
 			continue
@@ -643,20 +725,44 @@ func recordMatchHistory(
 				if result.GuessUnixMS > 0 {
 					occurredAt = time.UnixMilli(result.GuessUnixMS)
 				}
-				if _, err := tx.Exec(ctx, `
-					insert into ranked_guess_events(
-						user_id, match_id, round_number, score, guess_ms, evidence, occurred_at
-					)
-					values($1, $2, $3, $4, $5, $6, $7)
-					on conflict (match_id, round_number, user_id) do update set
-						score = excluded.score,
-						guess_ms = excluded.guess_ms,
-						evidence = excluded.evidence,
-						occurred_at = excluded.occurred_at
-				`, userID, matchID, round.RoundNumber, result.Score, min(result.GuessMS, int64(2147483647)), guessEvidence(result.Score, result.GuessMS), occurredAt); err != nil {
-					return err
-				}
+				guessRecords = append(guessRecords, rankedGuessRecord{
+					UserID:     userID,
+					Round:      round.RoundNumber,
+					Score:      result.Score,
+					GuessMS:    min(result.GuessMS, int64(2147483647)),
+					Evidence:   guessEvidence(result.Score, result.GuessMS),
+					OccurredAt: occurredAt.UTC().Format(time.RFC3339Nano),
+				})
 			}
+		}
+	}
+	if len(guessRecords) > 0 {
+		encodedGuesses, err := json.Marshal(guessRecords)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into ranked_guess_events(
+				user_id, match_id, round_number, score, guess_ms, evidence, occurred_at
+			)
+			select
+				input.user_id, $1, input.round_number, input.score,
+				input.guess_ms, input.evidence, input.occurred_at
+			from jsonb_to_recordset($2::jsonb) as input(
+				user_id uuid,
+				round_number smallint,
+				score smallint,
+				guess_ms integer,
+				evidence real,
+				occurred_at timestamptz
+			)
+			on conflict (match_id, round_number, user_id) do update set
+				score = excluded.score,
+				guess_ms = excluded.guess_ms,
+				evidence = excluded.evidence,
+				occurred_at = excluded.occurred_at
+		`, matchID, string(encodedGuesses)); err != nil {
+			return err
 		}
 	}
 	return nil

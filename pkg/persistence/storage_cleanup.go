@@ -218,4 +218,87 @@ func (s *pgStore) CleanupStorage(batchSize int) (StorageCleanupResult, error) {
 	return out, nil
 }
 
+func (s *pgStore) ReconcileStaleMatchSessions(grace time.Duration, batchSize int) (int64, error) {
+	if grace <= 0 {
+		grace = 5 * time.Minute
+	}
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, `
+		select match_id::text
+		from match_sessions
+		where state='live' and lease_expires_at < now()-$1::interval
+		order by lease_expires_at
+		limit $2
+		for update skip locked
+	`, grace.String(), min(batchSize, 10_000))
+	if err != nil {
+		return 0, err
+	}
+	var matchIDs []string
+	for rows.Next() {
+		var matchID string
+		if err := rows.Scan(&matchID); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		matchIDs = append(matchIDs, matchID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+	if len(matchIDs) == 0 {
+		return 0, tx.Commit(ctx)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		update match_sessions
+		set state='ended', ended_at=coalesce(ended_at,now()),
+		    lease_expires_at=null, updated_at=now()
+		where match_id::text=any($1)
+	`, matchIDs); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `
+		update runtime_matches
+		set state='ended', ended_at=coalesce(ended_at,now())
+		where id::text=any($1)
+	`, matchIDs); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `
+		update parties
+		set state='open',
+		    last_match_id=case when active_match_id::text=any($1)
+		        then active_match_id else started_match_id end,
+		    active_match_id=null, started_match_id=null, updated_at=now()
+		where active_match_id::text=any($1) or started_match_id::text=any($1)
+	`, matchIDs); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `
+		update party_members pm
+		set ready=false
+		from match_sessions ms
+		where ms.match_id::text=any($1) and pm.party_id=ms.source_party_id
+	`, matchIDs); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return int64(len(matchIDs)), nil
+}
+
 var _ StorageMaintenance = (*pgStore)(nil)

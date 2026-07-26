@@ -53,6 +53,12 @@ This document describes the current runtime implemented in this repository. Olde
 6. `realtime-gateway` resolves the registered gameplay pod for that route and proxies the websocket to the exact `gameplay-node`.
 7. `gameplay-node` runs the authoritative match loop and broadcasts snapshots.
 
+Live match sessions also carry a durable PostgreSQL lease. The owning gameplay
+node renews that lease in a single bounded batch. Expired leases are reconciled
+by the API maintenance loop and become `ended`. Redis assignment and presence
+keys expire through their existing TTLs and are never the durable match-state
+authority.
+
 ### Singleplayer
 
 1. Browser asks `services/api` to start a singleplayer session.
@@ -133,6 +139,12 @@ This document describes the current runtime implemented in this repository. Olde
 ## Match persistence and retention
 
 - A terminal gameplay snapshot is not broadcast as `ended` until PostgreSQL atomically commits match history, participant projections, rating/stat updates, match-session completion, runtime completion, and party reopening.
+- Duel finalization computes one explicit, stable-slot result (`player 1 win`,
+  `player 2 win`, or `draw`) before persistence. UUIDs are parsed at that
+  boundary, and stat writes consume per-player boolean win facts rather than
+  empty-string winner sentinels.
+- Finalization is attempted once as one idempotent transaction. Gameplay nodes
+  do not own retry timers or repeat failed writes.
 - The committed snapshot returned to the gameplay node contains authoritative post-match ratings. Redis assignment cleanup happens only after that snapshot is broadcast.
 - Compact match summaries and participant projections are retained durably for profiles, rankings, moderation, and match lists.
 - Full replay snapshots are Zstandard-compressed when written and retained for 30 days by default.

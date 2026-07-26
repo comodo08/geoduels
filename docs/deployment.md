@@ -58,6 +58,16 @@ When migrations 42 and 47 are performed in the same maintenance window, keep
 all writers stopped from storage compaction through the UUID migration and
 deploy the UUID-compatible application before reopening traffic.
 
+Migration 55 adds match-session leases. Apply it before deploying the API and
+gameplay-node changes that renew and reconcile those leases. Existing live
+sessions receive a 30-minute initial lease so a rolling deployment does not
+immediately classify them as stale. Drain active matches where practical,
+apply the migration, then roll out the gameplay nodes and API within that
+window. Monitor database write failures during the rollout. Do not shorten
+`MATCH_SESSION_STALE_GRACE` below the expected
+deployment and transient database-recovery time without reviewing the
+abandonment behavior.
+
 ## Post-Deploy Checks
 
 - `/health`, `/health/live`, and `/health/ready` for API and all deployed workers/services

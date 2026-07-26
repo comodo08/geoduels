@@ -55,6 +55,7 @@ type api struct {
 	guestCleanupBatchSize   int
 	storageCleanupInterval  time.Duration
 	storageCleanupBatchSize int
+	staleMatchGrace         time.Duration
 	turnstileSecret         string
 	turnstileVerifyURL      string
 	turnstileHostname       string
@@ -164,6 +165,7 @@ func newAPI() (*api, error) {
 		guestCleanupBatchSize:   getenvInt("GUEST_ACCOUNT_CLEANUP_BATCH_SIZE", 1000),
 		storageCleanupInterval:  getenvDuration("STORAGE_CLEANUP_INTERVAL", time.Minute),
 		storageCleanupBatchSize: getenvInt("STORAGE_CLEANUP_BATCH_SIZE", 1000),
+		staleMatchGrace:         getenvDuration("MATCH_SESSION_STALE_GRACE", 5*time.Minute),
 		turnstileSecret:         turnstileSecret,
 		turnstileVerifyURL:      getenv("TURNSTILE_VERIFY_URL", turnstileSiteverifyURL),
 		turnstileHostname:       strings.TrimSpace(os.Getenv("TURNSTILE_EXPECTED_HOSTNAME")),

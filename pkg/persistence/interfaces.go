@@ -55,6 +55,7 @@ type LeaderboardRepository interface {
 
 type MatchRepository interface {
 	FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error)
+	RenewMatchSessionLeases(nodeID string, ownerEpoch int64, matchIDs []string, ttl time.Duration) error
 	GetFinalMatchSnapshot(matchID string) ([]byte, bool, error)
 	ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error)
 	ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (MatchHistoryPage, error)
@@ -155,6 +156,7 @@ type StorageCleanupResult struct {
 
 type StorageMaintenance interface {
 	CleanupStorage(batchSize int) (StorageCleanupResult, error)
+	ReconcileStaleMatchSessions(grace time.Duration, batchSize int) (int64, error)
 }
 
 type ChatRepository interface {

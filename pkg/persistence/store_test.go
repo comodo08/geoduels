@@ -6,17 +6,20 @@ import (
 	"testing"
 )
 
-func TestFinalizeMatchFinalRankedDeltaCastsParameters(t *testing.T) {
+func TestFinalizeMatchUsesTypedSetBasedStatUpdates(t *testing.T) {
 	body, err := os.ReadFile("matches_write.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if strings.Contains(source, "final_ranked_delta = $3 - $2") {
-		t.Fatal("final_ranked_delta must cast pgx parameters before subtraction")
+	if strings.Contains(source, "case when user_id = $2") {
+		t.Fatal("winner must not be passed as a UUID sentinel")
 	}
-	if got := strings.Count(source, "final_ranked_delta = $3::integer - $2::integer"); got != 2 {
-		t.Fatalf("typed final_ranked_delta expressions = %d, want 2", got)
+	if got := strings.Count(source, "result.won::integer"); got != 2 {
+		t.Fatalf("set-based boolean win expressions = %d, want 2", got)
+	}
+	if !strings.Contains(source, "final_ranked_delta = result.rating_after - result.rating_before") {
+		t.Fatal("set-based final ranked delta update is missing")
 	}
 }
 

@@ -276,6 +276,10 @@ func (s *recoverTestStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoc
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) RenewMatchSessionLeases(nodeID string, ownerEpoch int64, matchIDs []string, ttl time.Duration) error {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) GetFinalMatchSnapshot(matchID string) ([]byte, bool, error) {
 	panic("unexpected call")
 }
