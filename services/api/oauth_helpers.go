@@ -139,6 +139,8 @@ func oauthUserError(err error) string {
 		return "Sign in as a guest before saving progress."
 	case strings.Contains(msg, "identity banned"):
 		return "This sign-in method is banned from GeoDuels."
+	case errors.Is(err, persistence.ErrOAuthEmailConflict):
+		return "This verified email is linked to multiple GeoDuels accounts. Contact support to recover the account."
 	case strings.Contains(msg, "signup unavailable"):
 		return "signup unavailable"
 	default:

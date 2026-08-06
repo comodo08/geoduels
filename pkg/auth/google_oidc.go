@@ -15,11 +15,12 @@ type GoogleVerifier struct {
 }
 
 type IdentityTokenClaims struct {
-	Sub     string `json:"sub"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
-	Nonce   string `json:"nonce"`
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	Nonce         string `json:"nonce"`
 }
 
 func NewGoogleVerifier(ctx context.Context, clientID, issuer string) (*GoogleVerifier, error) {

@@ -199,10 +199,7 @@ func (a *api) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		payload["error"] = "invalid google identity"
 		return
 	}
-	email := strings.TrimSpace(idClaims.Email)
-	if email == "" {
-		email = idClaims.Sub + "@oidc.invalid"
-	}
+	email := googleAccountEmail(idClaims)
 	displayName := strings.TrimSpace(idClaims.Name)
 	if displayName == "" {
 		displayName = email
@@ -235,6 +232,14 @@ func (a *api) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	a.setRefreshCookie(w, r, refreshToken)
 	payload = a.oauthSessionPayload("google", accessToken, identity, displayName, state.ReturnTo)
+}
+
+func googleAccountEmail(claims auth.IdentityTokenClaims) string {
+	email := strings.TrimSpace(claims.Email)
+	if email == "" || !claims.EmailVerified {
+		return claims.Sub + "@oidc.invalid"
+	}
+	return email
 }
 
 func sanitizeOAuthReturnPath(raw string) string {

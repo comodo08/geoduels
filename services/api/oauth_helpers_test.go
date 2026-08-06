@@ -146,3 +146,11 @@ func TestOAuthGuestUpgradeRequiresGuestAccount(t *testing.T) {
 		t.Fatalf("link calls = %d, want 0", store.linkCalls)
 	}
 }
+
+func TestOAuthUserErrorExplainsAmbiguousVerifiedEmail(t *testing.T) {
+	got := oauthUserError(persistence.ErrOAuthEmailConflict)
+	want := "This verified email is linked to multiple GeoDuels accounts. Contact support to recover the account."
+	if got != want {
+		t.Fatalf("oauthUserError() = %q, want %q", got, want)
+	}
+}

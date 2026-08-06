@@ -17,6 +17,8 @@ import (
 
 var ErrNicknameTaken = errors.New("nickname already taken")
 
+var ErrOAuthEmailConflict = errors.New("verified email is linked to multiple accounts")
+
 func chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType string) (string, bool) {
 	if existingProviderUserID != "" {
 		return existingProviderUserID, false
@@ -49,6 +51,58 @@ func providerAccountEmail(provider, email string) any {
 		return email
 	}
 	return nil
+}
+
+func lockOAuthEmail(ctx context.Context, tx pgx.Tx, email string) error {
+	if email == "" || isSyntheticOAuthEmail(email) {
+		return nil
+	}
+	// Account discovery and canonical-email claims must be serialized together.
+	// A transaction-scoped advisory lock works through PgBouncer transaction pools.
+	_, err := tx.Exec(ctx, `
+		select pg_advisory_xact_lock(hashtextextended(lower(btrim($1)), 0))
+	`, email)
+	return err
+}
+
+func findUserByVerifiedEmail(ctx context.Context, tx pgx.Tx, email string) (string, string, error) {
+	if email == "" || isSyntheticOAuthEmail(email) {
+		return "", "", nil
+	}
+	rows, err := tx.Query(ctx, `
+		select u.id, u.account_type
+		from users u
+		where u.deleted_at is null
+		  and (
+			lower(btrim(u.email)) = lower(btrim($1))
+			or exists (
+				select 1
+				from user_identities ui
+				where ui.user_id = u.id
+				  and lower(btrim(ui.email)) = lower(btrim($1))
+			)
+		  )
+		order by u.created_at, u.id
+		limit 2
+	`, email)
+	if err != nil {
+		return "", "", err
+	}
+	defer rows.Close()
+
+	var userID, accountType string
+	if rows.Next() {
+		if err := rows.Scan(&userID, &accountType); err != nil {
+			return "", "", err
+		}
+	}
+	if rows.Next() {
+		return "", "", ErrOAuthEmailConflict
+	}
+	if err := rows.Err(); err != nil {
+		return "", "", err
+	}
+	return userID, accountType, nil
 }
 
 func (s *pgStore) UpsertGoogleIdentity(googleSub, email, googleName, avatarURL, linkUserID string) (Identity, error) {
@@ -85,6 +139,11 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 	if err != nil {
 		return Identity{}, err
 	}
+	if providerUsesAccountEmail(provider) {
+		if err := lockOAuthEmail(ctx, tx, email); err != nil {
+			return Identity{}, err
+		}
+	}
 
 	var existingProviderUserID string
 	row := tx.QueryRow(ctx, `
@@ -107,15 +166,9 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 	}
 	var existingEmailUserID string
 	var existingEmailAccountType string
-	if providerUsesAccountEmail(provider) && existingProviderUserID == "" && email != "" && !isSyntheticOAuthEmail(email) {
-		row = tx.QueryRow(ctx, `
-			select id, account_type
-			from users
-			where lower(email) = lower($1)
-			order by case when account_type = 'registered' then 0 else 1 end, created_at asc
-			limit 1
-		`, email)
-		if err := row.Scan(&existingEmailUserID, &existingEmailAccountType); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if providerUsesAccountEmail(provider) && existingProviderUserID == "" {
+		existingEmailUserID, existingEmailAccountType, err = findUserByVerifiedEmail(ctx, tx, email)
+		if err != nil {
 			return Identity{}, err
 		}
 	}
@@ -137,7 +190,22 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 		insert into users (id, email, display_name, avatar_url, account_type)
 		values ($1, $2, $3, $4, 'registered')
 		on conflict (id) do update set
-			email = coalesce(excluded.email, users.email),
+			email = case
+				when excluded.email is null then users.email
+				when exists (
+					select 1 from users email_owner
+					where email_owner.id <> users.id
+					  and email_owner.deleted_at is null
+					  and lower(btrim(email_owner.email)) = lower(btrim(excluded.email))
+					union all
+					select 1 from user_identities identity_owner
+					join users identity_user on identity_user.id = identity_owner.user_id
+					where identity_owner.user_id <> users.id
+					  and identity_user.deleted_at is null
+					  and lower(btrim(identity_owner.email)) = lower(btrim(excluded.email))
+				) then users.email
+				else excluded.email
+			end,
 			display_name = case
 				when users.account_type = 'guest' then excluded.display_name
 				when users.nickname_claimed_at is not null and nullif(users.display_name, '') is not null then users.display_name
@@ -258,6 +326,11 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 	if err != nil {
 		return Identity{}, err
 	}
+	if providerUsesAccountEmail(provider) {
+		if err := lockOAuthEmail(ctx, tx, email); err != nil {
+			return Identity{}, err
+		}
+	}
 
 	var linkAccountType string
 	if err := tx.QueryRow(ctx, `
@@ -294,15 +367,12 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 		}
 	}
 	if providerUsesAccountEmail(provider) && email != "" && !isSyntheticOAuthEmail(email) {
-		var existingEmailUserID string
-		err = tx.QueryRow(ctx, `
-			select id
-			from users
-			where lower(email) = lower($1)
-			limit 1
-		`, email).Scan(&existingEmailUserID)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		existingEmailUserID, _, err := findUserByVerifiedEmail(ctx, tx, email)
+		if err != nil && !errors.Is(err, ErrOAuthEmailConflict) {
 			return Identity{}, err
+		}
+		if errors.Is(err, ErrOAuthEmailConflict) {
+			return Identity{}, errors.New("provider identity already linked")
 		}
 		if existingEmailUserID != "" && existingEmailUserID != linkUserID {
 			return Identity{}, errors.New("provider identity already linked")
