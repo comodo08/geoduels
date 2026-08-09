@@ -51,7 +51,7 @@
   }
   function options(extra) {
     const hidden = config.streetNames === "hidden";
-    const noMove = config.ruleset === "no_move";
+    const noMove = config.ruleset === "no_move" || config.ruleset === "nmpz";
     return { ...(extra || {}), addressControl: !hidden, showRoadLabels: !hidden, clickToGo: !noMove, linksControl: !noMove };
   }
   function latLng(value) {
@@ -95,7 +95,7 @@
   }
   function protectedValue(key, value) {
     if (config.streetNames === "hidden" && (key === "showRoadLabels" || key === "addressControl")) return false;
-    if (config.ruleset === "no_move" && (key === "clickToGo" || key === "linksControl")) return false;
+    if ((config.ruleset === "no_move" || config.ruleset === "nmpz") && (key === "clickToGo" || key === "linksControl")) return false;
     return value;
   }
   function register(panorama) {
