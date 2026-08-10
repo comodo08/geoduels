@@ -210,23 +210,11 @@ function WrappedResultLayer({
   resultPlayerBorderColors
 }: WrappedResultLayerProps) {
   const map = useMap();
-  const [viewportVersion, setViewportVersion] = useState(0);
+  const viewportVersion = useResultInteractions(map);
   const actualLocationIcon = useMemo(
     () => createActualLocationIcon(result.actualLocation.lat, result.actualLocation.lng),
     [result.actualLocation.lat, result.actualLocation.lng]
   );
-
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
 
   const layout = useMemo(() => {
     const container = map.getContainer();
@@ -294,19 +282,8 @@ function WrappedResultsLayer({
   resultPlayerBorderColors
 }: WrappedResultsLayerProps) {
   const map = useMap();
-  const [viewportVersion, setViewportVersion] = useState(0);
-
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
+  const viewportVersion = useResultInteractions(map);
+  const actualLocationIcons = useActualLocationIcons(results);
 
   const layout = useMemo(() => {
     const container = map.getContainer();
@@ -337,11 +314,7 @@ function WrappedResultsLayer({
         <Marker
           key={`actual-${round.roundIndex}`}
           position={[round.actualLatLng.lat, round.actualLatLng.lng]}
-          icon={createActualLocationIcon(
-            round.actualLocation.lat,
-            round.actualLocation.lng,
-            round.roundIndex + 1
-          )}
+          icon={actualLocationIcons[round.roundIndex]}
           zIndexOffset={4000}
           title={`Round ${round.roundIndex + 1}: Open actual location in Google Maps`}
         />
@@ -437,6 +410,70 @@ export function buildGoogleMapsLocationUrl(lat: number, lng: number) {
   return `https://www.google.com/maps/@?${params.toString()}`;
 }
 
+export function openLocationInMaps(lat: number, lng: number): string {
+  const url = buildGoogleMapsLocationUrl(lat, lng);
+  if (typeof window !== 'undefined' && typeof window.open === 'function') {
+    const opened = window.open(url, '_blank');
+    if (opened) opened.opener = null;
+  }
+  return url;
+}
+
+function disableMapClickPropagationForActualMarkers(container: HTMLElement) {
+  container
+    .querySelectorAll('.actual-location-marker')
+    .forEach((node) => {
+      const el = node as HTMLElement;
+      if (el.dataset.actualPropagationDisabled) return;
+      L.DomEvent.disableClickPropagation(el);
+      el.dataset.actualPropagationDisabled = '1';
+    });
+}
+
+function useResultInteractions(map: L.Map): number {
+  const [viewportVersion, setViewportVersion] = useState(0);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    
+    disableMapClickPropagationForActualMarkers(container);
+
+    const handleClick = (event: Event) => {
+      const link = (event.target as HTMLElement | null)?.closest<HTMLElement>('.actualLocationLink');
+      if (!link) return;
+      event.preventDefault();
+      const lat = Number(link.dataset.lat);
+      const lng = Number(link.dataset.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        openLocationInMaps(lat, lng);
+      }
+    };
+    container.addEventListener('click', handleClick, true);
+    return () => container.removeEventListener('click', handleClick, true);
+  }, [map, viewportVersion]);
+
+  useMapEvents({
+    move: () => setViewportVersion((value) => value + 1),
+    zoom: () => setViewportVersion((value) => value + 1),
+    resize: () => setViewportVersion((value) => value + 1)
+  });
+
+  return viewportVersion;
+}
+
+function useActualLocationIcons(results: RoundResult[]): L.DivIcon[] {
+  const signature = results
+    .map((round) => `${round.actualLocation.lat},${round.actualLocation.lng}`)
+    .join('|');
+  return useMemo(
+    () =>
+      results.map((round, index) =>
+        createActualLocationIcon(round.actualLocation.lat, round.actualLocation.lng, index + 1)
+      ),
+    [signature]
+  );
+}
+
 function createAvatarMarkerIcon({
   avatarUrl,
   fallback,
@@ -476,6 +513,8 @@ export function createActualLocationIcon(lat: number, lng: number, roundNumber?:
   const content = label
     ? `<span class="actualLocationNumber">${label}</span>`
     : '<span class="actualLocationFlag"></span>';
+  const latAttr = String(lat);
+  const lngAttr = String(lng);
   const mapsUrl = buildGoogleMapsLocationUrl(lat, lng).replace(/&/g, '&amp;');
   const accessibleLabel = label
     ? `Open round ${label} actual location in Google Maps`
@@ -483,7 +522,7 @@ export function createActualLocationIcon(lat: number, lng: number, roundNumber?:
 
   return L.divIcon({
     className: 'actual-location-marker',
-    html: `<a class="actualLocationLink" href="${mapsUrl}" target="_blank" rel="noopener noreferrer" aria-label="${accessibleLabel}"><span class="actualLocationPin" aria-hidden="true">${content}</span></a>`,
+    html: `<a class="actualLocationLink" href="${mapsUrl}" target="_blank" rel="noopener noreferrer" aria-label="${accessibleLabel}" data-lat="${latAttr}" data-lng="${lngAttr}"><span class="actualLocationPin" aria-hidden="true">${content}</span></a>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15]
   });
