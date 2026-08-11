@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import AvatarBadge from "./AvatarBadge";
+import { formatDamageMultiplierLabel } from "./damage-multiplier";
 import { MmrDisplay, RatingTrophyIcon } from "./MmrDisplay";
 export { RatingTrophyIcon } from "./MmrDisplay";
 import PlayerNameWithBadge from "./PlayerNameWithBadge";
@@ -57,23 +58,37 @@ export function ParticipantName({
   participant,
   nameClassName = "",
   wrapperClassName = "",
+  multiplier,
 }: {
   participant: ParticipantIdentityView;
   nameClassName?: string;
   wrapperClassName?: string;
+  multiplier?: number;
 }) {
+  const multiplierLabel =
+    multiplier === undefined ? null : formatDamageMultiplierLabel(multiplier);
+  const multiplierBadge = multiplierLabel ? (
+    <span
+      data-testid="participant-multiplier-badge"
+      aria-label={`Damage multiplier ${multiplierLabel}`}
+      className="font-hud shrink-0 rounded-pill border border-[#2ad18f]/35 bg-[#0c1a16]/80 px-1.5 py-[1px] text-[11px] leading-tight text-white"
+    >
+      {multiplierLabel}
+    </span>
+  ) : null;
   if (participant.kind === "team") {
     return (
       <span
-        className={`inline-flex max-w-full items-center ${wrapperClassName}`.trim()}
+        className={`inline-flex max-w-full items-center gap-1.5 ${wrapperClassName}`.trim()}
       >
         <span className={`truncate ${nameClassName}`.trim()}>
           {participant.name}
         </span>
+        {multiplierBadge}
       </span>
     );
   }
-  return (
+  const name = (
     <PlayerNameWithBadge
       name={participant.name}
       userId={participant.id}
@@ -81,8 +96,17 @@ export function ParticipantName({
       isAdmin={participant.isAdmin}
       selectedBadge={participant.selectedBadge}
       nameClassName={nameClassName}
-      wrapperClassName={wrapperClassName}
+      wrapperClassName={multiplierBadge ? "min-w-0" : wrapperClassName}
     />
+  );
+  if (!multiplierBadge) return name;
+  return (
+    <span
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.5 ${wrapperClassName}`.trim()}
+    >
+      {name}
+      {multiplierBadge}
+    </span>
   );
 }
 
@@ -183,6 +207,7 @@ export function ParticipantIdentityCard({
         <ParticipantName
           participant={participant}
           nameClassName={nameClassName}
+          multiplier={participant.damageMultiplier}
         />
         <div className="mt-1">
           <PlayerRating

@@ -111,7 +111,6 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         currentRoundId: "round-1",
         currentRoundNumber: 1,
         userAvatar: "",
-        damageMultiplier: 1,
         guessSubmitted: false,
         opponentGuessAlert: false,
         connectionIssue: "",

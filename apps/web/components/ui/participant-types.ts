@@ -14,6 +14,7 @@ export type PlayerIdentityView = {
   ratingDelta?: number;
   ratingPreview?: RatingDeltaPreview;
   disconnected?: boolean;
+  damageMultiplier?: number;
 };
 
 export type TeamIdentityView = {
@@ -23,6 +24,7 @@ export type TeamIdentityView = {
   avatarFallback: string;
   avatarColor: string;
   members: PlayerIdentityView[];
+  damageMultiplier?: number;
 };
 
 export type ParticipantIdentityView = PlayerIdentityView | TeamIdentityView;

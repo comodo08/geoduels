@@ -116,7 +116,6 @@ export type HomeGameView = {
   currentRoundNumber: number;
   totalRounds?: number;
   userAvatar: string;
-  damageMultiplier: number;
   guessSubmitted: boolean;
   opponentGuessAlert: boolean;
   connectionIssue: string;

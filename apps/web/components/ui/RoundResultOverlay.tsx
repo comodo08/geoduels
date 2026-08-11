@@ -163,12 +163,10 @@ export default function RoundResultOverlay({
   showScoreReveal,
   winner,
   damage,
-  damageMultiplier,
   sides,
   hpPct
 }: RoundResultOverlayProps) {
   const animation = RESULT_ANIMATION_CONFIG;
-  // derivedState
   const scoreTrackRef = useRef<HTMLDivElement | null>(null);
   const selfScoreTextRef = useRef<HTMLSpanElement | null>(null);
   const oppScoreTextRef = useRef<HTMLSpanElement | null>(null);
@@ -184,13 +182,16 @@ export default function RoundResultOverlay({
   const targetSide: Side = isSelfWinner ? 'opp' : 'self';
   const impactReached = phase === 'damage_travel' || phase === 'damage_multiplier' || phase === 'hp_apply';
   const showDamageMultiplier = phase === 'damage_multiplier' || phase === 'hp_apply';
-  const damageMultiplierLabel = showDamageMultiplier ? formatDamageMultiplierLabel(damageMultiplier) : null;
+  const winnerSide = isSelfWinner ? sides.self : isOppWinner ? sides.opponent : null;
+  const appliedDamageMultiplier = winnerSide?.participant.damageMultiplier ?? 1;
+  const damageMultiplierLabel = showDamageMultiplier
+    ? formatDamageMultiplierLabel(appliedDamageMultiplier)
+    : null;
   const hasWinnerMotion = showScores && showCrush && winner !== 'tie' && damage > 0;
-  const displayedDamage = showDamageMultiplier ? getAppliedDamage(damage, damageMultiplier) : damage;
+  const displayedDamage = showDamageMultiplier ? getAppliedDamage(damage, appliedDamageMultiplier) : damage;
   const scoreTravelDurationMs = getScoreTravelDurationMs(animation);
   const crushCrossFadeStart = 0.78;
 
-  // motionHelpers
   const scoreVariants: Variants = {
     base: { y: animation.scoreReveal.yFrom, opacity: 0, scale: animation.scoreReveal.scaleFrom },
     scores: {
@@ -233,7 +234,6 @@ export default function RoundResultOverlay({
     oppScore: sides.opponent.score
   });
 
-  // layoutMeasurement
   useLayoutEffect(() => {
     if (!hasWinnerMotion) {
       setScoreTravel(null);
@@ -270,7 +270,6 @@ export default function RoundResultOverlay({
     });
   }, [hasWinnerMotion, sourceSide, targetSide, showScores, phase, damage]);
 
-  // render sections
   return (
     <motion.div
       key={`round-result-overlay-${roundNumber}`}
@@ -440,7 +439,7 @@ export default function RoundResultOverlay({
                     {damageMultiplierLabel && (
                       <span
                         data-testid="damage-multiplier-label"
-                        className={`font-hud absolute top-1/2 text-2xl leading-none text-[#ffffff] drop-shadow-md ${targetSide === 'self'
+                        className={`font-hud absolute top-1/2 text-2xl leading-none text-[#ffffff] ${targetSide === 'self'
                           ? 'right-full -translate-x-3 -translate-y-1/2'
                           : 'left-full translate-x-3 -translate-y-1/2'
                           }`}
@@ -485,7 +484,6 @@ export default function RoundResultOverlay({
           </div>
         </div>
 
-        {/* Distance Bar (Straddling the bottom border) */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-[50]">
           <AnimatePresence>
             {showScores && sides.self.distanceKm !== undefined && sides.opponent.distanceKm !== undefined && (

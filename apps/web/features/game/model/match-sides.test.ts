@@ -132,6 +132,91 @@ describe("deriveMatchSides", () => {
     expect(derived.sides.opponent.participant.name).toBe("Team Blue");
   });
 
+  it("applies the team damage multiplier to the team card and its members", () => {
+    const snapshot = teamSnapshot();
+    snapshot.teams!.a.damageMultiplier = 2;
+    snapshot.teams!.b.damageMultiplier = 1;
+
+    const derived = deriveMatchSides({
+      snapshot,
+      selfUserId: "redSelf",
+      fallbackSelf,
+    });
+
+    const selfParticipant = derived.sides.self.participant;
+    expect(selfParticipant.damageMultiplier).toBe(2);
+    expect(selfParticipant.kind).toBe("team");
+    if (selfParticipant.kind === "team") {
+      expect(
+        selfParticipant.members.map((member) => member.damageMultiplier),
+      ).toEqual([2, 2]);
+    }
+    expect(derived.sides.opponent.participant.damageMultiplier).toBe(1);
+  });
+
+  it("reads the per-player damage multiplier from the snapshot", () => {
+    const snapshot = teamSnapshot();
+    snapshot.mode = "duel";
+    delete snapshot.teams;
+    snapshot.players = {
+      redSelf: { ...snapshot.players.redSelf, damageMultiplier: 1.5 },
+      blueOne: { ...snapshot.players.blueOne, damageMultiplier: 1 },
+    };
+
+    const derived = deriveMatchSides({
+      snapshot,
+      selfUserId: "redSelf",
+      fallbackSelf,
+    });
+
+    expect(derived.sides.self.participant.damageMultiplier).toBe(1.5);
+    expect(derived.sides.opponent.participant.damageMultiplier).toBe(1);
+  });
+
+  it("prefers the multiplier that the round result actually applied", () => {
+    const snapshot = teamSnapshot();
+    snapshot.mode = "duel";
+    delete snapshot.teams;
+    snapshot.players = {
+      redSelf: { ...snapshot.players.redSelf, damageMultiplier: 2 },
+      blueOne: { ...snapshot.players.blueOne, damageMultiplier: 1 },
+    };
+    const derived = deriveMatchSides({
+      snapshot,
+      selfUserId: "redSelf",
+      fallbackSelf,
+    });
+
+    const roundSides = withRoundSideResults(derived.sides, {
+      roundId: "round-1",
+      roundNumber: 2,
+      actualLocation: { lat: 0, lng: 0 },
+      players: {
+        redSelf: {
+          userId: "redSelf",
+          lat: 0,
+          lng: 0,
+          score: 4800,
+          distanceKm: 8,
+          damageMultiplier: 1.5,
+          hpAfterRound: 6000,
+        },
+        blueOne: {
+          userId: "blueOne",
+          lat: 0,
+          lng: 0,
+          score: 2300,
+          distanceKm: 600,
+          damageMultiplier: 1,
+          hpAfterRound: 3500,
+        },
+      },
+    });
+
+    expect(roundSides.self.participant.damageMultiplier).toBe(1.5);
+    expect(roundSides.opponent.participant.damageMultiplier).toBe(1);
+  });
+
   it("uses aggregate team round results instead of member results", () => {
     const snapshot = teamSnapshot();
     const derived = deriveMatchSides({
