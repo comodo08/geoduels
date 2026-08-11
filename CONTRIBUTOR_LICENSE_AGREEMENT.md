@@ -2,13 +2,13 @@
 
 Thank you for your interest in contributing to GeoDuels ("We" or "Us").
 
-This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To make this document effective, please sign it by electronic submission through the Contributor License Agreement signing flow configured for the `sourcelocation/geoduels` GitHub repository, or by contacting `me@sourceloc.net` for alternate instructions. This is a legally binding document, so please read it carefully before agreeing to it. The Agreement may cover more than one software project managed by Us.
+This contributor agreement ("Agreement") documents the rights granted by contributors to Us. To make this document effective, please sign it by electronic submission through the Contributor License Agreement signing flow configured for the `sourcelocation/geoduels` GitHub repository, or by contacting `support@matthewsource.com` for alternate instructions. This is a legally binding document, so please read it carefully before agreeing to it. The Agreement may cover more than one software project managed by Us.
 
 ## 1. Definitions
 
 "You" means the individual who Submits a Contribution to Us.
 
-"Contribution" means any work of authorship that is Submitted by You to Us in which You own or assert ownership of the Copyright. If You do not own the Copyright in the entire work of authorship, please identify the third-party material clearly in the Contribution and contact `me@sourceloc.net` before submission if separate permission or provenance review is needed.
+"Contribution" means any work of authorship that is Submitted by You to Us in which You own or assert ownership of the Copyright. If You do not own the Copyright in the entire work of authorship, please identify the third-party material clearly in the Contribution and contact `support@matthewsource.com` before submission if separate permission or provenance review is needed.
 
 "Copyright" means all rights protecting works of authorship owned or controlled by You, including copyright, moral and neighboring rights, as appropriate, for the full term of their existence including any extensions by You.
 
@@ -96,7 +96,7 @@ Name: Matthew Anisovich, also known as sourcelocation
 
 Title: Operator of GeoDuels
 
-Contact: `me@sourceloc.net`
+Contact: `support@matthewsource.com`
 
 This work is licensed under a Creative Commons Attribution 3.0 Unported License.
 

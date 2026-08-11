@@ -5,7 +5,7 @@ const sections = [
     title: "1. Who We Are",
     body: [
       "GeoDuels is an open-source online geography duel game operated by Matthew Anisovich, also known as sourcelocation. This Privacy Policy explains how GeoDuels collects, uses, stores, and shares information when you use the website, game, accounts, matchmaking, rankings, moderation tools, and related services.",
-      "For privacy questions or account deletion requests, contact me@sourceloc.net.",
+      "For privacy questions or account deletion requests, contact support@matthewsource.com.",
     ],
   },
   {
@@ -66,15 +66,15 @@ const sections = [
   {
     title: "9. Your Choices and Rights",
     body: [
-      "You may request deletion of your GeoDuels account by emailing me@sourceloc.net from an address that can reasonably identify your account. During Discord migration, GeoDuels may offer an in-app option to delete the current Discord-only account data before migrating an older Google-backed account.",
-      "Depending on where you live, you may have rights to access, delete, correct, or object to certain processing of your personal information. Contact me@sourceloc.net to make a request. GeoDuels may need to retain certain information where required or reasonably necessary for safety, fraud prevention, moderation, legal, or operational reasons.",
+      "You may request deletion of your GeoDuels account by emailing support@matthewsource.com from an address that can reasonably identify your account. During Discord migration, GeoDuels may offer an in-app option to delete the current Discord-only account data before migrating an older Google-backed account.",
+      "Depending on where you live, you may have rights to access, delete, correct, or object to certain processing of your personal information. Contact support@matthewsource.com to make a request. GeoDuels may need to retain certain information where required or reasonably necessary for safety, fraud prevention, moderation, legal, or operational reasons.",
     ],
   },
   {
     title: "10. Children",
     body: [
       "GeoDuels is intended for users who are at least 13 years old. If you are under the age required to use online services in your location, you may use GeoDuels only with permission from a parent or guardian.",
-      "If you believe a child has provided personal information in violation of this policy, contact me@sourceloc.net.",
+      "If you believe a child has provided personal information in violation of this policy, contact support@matthewsource.com.",
     ],
   },
   {
@@ -85,7 +85,7 @@ const sections = [
   },
   {
     title: "12. Contact",
-    body: ["Privacy requests and questions can be sent to me@sourceloc.net."],
+    body: ["Privacy requests and questions can be sent to support@matthewsource.com."],
   },
 ];
 
