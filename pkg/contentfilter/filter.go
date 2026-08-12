@@ -11,6 +11,7 @@ import (
 const (
 	MinNicknameLength = 2
 	MaxNicknameLength = 14
+	MaxBioLength      = 150
 )
 
 var (
@@ -106,6 +107,14 @@ func ValidateNickname(raw string) (string, error) {
 		return "", errors.New("invalid nickname")
 	}
 	return nick, nil
+}
+
+func ValidateBio(raw string) (string, error) {
+	body := NormalizeText(raw, MaxBioLength)
+	if err := RejectAbusiveText(body); err != nil {
+		return "", errors.New("bio contains inappropriate language")
+	}
+	return body, nil
 }
 
 func IsAbusiveText(text string) bool {

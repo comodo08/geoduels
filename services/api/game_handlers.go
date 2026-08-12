@@ -59,6 +59,7 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 		"linkedProviders":   identity.LinkedProviders,
 		"badges":            profile.Badges,
 		"selectedBadge":     profile.SelectedBadge,
+		"about":             profile.About,
 	})
 }
 

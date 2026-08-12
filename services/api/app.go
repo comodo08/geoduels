@@ -194,6 +194,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/me", a.me).Methods(http.MethodGet)
 	r.HandleFunc("/v1/me/badge", a.updateSelectedBadge).Methods(http.MethodPatch)
 	r.HandleFunc("/v1/me/nickname", a.updateNickname).Methods(http.MethodPut, http.MethodPatch)
+	r.HandleFunc("/v1/me/about", a.updateAbout).Methods(http.MethodPut, http.MethodPatch)
 	r.HandleFunc("/v1/me", a.deleteAccount).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/me/auth-providers/{provider}", a.unlinkAuthProvider).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/me/notifications", a.userNotifications).Methods(http.MethodGet)

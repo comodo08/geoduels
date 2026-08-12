@@ -760,6 +760,27 @@ func (s *pgStore) SetNickname(sub, displayName string) error {
 	return nil
 }
 
+func (s *pgStore) SetAbout(sub, about string) (Profile, error) {
+	if sub == "" {
+		return Profile{}, errors.New("subject required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	tag, err := s.pool.Exec(ctx, `
+		update users
+		set about = $2
+		where id = $1
+		  and coalesce(account_type, 'registered') <> 'guest'
+	`, sub, about)
+	if err != nil {
+		return Profile{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return Profile{}, errors.New("user not found")
+	}
+	return s.GetProfile(sub)
+}
+
 func (s *pgStore) SuggestNickname(sub, displayName string) (string, error) {
 	base := contentfilter.NicknameSuggestionBase(displayName)
 	if _, err := contentfilter.ValidateNickname(base); err != nil {

@@ -94,8 +94,9 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 				coalesce(u.is_moderator, false) as is_moderator,
 				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false) as is_banned,
 				coalesce(u.ban_reason, '') as ban_reason,
-				coalesce(u.selected_badge_code, 0) as selected_badge_code,
-				coalesce(u.selected_badge_season_id, '') as selected_badge_season_id
+			coalesce(u.selected_badge_code, 0) as selected_badge_code,
+			coalesce(u.selected_badge_season_id, '') as selected_badge_season_id,
+			coalesce(u.about, '') as about
 		from (select $1::uuid as user_id) seed
 		left join users u on u.id = seed.user_id
 		left join lateral (
@@ -136,6 +137,7 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 		&p.BanReason,
 		&selectedBadgeCode,
 		&selectedBadgeSeasonID,
+		&p.About,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return p, nil
@@ -182,7 +184,8 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 			coalesce(rs.games_played, 0),
 			coalesce(rs.wins, 0),
 			coalesce(u.selected_badge_code, 0),
-			coalesce(u.selected_badge_season_id, '')
+			coalesce(u.selected_badge_season_id, ''),
+			coalesce(u.about, '')
 		from users u
 		left join lateral (
 			select provider_name, avatar_url
@@ -218,6 +221,7 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 		&p.RankedWins,
 		&selectedBadgeCode,
 		&selectedBadgeSeasonID,
+		&p.About,
 	)
 	if err != nil {
 		return p, err

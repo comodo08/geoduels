@@ -1,6 +1,9 @@
 package contentfilter
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSanitizeNicknameMaxLength(t *testing.T) {
 	if _, err := SanitizeNickname("FourteenChars!"); err == nil {
@@ -37,6 +40,32 @@ func TestNicknameSuggestionBase(t *testing.T) {
 		if got := NicknameSuggestionBase(raw); got != want {
 			t.Fatalf("NicknameSuggestionBase(%q) = %q, want %q", raw, got, want)
 		}
+	}
+}
+
+func TestValidateBio(t *testing.T) {
+	short, err := ValidateBio("  hello world  ")
+	if err != nil {
+		t.Fatalf("ValidateBio short error = %v", err)
+	}
+	if short != "hello world" {
+		t.Fatalf("ValidateBio short = %q, want %q", short, "hello world")
+	}
+
+	long := strings.Repeat("a", MaxBioLength+50)
+	trimmed, err := ValidateBio(long)
+	if err != nil {
+		t.Fatalf("ValidateBio long error = %v", err)
+	}
+	if len([]rune(trimmed)) != MaxBioLength {
+		t.Fatalf("ValidateBio long length = %d, want %d", len([]rune(trimmed)), MaxBioLength)
+	}
+
+	previous := defaultFilter
+	defer SetDefaultFilter(previous)
+	SetDefaultFilter(staticFilter{blocked: "forbiddenword"})
+	if _, err := ValidateBio("forbiddenword"); err == nil {
+		t.Fatal("expected abusive bio to be rejected")
 	}
 }
 

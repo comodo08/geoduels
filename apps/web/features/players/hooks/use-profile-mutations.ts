@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
 import {
+  requestUpdateAbout,
   requestUpdateNickname,
   requestUpdateSelectedBadge,
 } from "../../auth/lib/auth-client";
@@ -23,6 +24,11 @@ export function useProfileOwnerActions(accessToken: string) {
     badgeMutation: useMutation({
       mutationFn: (badgeId: string) =>
         requestUpdateSelectedBadge(config, accessToken, badgeId),
+      onSuccess: refresh,
+    }),
+    aboutMutation: useMutation({
+      mutationFn: (about: string) =>
+        requestUpdateAbout(config, accessToken, about),
       onSuccess: refresh,
     }),
   };

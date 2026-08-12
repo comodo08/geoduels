@@ -13,6 +13,7 @@ export type PublicPlayerProfile = {
   rankedWins: number;
   badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
+  about?: string;
 };
 
 export type PlayerMatchSummary = {

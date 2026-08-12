@@ -77,6 +77,7 @@ func TestPublicPlayerProfileContainsOnlyPublicFields(t *testing.T) {
 			MMR:         1420,
 			GamesPlayed: 30,
 			Wins:        18,
+			About:       "I love maps",
 		},
 	}
 	a := &api{store: store}
@@ -100,6 +101,9 @@ func TestPublicPlayerProfileContainsOnlyPublicFields(t *testing.T) {
 	}
 	if body["displayName"] != "Explorer" {
 		t.Fatalf("displayName = %v", body["displayName"])
+	}
+	if body["about"] != "I love maps" {
+		t.Fatalf("about = %v", body["about"])
 	}
 }
 

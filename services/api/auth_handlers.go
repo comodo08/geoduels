@@ -206,6 +206,43 @@ func (a *api) logoutAll(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *api) updateAbout(w http.ResponseWriter, r *http.Request) {
+	claims, err := a.authenticatedClaims(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	identity, err := a.store.GetIdentity(claims.Sub)
+	if err != nil {
+		http.Error(w, "identity not found", http.StatusUnauthorized)
+		return
+	}
+	if identity.AccountType == "guest" {
+		http.Error(w, "guest bios cannot be changed", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		About string `json:"about"`
+	}
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	about, err := contentfilter.ValidateBio(req.About)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	profile, err := a.store.SetAbout(claims.Sub, about)
+	if err != nil {
+		http.Error(w, "failed to update bio", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"about": profile.About,
+	})
+}
+
 func validatedNickname(raw string) (string, error) {
 	return contentfilter.ValidateNickname(raw)
 }

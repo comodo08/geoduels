@@ -35,6 +35,7 @@ type ProfileRepository interface {
 	GetProfile(userID string) (Profile, error)
 	GetPublicPlayerProfileByNickname(nickname string) (PublicPlayerProfile, error)
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
+	SetAbout(userID, about string) (Profile, error)
 }
 
 type BadgeRepository interface {

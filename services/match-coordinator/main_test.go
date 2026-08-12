@@ -82,6 +82,10 @@ func (s *recoverTestStore) SetNickname(sub, displayName string) error {
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) SetAbout(sub, about string) (persistence.Profile, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) SuggestNickname(sub, displayName string) (string, error) {
 	panic("unexpected call")
 }
