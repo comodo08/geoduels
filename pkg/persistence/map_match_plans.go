@@ -88,7 +88,7 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 		return errors.New("selected map has too few locations")
 	}
 	for i, row := range selected {
-		if _, err := tx.Exec(ctx, `insert into match_round_plans(match_id,round_index,map_id,lat,lng,country,pano_id,heading,pitch) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(match_id,round_index) do nothing`, found.MatchID, i, mapID, row.Lat, row.Lng, row.Country, row.PanoID, row.Heading, row.Pitch); err != nil {
+		if err := persistRoundPlan(ctx, tx, found.MatchID, i, mapID, row.LocationPoint); err != nil {
 			return err
 		}
 		found.PlannedRounds = append(found.PlannedRounds, contracts.PlannedRound{RoundIndex: i, Location: row.LocationPoint})
@@ -101,6 +101,43 @@ func (s *pgStore) PrepareMatchPlan(ctx context.Context, found *contracts.MatchFo
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+const insertRoundPlanSQL = `insert into match_round_plans(match_id,round_index,map_id,lat,lng,country,pano_id,heading,pitch) values($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict(match_id,round_index) do nothing`
+
+func persistRoundPlan(ctx context.Context, tx pgx.Tx, matchID string, roundIndex int, mapID string, loc contracts.LocationPoint) error {
+	_, err := tx.Exec(ctx, insertRoundPlanSQL,
+		matchID, roundIndex, mapID,
+		loc.Lat, loc.Lng, loc.Country, loc.PanoID, loc.Heading, loc.Pitch,
+	)
+	return err
+}
+
+func (s *pgStore) RandomLocationForMatch(ctx context.Context, matchID, mapID string, roundIndex int) (contracts.LocationPoint, error) {
+	if strings.TrimSpace(matchID) == "" || strings.TrimSpace(mapID) == "" {
+		return contracts.LocationPoint{}, errors.New("match and map required")
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return contracts.LocationPoint{}, err
+	}
+	defer tx.Rollback(ctx)
+	pivot := deterministicPivot(fmt.Sprintf("%s:%d", matchID, roundIndex), mapID)
+	selected, err := selectPlanRows(ctx, tx, mapID, pivot, 1)
+	if err != nil {
+		return contracts.LocationPoint{}, err
+	}
+	if len(selected) == 0 {
+		return contracts.LocationPoint{}, errors.New("no locations available for map")
+	}
+	loc := selected[0].LocationPoint
+	if err := persistRoundPlan(ctx, tx, matchID, roundIndex, mapID, loc); err != nil {
+		return contracts.LocationPoint{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return contracts.LocationPoint{}, err
+	}
+	return loc, nil
 }
 
 func selectedMapAccessible(ownerUserID, accessUserID, visibility string) bool {

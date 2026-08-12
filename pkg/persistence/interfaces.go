@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"context"
 	"time"
 
 	"geoduels/pkg/contracts"
@@ -55,11 +56,13 @@ type LeaderboardRepository interface {
 
 type MatchRepository interface {
 	FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error)
+	FinalizeMatchSummary(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error)
 	RenewMatchSessionLeases(nodeID string, ownerEpoch int64, matchIDs []string, ttl time.Duration) error
 	GetFinalMatchSnapshot(matchID string) ([]byte, bool, error)
 	ListPlayerMatchHistory(userID string, limit int) ([]MatchHistorySummary, error)
 	ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (MatchHistoryPage, error)
 	PlayerParticipatedInMatch(userID, matchID string) (bool, error)
+	RandomLocationForMatch(ctx context.Context, matchID, mapID string, roundIndex int) (contracts.LocationPoint, error)
 }
 
 type ModerationRepository interface {

@@ -217,7 +217,13 @@ func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	found.Config = contracts.NormalizeMatchConfig(found.Config)
-	g.plans.Set(found.MatchID, found.PlannedRounds)
+	var extend func(roundIndex int) (contracts.LocationPoint, error)
+	if found.Config.Endless && mode == contracts.ModeSingleplayer {
+		extend = func(roundIndex int) (contracts.LocationPoint, error) {
+			return g.persist.RandomLocationForMatch(context.Background(), found.MatchID, found.ResolvedMap.MapID, roundIndex)
+		}
+	}
+	g.plans.Set(found.MatchID, found.PlannedRounds, extend)
 	if err := runtime.CreateMatch(found.MatchID, found.Players, found.Profiles, found.Unranked, found.SeasonID, found.Config, found.Teams); err != nil && !strings.Contains(err.Error(), "already exists") {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -517,7 +523,13 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 	g.finalizing[matchID] = true
 	g.mu.Unlock()
 
-	finalized, err := g.persist.FinalizeMatch(*snap, g.nodeEpoch)
+	var finalized contracts.MatchSnapshot
+	var err error
+	if snap.Mode == contracts.ModeSingleplayer && snap.Config.Endless {
+		finalized, err = g.persist.FinalizeMatchSummary(*snap, g.nodeEpoch)
+	} else {
+		finalized, err = g.persist.FinalizeMatch(*snap, g.nodeEpoch)
+	}
 	if err != nil {
 		g.metrics.DBWriteFailures.Inc()
 		observability.Log("error", "match finalization failed", map[string]any{
@@ -537,6 +549,10 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 		}
 	}
 	g.mu.Unlock()
+
+	if g.plans != nil {
+		g.plans.Delete(matchID)
+	}
 
 	g.clearQueuedMatchArtifacts(players)
 	if err := g.coord.ClearAssignment(context.Background(), coordinator.Assignment{

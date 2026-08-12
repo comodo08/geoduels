@@ -148,6 +148,7 @@ export type Snapshot = {
     roundTimerMode?: "none" | "pressure" | "fixed";
     roundTimeLimitMs?: number;
     pressureTimeLimitMs?: number;
+    endless?: boolean;
   };
   unranked?: boolean;
   state: string;

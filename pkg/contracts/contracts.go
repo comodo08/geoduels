@@ -107,6 +107,7 @@ type MatchConfig struct {
 	RoundTimerMode      RoundTimerMode        `json:"roundTimerMode,omitempty"`
 	RoundTimeLimitMS    int64                 `json:"roundTimeLimitMs,omitempty"`
 	PressureTimeLimitMS int64                 `json:"pressureTimeLimitMs,omitempty"`
+	Endless             bool                  `json:"endless,omitempty"`
 }
 
 func NormalizeRuleset(v GameRuleset) GameRuleset {

@@ -475,7 +475,10 @@ export function deriveHomeModel({
       guess: game.guess,
       currentRoundId: snapshot?.currentRound?.roundId || "",
       currentRoundNumber,
-      totalRounds: isSingleplayer || isFreeForAll ? SINGLEPLAYER_TOTAL_ROUNDS : undefined,
+      totalRounds:
+        (isSingleplayer || isFreeForAll) && !matchConfig.endless
+          ? SINGLEPLAYER_TOTAL_ROUNDS
+          : undefined,
       userAvatar: auth.userAvatar,
       damageMultiplier,
       guessSubmitted: game.guessSubmitted,

@@ -153,9 +153,18 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
           <span className="truncate">
             {match.opponentDisplayName
               ? `vs ${match.opponentDisplayName}`
-              : formatMode(match.mode)}
+              : singleplayer
+                ? match.endless
+                  ? "Endless"
+                  : "Singleplayer"
+                : formatMode(match.mode)}
           </span>
         </span>
+        {match.endless && match.roundCount ? (
+          <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-[#a9bfd4]">
+            {match.roundCount} rounds
+          </span>
+        ) : null}
         {match.ranked ? (
           <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-[#a9bfd4]">
             Ranked

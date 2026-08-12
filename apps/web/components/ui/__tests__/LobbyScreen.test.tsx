@@ -276,6 +276,7 @@ describe('LobbyScreen', () => {
     expect(startSingleplayer).toHaveBeenCalledWith({
       ruleset: 'no_move',
       streetNames: 'hidden',
+      endless: false,
     });
   });
 

@@ -162,6 +162,90 @@ func TestFinalizeDuelDrawIntegration(t *testing.T) {
 	}
 }
 
+func TestFinalizeMatchSummarySkipsReplayIntegration(t *testing.T) {
+	dsn := os.Getenv("FINALIZATION_TEST_POSTGRES_URL")
+	if dsn == "" {
+		t.Skip("FINALIZATION_TEST_POSTGRES_URL is required")
+	}
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	store := &pgStore{pool: pool}
+
+	const matchID = "019fb0f7-c348-753a-8c6d-cf3dd720f5a3"
+	if _, err := pool.Exec(t.Context(), `
+		insert into match_sessions(
+			match_id, preset_id, mode, state, ranked, source_kind,
+			config_json, node_id, node_epoch, public_route, lease_expires_at
+		)
+		values($1, 'solo', 'singleplayer', 'live', false, 'solo',
+		       '{"endless":true}'::jsonb, 'test-node', 42, 'test-node', now()+interval '1 minute')
+	`, matchID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), `
+		insert into runtime_matches(id, state, owner_epoch)
+		values($1, 'live', 42)
+	`, matchID); err != nil {
+		t.Fatal(err)
+	}
+	snap := contracts.MatchSnapshot{
+		MatchID:  matchID,
+		Mode:     contracts.ModeSingleplayer,
+		SeasonID: "s1",
+		State:    contracts.MatchEnded,
+		Config:   contracts.MatchConfig{Endless: true},
+		Players: map[string]contracts.PlayerState{
+			testPlayer1ID: {UserID: testPlayer1ID, DisplayName: "One", TotalScore: 15000},
+		},
+		RoundResults: []*contracts.RoundResult{
+			{RoundID: matchID + ":r1", RoundNumber: 1, Players: map[string]contracts.RoundPlayerResult{testPlayer1ID: {UserID: testPlayer1ID, Score: 5000}}},
+			{RoundID: matchID + ":r2", RoundNumber: 2, Players: map[string]contracts.RoundPlayerResult{testPlayer1ID: {UserID: testPlayer1ID, Score: 5000}}},
+			{RoundID: matchID + ":r3", RoundNumber: 3, Players: map[string]contracts.RoundPlayerResult{testPlayer1ID: {UserID: testPlayer1ID, Score: 5000}}},
+		},
+	}
+	if _, err := store.FinalizeMatchSummary(snap, 42); err != nil {
+		t.Fatal(err)
+	}
+
+	var roundCount int
+	var replayStored, endless bool
+	if err := pool.QueryRow(t.Context(), `
+		select round_count, replay_zstd is not null, endless
+		from match_history where match_id=$1
+	`, matchID).Scan(&roundCount, &replayStored, &endless); err != nil {
+		t.Fatal(err)
+	}
+	if roundCount != 3 || replayStored || !endless {
+		t.Fatalf("history = rounds:%d replayStored:%v endless:%v, want 3/false/true", roundCount, replayStored, endless)
+	}
+	var playerCount int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*) from match_players where match_id=$1
+	`, matchID).Scan(&playerCount); err != nil {
+		t.Fatal(err)
+	}
+	if playerCount != 1 {
+		t.Fatalf("match_players rows = %d, want 1", playerCount)
+	}
+	var sessionState string
+	if err := pool.QueryRow(t.Context(), `
+		select state from match_sessions where match_id=$1
+	`, matchID).Scan(&sessionState); err != nil {
+		t.Fatal(err)
+	}
+	if sessionState != string(contracts.MatchEnded) {
+		t.Fatalf("session state = %q", sessionState)
+	}
+	if _, found, err := store.GetFinalMatchSnapshot(matchID); err != nil {
+		t.Fatal(err)
+	} else if found {
+		t.Fatal("expected no replay snapshot for a summary-only match")
+	}
+}
+
 func TestStaleMatchLeaseReconciliationIntegration(t *testing.T) {
 	dsn := os.Getenv("FINALIZATION_TEST_POSTGRES_URL")
 	if dsn == "" {

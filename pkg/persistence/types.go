@@ -108,6 +108,8 @@ type MatchHistorySummary struct {
 	Ranked              bool      `json:"ranked"`
 	RatingDelta         int       `json:"ratingDelta,omitempty"`
 	TotalScore          int       `json:"totalScore,omitempty"`
+	RoundCount          int       `json:"roundCount,omitempty"`
+	Endless             bool      `json:"endless,omitempty"`
 	OpponentUserID      string    `json:"opponentUserId,omitempty"`
 	OpponentDisplayName string    `json:"opponentDisplayName,omitempty"`
 }

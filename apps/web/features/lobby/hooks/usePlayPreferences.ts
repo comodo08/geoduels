@@ -14,6 +14,7 @@ type DuelPreferences = {
 type SingleplayerPreferences = {
   mode: GameRuleset;
   streetNames: StreetNamesVisibility;
+  endless: boolean;
 };
 
 const DUEL_STORAGE_KEY = "geoduels.play.duels";
@@ -34,6 +35,7 @@ function readPreferences() {
   let singleplayer: SingleplayerPreferences = {
     mode: "moving",
     streetNames: "shown",
+    endless: false,
   };
   try {
     const storedDuel = JSON.parse(
@@ -67,6 +69,10 @@ function readPreferences() {
         mode: storedSingleplayer.mode,
         streetNames:
           storedSingleplayer.streetNames === "hidden" ? "hidden" : "shown",
+        endless:
+          typeof storedSingleplayer.endless === "boolean"
+            ? storedSingleplayer.endless
+            : false,
       };
     }
   } catch {
@@ -94,6 +100,7 @@ export function usePlayPreferences(extensionAvailable: boolean | null) {
     setSingleplayer((current) => ({
       mode: current.mode === "no_move" ? "moving" : current.mode,
       streetNames: "shown",
+      endless: current.endless,
     }));
   }, [extensionAvailable]);
 

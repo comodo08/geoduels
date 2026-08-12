@@ -15,15 +15,26 @@ type matchConfigRegistry struct {
 }
 
 type roundPlanRegistry struct {
-	mu    sync.RWMutex
-	plans map[string][]contracts.LocationPoint
+	mu        sync.RWMutex
+	plans     map[string][]contracts.LocationPoint
+	extenders map[string]func(roundIndex int) (contracts.LocationPoint, error)
 }
 
 func newRoundPlanRegistry() *roundPlanRegistry {
-	return &roundPlanRegistry{plans: map[string][]contracts.LocationPoint{}}
+	return &roundPlanRegistry{
+		plans:     map[string][]contracts.LocationPoint{},
+		extenders: map[string]func(roundIndex int) (contracts.LocationPoint, error){},
+	}
 }
 
-func (r *roundPlanRegistry) Set(matchID string, rounds []contracts.PlannedRound) {
+func (r *roundPlanRegistry) Delete(matchID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.plans, matchID)
+	delete(r.extenders, matchID)
+}
+
+func (r *roundPlanRegistry) Set(matchID string, rounds []contracts.PlannedRound, extend func(roundIndex int) (contracts.LocationPoint, error)) {
 	points := make([]contracts.LocationPoint, len(rounds))
 	for _, round := range rounds {
 		if round.RoundIndex >= 0 && round.RoundIndex < len(points) {
@@ -32,17 +43,29 @@ func (r *roundPlanRegistry) Set(matchID string, rounds []contracts.PlannedRound)
 	}
 	r.mu.Lock()
 	r.plans[matchID] = points
+	if extend == nil {
+		delete(r.extenders, matchID)
+	} else {
+		r.extenders[matchID] = extend
+	}
 	r.mu.Unlock()
 }
 
 func (r *roundPlanRegistry) Get(matchID string, roundIndex int) (contracts.LocationPoint, error) {
+	if roundIndex < 0 {
+		return contracts.LocationPoint{}, errors.New("invalid round index")
+	}
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	points := r.plans[matchID]
-	if roundIndex < 0 || roundIndex >= len(points) {
+	ext := r.extenders[matchID]
+	r.mu.RUnlock()
+	if roundIndex < len(points) {
+		return points[roundIndex], nil
+	}
+	if ext == nil {
 		return contracts.LocationPoint{}, errors.New("round plan exhausted")
 	}
-	return points[roundIndex], nil
+	return ext(roundIndex)
 }
 
 func newMatchConfigRegistry() *matchConfigRegistry {

@@ -612,6 +612,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 			RoundTimerMode:      requestedConfig.RoundTimerMode,
 			RoundTimeLimitMS:    requestedConfig.RoundTimeLimitMS,
 			PressureTimeLimitMS: requestedConfig.PressureTimeLimitMS,
+			Endless:             requestedConfig.Endless,
 		}),
 		Players: []string{userID},
 		Profiles: map[string]contracts.PlayerProfile{

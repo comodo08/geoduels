@@ -14,6 +14,14 @@ import (
 )
 
 func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error) {
+	return s.finalizeMatch(snap, ownerEpoch, true)
+}
+
+func (s *pgStore) FinalizeMatchSummary(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error) {
+	return s.finalizeMatch(snap, ownerEpoch, false)
+}
+
+func (s *pgStore) finalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64, withReplay bool) (contracts.MatchSnapshot, error) {
 	if strings.TrimSpace(snap.MatchID) == "" {
 		return snap, errors.New("match id required")
 	}
@@ -29,13 +37,18 @@ func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 			return snap, err
 		}
 	}
-	replay, err := finalReplaySnapshotJSON(snap)
-	if err != nil {
-		return snap, err
-	}
-	compressedReplay, replayHash, err := compressReplay(replay)
-	if err != nil {
-		return snap, err
+	var compressedReplay, replayHash []byte
+	replayBytes := 0
+	if withReplay {
+		replay, err := finalReplaySnapshotJSON(snap)
+		if err != nil {
+			return snap, err
+		}
+		compressed, hash, err := compressReplay(replay)
+		if err != nil {
+			return snap, err
+		}
+		compressedReplay, replayHash, replayBytes = compressed, hash[:], len(replay)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -84,8 +97,8 @@ func (s *pgStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 		snap.MatchID,
 		snap,
 		compressedReplay,
-		replayHash[:],
-		len(replay),
+		replayHash,
+		replayBytes,
 	); err != nil {
 		return snap, err
 	}
@@ -592,11 +605,11 @@ func recordMatchHistory(
 			match_id, mode, started_at, ended_at, winner_user_id,
 			ranked, source_kind, source_party_id, ruleset, map_id,
 			replay_zstd, replay_codec, replay_schema_version, replay_uncompressed_bytes,
-			replay_sha256, replay_expires_at, round_count
+			replay_sha256, replay_expires_at, round_count, endless
 		)
 		values($1,$2,$3,$4,nullif($5,'')::uuid,$6,$7,nullif($8,'')::uuid,nullif($9,''),
 		       nullif($10,'')::uuid,$11,$12,$13,$14,$15,
-		       $4::timestamptz + make_interval(days => $16::integer),$17)
+		       $4::timestamptz + make_interval(days => $16::integer),$17,$18)
 		on conflict (match_id) do update set
 			mode = excluded.mode,
 			started_at = excluded.started_at,
@@ -614,11 +627,13 @@ func recordMatchHistory(
 			replay_uncompressed_bytes = excluded.replay_uncompressed_bytes,
 			replay_sha256 = excluded.replay_sha256,
 			replay_expires_at = excluded.replay_expires_at,
-			round_count = excluded.round_count
+			round_count = excluded.round_count,
+			endless = excluded.endless
 	`, matchID, string(snap.Mode), startedAt, endedAt, winner,
 		ranked, sourceKind, sourcePartyID, ruleset, mapID,
 		compressedReplay, replayCodecZstd, replaySchemaVersion, replayUncompressedBytes,
-		replayHash, replayRetentionDays, len(snap.RoundResults)); err != nil {
+		replayHash, replayRetentionDays, len(snap.RoundResults),
+		snap.Mode == contracts.ModeSingleplayer && snap.Config.Endless); err != nil {
 		return err
 	}
 	type matchPlayerRecord struct {
