@@ -468,7 +468,7 @@ export default function InGameScene({
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setConfirmForfeit(true)}
+                  onClick={() => (isSingleplayer ? handleForfeitConfirm() : setConfirmForfeit(true))}
                   aria-label="Forfeit match"
                   className="flex h-11 w-11 items-center justify-center rounded-full bg-hudBg text-white/80 shadow-elev-2 backdrop-blur-hud transition hover:bg-white/10 hover:text-white"
                 >
