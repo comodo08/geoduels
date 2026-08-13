@@ -506,6 +506,8 @@ export function deriveHomeModel({
       messages: [],
       selfUserId: selfId,
       error: "",
+      opponentLeftNotice: game.opponentLeftNotice,
+      opponentLeftNoticeName: game.opponentLeftNoticeName,
     },
     overlays: {
       nicknameRequiredOpen: auth.nicknameRequired && !!auth.userId,

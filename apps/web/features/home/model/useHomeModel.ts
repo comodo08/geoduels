@@ -672,6 +672,8 @@ export function useHomeModel(options?: {
       messages: chatState.messages,
       selfUserId: auth.userId,
       error: chatState.error,
+      opponentLeftNotice: game.opponentLeftNotice,
+      opponentLeftNoticeName: game.opponentLeftNoticeName,
     },
   };
 

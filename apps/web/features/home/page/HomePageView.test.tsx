@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { HomeModel } from "../model/types";
 import HomePageView from "./HomePageView";
@@ -125,6 +125,8 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         messages: [],
         selfUserId: "self",
         error: "",
+        opponentLeftNotice: false,
+        opponentLeftNoticeName: "",
       },
       overlays: {
         nicknameRequiredOpen: true,
@@ -259,13 +261,46 @@ describe("HomePageView", () => {
             messages: [],
             selfUserId: "self",
             error: "",
+            opponentLeftNotice: false,
+            opponentLeftNoticeName: "",
           },
         })}
       /></QueryClientProvider>,
     );
 
-    expect(screen.getByLabelText("Open chat").parentElement).toHaveClass(
-      "app-layer-chat",
+    expect(screen.getByLabelText("Open chat").closest(".app-layer-chat")).not.toBeNull();
+  });
+
+  it("shows the opponent left message below the chat when the opponent quits", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}><HomePageView
+        model={createModel({
+          chat: {
+            conversationId: "match:match-1",
+            messages: [],
+            selfUserId: "self",
+            error: "",
+            opponentLeftNotice: true,
+            opponentLeftNoticeName: "Opp",
+          },
+        })}
+      /></QueryClientProvider>,
     );
+
+    expect(screen.getByText("Opp left the game")).toBeInTheDocument();
+    expect(
+      screen.getByText("Opp left the game").closest(".app-layer-chat"),
+    ).not.toBeNull();
+  });
+
+  it("hides the opponent left message when the opponent is still connected", () => {
+    cleanup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}><HomePageView model={createModel()} /></QueryClientProvider>,
+    );
+
+    expect(screen.queryByText("Opponent left the game")).not.toBeInTheDocument();
   });
 });

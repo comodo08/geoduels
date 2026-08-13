@@ -116,6 +116,8 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     resultPhase: 'base',
     resultShownHP: { self: 5000, opp: 4500 },
     showMatchEndPage: false,
+    opponentLeftNotice: false,
+    opponentLeftNoticeName: '',
     ...overrides
   };
 }
@@ -222,6 +224,19 @@ describe('deriveHomeModel', () => {
     expect(model.game.isRoundTimerRunning).toBe(false);
     expect(model.game.mm).toBe('--');
     expect(model.game.ss).toBe('--');
+  });
+
+  it('surfaces the opponent left notice on the chat view', () => {
+    const model = deriveHomeModel({
+      auth: createAuthState(),
+      match: createMatchState(createSnapshot()),
+      game: createGameState({ opponentLeftNotice: true, opponentLeftNoticeName: 'Opp' }),
+      config,
+      routeMatchId: 'match-1'
+    });
+
+    expect(model.chat.opponentLeftNotice).toBe(true);
+    expect(model.chat.opponentLeftNoticeName).toBe('Opp');
   });
 
   it('surfaces opponent disconnect state from the live snapshot', () => {
