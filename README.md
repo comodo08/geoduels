@@ -106,8 +106,8 @@ Prerequisites:
 Start:
 
 ```bash
-cp .env.example .env
-cp apps/web/.env.local.example apps/web/.env.local
+cp -n .env.example .env
+cp -n apps/web/.env.local.example apps/web/.env.local
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
 docker compose up -d gameplay-node match-coordinator realtime-gateway api

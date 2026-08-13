@@ -9,7 +9,7 @@
 ## Prepare infrastructure
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
 ```
