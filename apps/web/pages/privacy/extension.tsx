@@ -46,7 +46,7 @@ const sections = [
   },
   {
     title: "7. Contact",
-    body: ["Privacy questions can be sent to me@sourceloc.net."],
+    body: ["Privacy questions can be sent to support@matthewsource.com."],
   },
 ];
 

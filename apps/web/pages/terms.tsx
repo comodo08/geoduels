@@ -20,7 +20,7 @@ const sections = [
     body: [
       "GeoDuels may support Discord sign-in, guest access, and migration-only Google account recovery. You are responsible for activity under your account and for keeping access to your Discord account, any migration Google account, devices, and sessions secure.",
       "You may not share, sell, transfer, or misuse accounts. GeoDuels may restrict, suspend, or terminate accounts used for abuse, cheating, fraud, security risks, or violations of these Terms.",
-      "You may request deletion of your account by contacting me@sourceloc.net. During Discord migration, in-app deletion may be available for replacing a current Discord-only account with an older migrated account.",
+      "You may request deletion of your account by contacting support@matthewsource.com. During Discord migration, in-app deletion may be available for replacing a current Discord-only account with an older migrated account.",
     ],
   },
   {
@@ -60,7 +60,7 @@ const sections = [
     body: [
       "GeoDuels may review reports, gameplay signals, match history, account history, technical logs, and moderation evidence to protect players and ranked integrity.",
       "Enforcement may include warnings, content removal, report mutes, queue restrictions, rating adjustments, MMR resets, rating refunds, temporary suspensions, permanent bans, IP or signup restrictions, or other reasonable measures.",
-      "GeoDuels does not currently offer a formal appeal process. You may contact me@sourceloc.net about moderation questions, but moderation decisions are not guaranteed to be reconsidered.",
+      "GeoDuels does not currently offer a formal appeal process. You may contact support@matthewsource.com about moderation questions, but moderation decisions are not guaranteed to be reconsidered.",
     ],
   },
   {
@@ -120,7 +120,7 @@ const sections = [
   },
   {
     title: "17. Contact",
-    body: ["Questions about these Terms can be sent to me@sourceloc.net."],
+    body: ["Questions about these Terms can be sent to support@matthewsource.com."],
   },
 ];
 
