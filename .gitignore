@@ -46,6 +46,7 @@ infra/ansible/**/group_vars/all.yml
 .DS_Store
 .codex
 tmp/
+.kilo/
 
 # data
 datasets/*.json
