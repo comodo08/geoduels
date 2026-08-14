@@ -15,7 +15,7 @@ export default function HomePageChatDock({ chat, actions }: HomePageChatDockProp
       selfUserId={chat.selfUserId}
       onSendMessage={actions.sendChatMessage}
       onSendEmote={actions.sendChatEmote}
-      className="app-layer-chat fixed left-3 top-24 w-[min(calc(100vw-1.5rem),21rem)] md:left-4 md:top-28"
+      className="app-layer-chat fixed left-3 top-24 w-[min(calc(100vw-1.5rem),23rem)] md:left-4 md:top-28"
     />
   );
 }

@@ -6,10 +6,13 @@ import type { ChatEmote, ChatMessage } from './types';
 import PlayerProfileLink from './PlayerProfileLink';
 
 const chatEmotes: Array<{ emote: ChatEmote; label: string; glyph: string }> = [
+  { emote: 'greetings', label: 'Greetings', glyph: '👋' },
   { emote: 'skull', label: 'Skull', glyph: '💀' },
   { emote: 'sob', label: 'Sob', glyph: '😭' },
   { emote: 'thinking', label: 'Thinking', glyph: '🤔' },
-  { emote: 'sunglasses', label: 'Sunglasses', glyph: '😎' }
+  { emote: 'sunglasses', label: 'Sunglasses', glyph: '😎' },
+  { emote: 'laugh', label: 'Laugh', glyph: '😂' },
+  { emote: 'pray', label: 'Pray', glyph: '🙏' }
 ];
 
 function emoteGlyph(emote?: ChatEmote) {
@@ -22,7 +25,7 @@ export default function ChatPanel({
   onSendMessage,
   onSendEmote,
   mode = "interactive",
-  className = "absolute left-3 top-24 z-40 w-[min(calc(100vw-1.5rem),21rem)] md:left-4 md:top-28",
+  className = "absolute left-3 top-24 z-40 w-[min(calc(100vw-1.5rem),23rem)] md:left-4 md:top-28",
 }: {
   messages: ChatMessage[];
   selfUserId: string;
@@ -96,6 +99,48 @@ export default function ChatPanel({
     };
   }, []);
 
+  useEffect(() => {
+    if (reviewMode) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (open) setOpen(false);
+        return;
+      }
+      if (event.key === "Enter" && !open) {
+        const tag = (event.target as HTMLElement | null)?.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "BUTTON" ||
+          tag === "SELECT" ||
+          (event.target as HTMLElement | null)?.isContentEditable
+        ) {
+          return;
+        }
+        event.preventDefault();
+        setOpen(true);
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const index = Number(event.key) - 1;
+      if (index >= 0 && index < chatEmotes.length) {
+        if (!open) setOpen(true);
+        onSendEmote?.(chatEmotes[index].emote);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, reviewMode, onSendEmote]);
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const sent = onSendMessage?.(body);
@@ -149,7 +194,7 @@ export default function ChatPanel({
           <div
             ref={scrollRef}
             className={`scrollbar-hidden flex flex-col gap-1 overflow-y-auto text-[13px] font-semibold leading-snug [text-shadow:0_1px_5px_rgba(0,0,0,0.7)] ${
-              reviewMode ? "max-h-80" : "max-h-48 pr-20"
+              reviewMode ? "max-h-80" : `max-h-48 pr-24 ${messages.length > 0 ? "pt-3" : ""}`
             }`}
           >
             {messages.length === 0 ? (
@@ -177,7 +222,7 @@ export default function ChatPanel({
           </div>
           {!reviewMode ? (
             <>
-              <div className="mt-3 flex gap-2">
+              <div className={`mt-3 flex gap-2 ${messages.length > 0 ? 'pt-2' : ''}`}>
                 {chatEmotes.map((item) => (
                   <button
                     key={item.emote}
@@ -185,7 +230,7 @@ export default function ChatPanel({
                     onClick={() => onSendEmote?.(item.emote)}
                     aria-label={item.label}
                     title={item.label}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xl [text-shadow:0_1px_5px_rgba(0,0,0,0.65)] transition hover:bg-white/[0.12]"
+                    className="flex h-10 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xl [text-shadow:0_1px_5px_rgba(0,0,0,0.65)] transition hover:bg-white/[0.12]"
                   >
                     {item.glyph}
                   </button>
@@ -217,7 +262,7 @@ export default function ChatPanel({
           type="button"
           onClick={openChat}
           aria-label={muted ? 'Open chat and unmute' : 'Open chat'}
-          className="flex h-11 max-w-[min(calc(100vw-1.5rem),19rem)] items-center gap-2 rounded-pill border border-white/10 bg-[rgba(7,12,18,0.25)] px-3 text-left text-white/85 transition hover:bg-[rgba(7,12,18,0.35)] hover:text-white"
+          className="flex h-11 max-w-[min(calc(100vw-1.5rem),24rem)] items-center gap-2 rounded-pill border border-white/10 bg-[rgba(7,12,18,0.25)] px-3 text-left text-white/85 transition hover:bg-[rgba(7,12,18,0.35)] hover:text-white"
         >
           {muted ? (
             <VolumeX size={17} strokeWidth={2.4} className="flex-shrink-0 text-white/65" />
