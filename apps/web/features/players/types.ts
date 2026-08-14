@@ -13,6 +13,7 @@ export type PublicPlayerProfile = {
   rankedWins: number;
   badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
 };
 
 export type PlayerMatchSummary = {
@@ -44,4 +45,5 @@ export type OptionalViewer = {
   avatarUrl?: string;
   mmr?: number;
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
 };

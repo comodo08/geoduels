@@ -37,6 +37,7 @@ func (s *pgStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]L
 			r.user_id,
 			coalesce(nullif(u.display_name, r.user_id::text), ui.provider_name, r.user_id::text) as display_name,
 			coalesce(u.avatar_url, ui.avatar_url, '') as avatar_url,
+			coalesce(u.flag_code, '') as flag_code,
 			r.mmr,
 			coalesce(rs.games_played, 0) as games_played,
 			coalesce(rs.wins, 0) as wins
@@ -70,6 +71,7 @@ func (s *pgStore) ListLeaderboard(mode, seasonID string, limit, offset int) ([]L
 			&entry.UserID,
 			&entry.DisplayName,
 			&entry.AvatarURL,
+			&entry.FlagCode,
 			&entry.MMR,
 			&entry.GamesPlayed,
 			&entry.Wins,

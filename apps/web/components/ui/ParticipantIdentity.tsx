@@ -80,6 +80,7 @@ export function ParticipantName({
       profileDisabled={participant.isGuest}
       isAdmin={participant.isAdmin}
       selectedBadge={participant.selectedBadge}
+      flagCode={participant.flagCode}
       nameClassName={nameClassName}
       wrapperClassName={wrapperClassName}
     />

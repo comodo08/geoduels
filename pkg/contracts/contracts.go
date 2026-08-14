@@ -36,6 +36,7 @@ type PlayerProfile struct {
 	IsGuest           bool         `json:"isGuest,omitempty"`
 	IsAdmin           bool         `json:"isAdmin,omitempty"`
 	SelectedBadge     *PlayerBadge `json:"selectedBadge,omitempty"`
+	FlagCode          string       `json:"flagCode,omitempty"`
 }
 
 type PlayerBadge struct {
@@ -226,6 +227,7 @@ type PlayerState struct {
 	HasGuess          bool         `json:"-"`
 	Disconnected      bool         `json:"disconnected"`
 	DisconnectDue     int64        `json:"disconnectDue"`
+	FlagCode          string       `json:"flagCode,omitempty"`
 }
 
 type TeamState struct {
@@ -372,6 +374,43 @@ type ClientPlayerState struct {
 	Finalized         bool         `json:"finalized"`
 	Disconnected      bool         `json:"disconnected"`
 	DisconnectDue     int64        `json:"disconnectDue"`
+	FlagCode          string       `json:"flagCode,omitempty"`
+}
+
+func PlayerStateFromProfile(p PlayerProfile) PlayerState {
+	return PlayerState{
+		UserID:            p.UserID,
+		DisplayName:       p.DisplayName,
+		MMR:               p.MMR,
+		RatingRD:          p.RatingRD,
+		RankedGamesPlayed: p.RankedGamesPlayed,
+		AvatarURL:         p.AvatarURL,
+		IsGuest:           p.IsGuest,
+		IsAdmin:           p.IsAdmin,
+		SelectedBadge:     p.SelectedBadge,
+		FlagCode:          p.FlagCode,
+	}
+}
+
+func ClientPlayerStateFromPlayer(p PlayerState) ClientPlayerState {
+	return ClientPlayerState{
+		UserID:            p.UserID,
+		DisplayName:       p.DisplayName,
+		MMR:               p.MMR,
+		RatingRD:          p.RatingRD,
+		RankedGamesPlayed: p.RankedGamesPlayed,
+		AvatarURL:         p.AvatarURL,
+		IsGuest:           p.IsGuest,
+		IsAdmin:           p.IsAdmin,
+		SelectedBadge:     p.SelectedBadge,
+		FlagCode:          p.FlagCode,
+		TeamID:            p.TeamID,
+		HP:                p.HP,
+		TotalScore:        p.TotalScore,
+		Finalized:         p.Finalized,
+		Disconnected:      p.Disconnected,
+		DisconnectDue:     p.DisconnectDue,
+	}
 }
 
 type ClientSelfState struct {
@@ -443,23 +482,7 @@ func ClientSnapshotForPlayer(snap *MatchSnapshot, userID string) *ClientMatchSna
 	if snap.Players != nil {
 		client.Players = make(map[string]ClientPlayerState, len(snap.Players))
 		for id, player := range snap.Players {
-			client.Players[id] = ClientPlayerState{
-				UserID:            player.UserID,
-				DisplayName:       player.DisplayName,
-				MMR:               player.MMR,
-				RatingRD:          player.RatingRD,
-				RankedGamesPlayed: player.RankedGamesPlayed,
-				AvatarURL:         player.AvatarURL,
-				IsGuest:           player.IsGuest,
-				IsAdmin:           player.IsAdmin,
-				SelectedBadge:     player.SelectedBadge,
-				TeamID:            player.TeamID,
-				HP:                player.HP,
-				TotalScore:        player.TotalScore,
-				Finalized:         player.Finalized,
-				Disconnected:      player.Disconnected,
-				DisconnectDue:     player.DisconnectDue,
-			}
+			client.Players[id] = ClientPlayerStateFromPlayer(player)
 			if id == userID {
 				client.Self = clientSelfState(snap, player)
 			}
@@ -504,6 +527,7 @@ type QueueJoinRequest struct {
 	IsGuest           bool         `json:"isGuest,omitempty"`
 	IsAdmin           bool         `json:"isAdmin,omitempty"`
 	SelectedBadge     *PlayerBadge `json:"selectedBadge,omitempty"`
+	FlagCode          string       `json:"flagCode,omitempty"`
 }
 
 type QueueJoinResponse struct {
@@ -562,6 +586,7 @@ type LeaderboardEntrySummary struct {
 	UserID      string `json:"userId"`
 	DisplayName string `json:"displayName"`
 	AvatarURL   string `json:"avatarUrl,omitempty"`
+	FlagCode    string `json:"flagCode,omitempty"`
 	MMR         int    `json:"mmr"`
 	GamesPlayed int    `json:"gamesPlayed"`
 	Wins        int    `json:"wins"`
@@ -619,6 +644,7 @@ type PartyMember struct {
 	UserID         string              `json:"userId"`
 	DisplayName    string              `json:"displayName"`
 	AvatarURL      string              `json:"avatarUrl,omitempty"`
+	FlagCode       string              `json:"flagCode,omitempty"`
 	IsGuest        bool                `json:"isGuest,omitempty"`
 	IsAdmin        bool                `json:"isAdmin,omitempty"`
 	SelectedBadge  *PlayerBadge        `json:"selectedBadge,omitempty"`

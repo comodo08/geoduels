@@ -9,11 +9,13 @@ import { Surface } from "../../../components/ui/Surface";
 import { Tabs } from "../../../components/ui/Tabs";
 import type { useProfileEditor } from "../hooks/use-profile-editor";
 import type { PlayerMatchSummary, PublicPlayerProfile } from "../types";
+import { CountryFlag } from "../../../components/ui/CountryFlag";
 import {
   MatchHistoryRow,
   ProfileBadgeCollection,
   profileMetrics,
 } from "./PlayerProfilePrimitives";
+import { FlagSelect } from "./FlagSelect";
 
 type Editor = ReturnType<typeof useProfileEditor>;
 
@@ -71,6 +73,15 @@ export function ProfileOverview({
                 {profile.displayName}
               </h1>
             )}
+            {owner ? (
+              <FlagSelect
+                value={editor.flagCode}
+                onSelect={editor.selectFlag}
+                isSaving={editor.flagMutation.isPending}
+              />
+            ) : (
+              <CountryFlag code={profile.flagCode} size="md" />
+            )}
             <PlayerBadge badge={profile.selectedBadge} size="md" />
             {owner ? (
               editor.editingName ? (
@@ -116,6 +127,13 @@ export function ProfileOverview({
             ) : null}
           </div>
           <MmrDisplay value={profile.mmr} size="md" label className="mt-3" />
+          {owner ? (
+            <MutationError
+              mutation={editor.flagMutation}
+              fallback="Failed to update national flag"
+              className="mt-2"
+            />
+          ) : null}
           <MutationError
             mutation={editor.nicknameMutation}
             fallback="Failed to update display name"

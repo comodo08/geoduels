@@ -61,6 +61,7 @@ export function useOptionalViewer() {
         avatarUrl: profile?.avatarUrl || session.user.avatar_url,
         mmr: profile?.mmr,
         selectedBadge: profile?.selectedBadge,
+        flagCode: profile?.flagCode,
       };
     },
     refetchOnMount: false,

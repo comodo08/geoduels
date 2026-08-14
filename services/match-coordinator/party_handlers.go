@@ -631,7 +631,7 @@ func (q *matchCoordinator) partyMatchFound(snap contracts.PartySnapshot) (contra
 		if snap.Mode == contracts.ModeTeamDuel {
 			match.Teams[member.UserID] = normalizePartyTeam(member.TeamID)
 		}
-		match.Profiles[member.UserID] = contracts.PlayerProfile{
+		player := contracts.PlayerProfile{
 			UserID:        member.UserID,
 			DisplayName:   member.DisplayName,
 			AvatarURL:     member.AvatarURL,
@@ -640,13 +640,13 @@ func (q *matchCoordinator) partyMatchFound(snap contracts.PartySnapshot) (contra
 			SelectedBadge: member.SelectedBadge,
 		}
 		if profile, err := q.persist.GetProfile(member.UserID); err == nil {
-			player := match.Profiles[member.UserID]
 			player.MMR = profile.MMR
 			player.RatingRD = profile.RatingRD
 			player.RankedGamesPlayed = profile.RankedGamesPlayed
 			player.SelectedBadge = profile.SelectedBadge
-			match.Profiles[member.UserID] = player
+			player.FlagCode = profile.FlagCode
 		}
+		match.Profiles[member.UserID] = player
 	}
 	return match, nil
 }

@@ -131,19 +131,12 @@ func (e *Engine) CreateMatchWithOptions(matchID string, playerIDs []string, prof
 		if mode == contracts.ModeTeamDuel {
 			teamID = normalizeTeamID(opts.Teams[id])
 		}
-		players[id] = &contracts.PlayerState{
-			UserID:            id,
-			DisplayName:       name,
-			MMR:               p.MMR,
-			RatingRD:          p.RatingRD,
-			RankedGamesPlayed: p.RankedGamesPlayed,
-			AvatarURL:         p.AvatarURL,
-			IsGuest:           p.IsGuest,
-			IsAdmin:           p.IsAdmin,
-			SelectedBadge:     p.SelectedBadge,
-			TeamID:            teamID,
-			HP:                startingHP,
-		}
+		player := contracts.PlayerStateFromProfile(p)
+		player.UserID = id
+		player.DisplayName = name
+		player.TeamID = teamID
+		player.HP = startingHP
+		players[id] = &player
 	}
 	teams := buildTeams(mode, playerIDs, players)
 	if mode == contracts.ModeTeamDuel && len(teams) != 2 {

@@ -79,10 +79,13 @@ func (e *Engine) CreateMatchWithConfig(matchID string, playerIDs []string, profi
 		return nil, errors.New("match already exists")
 	}
 	config = contracts.NormalizeMatchConfig(config)
+	player := contracts.PlayerStateFromProfile(profile)
+	player.UserID = playerID
+	player.DisplayName = name
 	session := &Session{
 		ID:              matchID,
 		Config:          config,
-		Player:          &contracts.PlayerState{UserID: playerID, DisplayName: name, MMR: profile.MMR, RatingRD: profile.RatingRD, RankedGamesPlayed: profile.RankedGamesPlayed, AvatarURL: profile.AvatarURL, IsGuest: profile.IsGuest, IsAdmin: profile.IsAdmin, SelectedBadge: profile.SelectedBadge},
+		Player:          &player,
 		CurrentLocation: firstRound,
 		CurrentIndex:    0,
 		RoundID:         roundID(matchID, 1),

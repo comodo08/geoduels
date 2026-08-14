@@ -59,6 +59,7 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 		"linkedProviders":   identity.LinkedProviders,
 		"badges":            profile.Badges,
 		"selectedBadge":     profile.SelectedBadge,
+		"flagCode":          profile.FlagCode,
 	})
 }
 
@@ -87,6 +88,33 @@ func (a *api) updateSelectedBadge(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"badges":        profile.Badges,
 		"selectedBadge": profile.SelectedBadge,
+	})
+}
+
+func (a *api) updateProfileFlag(w http.ResponseWriter, r *http.Request) {
+	claims, err := a.authenticatedClaims(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		FlagCode string `json:"flagCode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	profile, err := a.store.UpdateProfileFlag(claims.Sub, req.FlagCode)
+	if err != nil {
+		if errors.Is(err, persistence.ErrFlagCodeUnavailable) {
+			http.Error(w, "flag code unavailable", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "profile unavailable", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"flagCode": profile.FlagCode,
 	})
 }
 
@@ -615,17 +643,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		}),
 		Players: []string{userID},
 		Profiles: map[string]contracts.PlayerProfile{
-			userID: {
-				UserID:            userID,
-				DisplayName:       profile.DisplayName,
-				MMR:               profile.MMR,
-				RatingRD:          profile.RatingRD,
-				RankedGamesPlayed: profile.RankedGamesPlayed,
-				AvatarURL:         profile.AvatarURL,
-				IsGuest:           profile.IsGuest,
-				IsAdmin:           profile.IsAdmin,
-				SelectedBadge:     profile.SelectedBadge,
-			},
+			userID: profile.PlayerProfile(),
 		},
 		MapAccessUserID: userID,
 		MapScope:        "world",

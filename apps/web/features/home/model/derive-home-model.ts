@@ -236,6 +236,7 @@ export function deriveHomeModel({
   const selfElo = selfPlayer?.mmr || auth.mmr;
   const selfIsAdmin = !!(selfPlayer?.isAdmin ?? auth.isAdmin);
   const selfSelectedBadge = selfPlayer?.selectedBadge || auth.selectedBadge || null;
+  const selfFlagCode = selfPlayer?.flagCode || auth.flagCode || undefined;
   const selfHasNoLinkedAccount =
     !auth.userEmail || !!(selfPlayer?.isGuest ?? auth.isGuest);
   const selfFallback = isTeamDuel
@@ -346,6 +347,7 @@ export function deriveHomeModel({
       isAdmin: selfIsAdmin,
       isGuest: selfHasNoLinkedAccount,
       selectedBadge: selfSelectedBadge,
+      flagCode: selfFlagCode,
       rating: selfElo,
     },
     competitive: {
@@ -397,6 +399,7 @@ export function deriveHomeModel({
       linkedProviders: auth.linkedProviders,
       badges: auth.badges,
       selectedBadge: auth.selectedBadge,
+      flagCode: auth.flagCode,
       canPlay: auth.canPlay,
       nicknameInput: auth.nicknameInput,
       nicknameError: auth.nicknameError,

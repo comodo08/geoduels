@@ -63,6 +63,7 @@ type SessionPatch = Partial<
     | "linkedProviders"
     | "badges"
     | "selectedBadge"
+    | "flagCode"
     | "canPlay"
   >
 >;
@@ -84,6 +85,7 @@ type ProfileSnapshot = {
   rankedWins?: unknown;
   badges?: unknown;
   selectedBadge?: unknown;
+  flagCode?: unknown;
   linkedProviders?: unknown;
 };
 
@@ -109,6 +111,7 @@ export type SessionState = {
   linkedProviders?: string[];
   badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string | null;
   canPlay?: boolean;
   nicknameInput: string;
   nicknameError: string;
@@ -126,6 +129,7 @@ export type LeaderboardEntrySummary = {
   userId: string;
   displayName: string;
   avatarUrl: string;
+  flagCode?: string;
   mmr: number;
   gamesPlayed: number;
   wins: number;
@@ -162,6 +166,7 @@ const initialState: SessionState = {
   linkedProviders: [],
   badges: [],
   selectedBadge: null,
+  flagCode: null,
   canPlay: false,
   nicknameInput: "",
   nicknameError: "",
@@ -568,6 +573,8 @@ export class SessionController extends ObservableStore<SessionState> {
           : this.state.rankedWins,
       badges: normalizeBadges(profile.badges),
       selectedBadge: normalizeBadge(profile.selectedBadge),
+      flagCode:
+        typeof profile.flagCode === "string" ? profile.flagCode : this.state.flagCode,
       linkedProviders: Array.isArray(profile.linkedProviders)
         ? profile.linkedProviders.filter((provider): provider is string => typeof provider === "string")
         : this.state.linkedProviders,
@@ -659,6 +666,7 @@ function normalizeLeaderboardEntry(
     userId: typeof raw.userId === "string" ? raw.userId : "",
     displayName: typeof raw.displayName === "string" ? raw.displayName : "",
     avatarUrl: typeof raw.avatarUrl === "string" ? raw.avatarUrl : "",
+    flagCode: typeof raw.flagCode === "string" ? raw.flagCode : undefined,
     mmr: typeof raw.mmr === "number" ? raw.mmr : INITIAL_MMR,
     gamesPlayed: typeof raw.gamesPlayed === "number" ? raw.gamesPlayed : 0,
     wins: typeof raw.wins === "number" ? raw.wins : 0,

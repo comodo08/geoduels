@@ -18,6 +18,7 @@ type FallbackSelf = {
   isAdmin?: boolean;
   isGuest?: boolean;
   selectedBadge?: SnapshotPlayer["selectedBadge"];
+  flagCode?: string;
   rating?: number;
 };
 
@@ -62,6 +63,7 @@ function playerIdentity(
     avatarFallback:
       fallback?.avatarFallback || avatarFallback(player, "P"),
     selectedBadge: player?.selectedBadge || fallback?.selectedBadge || null,
+    flagCode: player?.flagCode || fallback?.flagCode,
     isAdmin: player?.isAdmin ?? fallback?.isAdmin,
     isGuest: player?.isGuest ?? fallback?.isGuest,
     rating: player?.mmr ?? fallback?.rating,

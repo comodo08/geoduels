@@ -12,11 +12,13 @@ export function useProfileEditor(
   const [nickname, setNickname] = useState(profile?.displayName || "");
   const [choosingBadge, setChoosingBadge] = useState(false);
   const [badgeId, setBadgeId] = useState(profile?.selectedBadge?.id || "");
+  const [flagCode, setFlagCode] = useState(profile?.flagCode || "");
 
   useEffect(() => {
     if (!profile) return;
     if (!editingName) setNickname(profile.displayName);
     if (!choosingBadge) setBadgeId(profile.selectedBadge?.id || "");
+    setFlagCode(profile.flagCode || "");
   }, [choosingBadge, editingName, profile]);
 
   const cancelName = () => {
@@ -38,6 +40,13 @@ export function useProfileEditor(
     actions.badgeMutation.mutate(badgeId, {
       onSuccess: () => setChoosingBadge(false),
     });
+  const selectFlag = (code: string) => {
+    const previous = profile?.flagCode || "";
+    setFlagCode(code);
+    actions.flagMutation.mutate(code, {
+      onError: () => setFlagCode(previous),
+    });
+  };
 
   return {
     ...actions,
@@ -53,5 +62,8 @@ export function useProfileEditor(
     setBadgeId,
     cancelBadge,
     saveBadge,
+    flagCode,
+    setFlagCode,
+    selectFlag,
   };
 }

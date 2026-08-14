@@ -1,6 +1,7 @@
 import type { LeaderboardSummary } from "../../auth/controllers/session-controller";
 import PlayerProfileLink from "../../../components/ui/PlayerProfileLink";
 import { useSeasonResetCountdown } from "../lib/season-countdown";
+import { CountryFlag } from "../../../components/ui/CountryFlag";
 import { LobbyPanel, LobbySectionHeader } from "./lobby-primitives";
 
 export function LeaderboardPanel({
@@ -65,8 +66,9 @@ export function LeaderboardPanel({
                   </span>
                 </div>
                 <div className="min-w-0">
-                  <PlayerProfileLink userId={entry.userId} nickname={entry.displayName} className="block truncate font-bold text-white hover:text-emerald-200">
+                  <PlayerProfileLink userId={entry.userId} nickname={entry.displayName} className="flex items-center gap-2 truncate font-bold text-white hover:text-emerald-200">
                     {entry.displayName || entry.userId}
+                    <CountryFlag code={entry.flagCode} />
                   </PlayerProfileLink>
                   <p className="truncate text-[12px] text-[#8caab0]">
                     {isSelf ? "You" : `${entry.gamesPlayed} games`}

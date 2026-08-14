@@ -232,6 +232,10 @@ func (s *recoverTestStore) UpdateSelectedBadge(userID, badgeID string) (persiste
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) UpdateProfileFlag(userID, flagCode string) (persistence.Profile, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) SyncLoginBadges(userID string) error {
 	panic("unexpected call")
 }
