@@ -129,14 +129,31 @@ func badgeTemplates() []contracts.PlayerBadge {
 	return out
 }
 
-func seasonRankBadgeTemplate(seasonID string) contracts.PlayerBadge {
+func seasonRankBadgeTemplate(seasonID string, rank int) contracts.PlayerBadge {
 	displaySeason := seasonBadgeDisplayName(seasonID)
+	imageURL := "/medals/platinum-medal.v1.png"
+	label := displaySeason + " Top 100"
+	description := "Awarded to players who finish in the top 100 when " + displaySeason + " ends."
+	switch rank {
+	case 1:
+		imageURL = "/medals/season-1st-medal.v1.png"
+		label = displaySeason + " Champion"
+		description = "Awarded to the player who finishes #1 when " + displaySeason + " ends."
+	case 2:
+		imageURL = "/medals/season-2nd-medal.v1.png"
+		label = displaySeason + " Runner-Up"
+		description = "Awarded to the player who finishes #2 when " + displaySeason + " ends."
+	case 3:
+		imageURL = "/medals/season-3rd-medal.v1.png"
+		label = displaySeason + " Third Place"
+		description = "Awarded to the player who finishes #3 when " + displaySeason + " ends."
+	}
 	return contracts.PlayerBadge{
 		ID:          seasonRankBadgeID(seasonID),
 		Kind:        "season_rank",
-		Label:       displaySeason + " Top 100",
-		Description: "Awarded to players who finish in the top 100 when " + displaySeason + " ends.",
-		ImageURL:    "/medals/platinum-medal.v1.png",
+		Label:       label,
+		Description: description,
+		ImageURL:    imageURL,
 		Rarity:      "legendary",
 		SeasonID:    seasonID,
 		Owned:       false,
@@ -200,13 +217,25 @@ func badgeFromDefinition(def badgeDefinition, owned bool) contracts.PlayerBadge 
 
 func badgeFromParts(code int16, seasonID string, rank int, owned bool) (contracts.PlayerBadge, bool) {
 	if code == badgeCodeSeasonRank {
-		badge := seasonRankBadgeTemplate(seasonID)
+		badge := seasonRankBadgeTemplate(seasonID, rank)
 		badge.Rank = rank
 		badge.Owned = owned
 		if owned && rank > 0 {
 			displaySeason := seasonBadgeDisplayName(seasonID)
-			badge.Label = displaySeason + " #" + fmt.Sprint(rank)
-			badge.Description = "Finished #" + fmt.Sprint(rank) + " in " + displaySeason + "."
+			switch rank {
+			case 1:
+				badge.Label = displaySeason + " Champion"
+				badge.Description = "Finished #1 in " + displaySeason + "."
+			case 2:
+				badge.Label = displaySeason + " Runner-Up"
+				badge.Description = "Finished #2 in " + displaySeason + "."
+			case 3:
+				badge.Label = displaySeason + " Third Place"
+				badge.Description = "Finished #3 in " + displaySeason + "."
+			default:
+				badge.Label = displaySeason + " #" + fmt.Sprint(rank)
+				badge.Description = "Finished #" + fmt.Sprint(rank) + " in " + displaySeason + "."
+			}
 		}
 		return badge, strings.TrimSpace(seasonID) != ""
 	}
