@@ -12,9 +12,10 @@
 cp -n .env.example .env
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
+./scripts/seed-maps.sh
 ```
 
-Create and manage maps through the web map administration UI.
+The bundled sample maps (`a-source-world`, `a-location-world`) are seeded into the database so the game is playable immediately. Re-run `./scripts/seed-maps.sh` any time to (re)load them; it runs `go run ./cmd/seed-maps` against `datasets/a-source-world.sample.json` (set POSTGRES_URL if your database is not on the default localhost:5432). Create and manage more maps through the web map administration UI.
 
 ## Start the backend stack
 
@@ -80,6 +81,7 @@ Run migrations with the repository helper, which uses the pinned migration conta
 ```bash
 MIGRATIONS_DB_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable' \
 ./scripts/migrate.sh up
+./scripts/seed-maps.sh
 ```
 
 Set backend DB URL in `.env`:

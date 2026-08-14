@@ -110,13 +110,14 @@ cp -n .env.example .env
 cp -n apps/web/.env.local.example apps/web/.env.local
 docker compose up -d postgres redis
 ./scripts/migrate.sh up
+./scripts/seed-maps.sh
 docker compose up -d gameplay-node match-coordinator realtime-gateway api
 cd apps/web
 npm ci
 npm run dev
 ```
 
-Create and manage maps through the web map administration UI.
+The bundled sample maps (`a-source-world`, `a-location-world`) are seeded into the database so the game is playable immediately. Re-run `./scripts/seed-maps.sh` any time to (re)load them; it runs `go run ./cmd/seed-maps` against `datasets/a-source-world.sample.json` (set POSTGRES_URL if your database is not on the default localhost:5432). Create and manage more maps through the web map administration UI.
 
 For bulk official country maps generated from a local Vali install, use the
 dry-run-first pipeline in [`docs/map-imports.md`](docs/map-imports.md).
