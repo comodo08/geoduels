@@ -358,7 +358,7 @@ describe('GameController', () => {
     vi.useRealTimers();
   });
 
-  it('plays result exit sfx when round result screen hides behind the end match page', () => {
+  it('plays duel-win sfx and no result exit sfx when the match ends on the end match page', () => {
     let listener: () => void = () => {};
     const matchState = { snapshot: null as Snapshot | null };
     const matchController = {
@@ -388,7 +388,10 @@ describe('GameController', () => {
     controller.setShowMatchEndPage(true);
 
     const exitCalls = vi.mocked(sfxController.play).mock.calls.filter(([name]) => name === 'duel-round-result-exit');
-    expect(exitCalls).toHaveLength(1);
+    expect(exitCalls).toHaveLength(0);
+
+    const winCalls = vi.mocked(sfxController.play).mock.calls.filter(([name]) => name === 'duel-win');
+    expect(winCalls).toHaveLength(1);
 
     controller.destroy();
     vi.useRealTimers();

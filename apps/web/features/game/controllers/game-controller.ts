@@ -1,9 +1,10 @@
-import type { ResultPhase, RoundResult, Snapshot } from '../../../components/ui/types';
+import type { ResultPhase, RoundResult, Snapshot, SnapshotPlayer } from '../../../components/ui/types';
 import type { RuntimeConfig } from '../../../lib/runtime-config';
 import type { SfxController } from '../../../lib/audio/sfx';
 import { ObservableStore } from '../../../lib/observable-store';
 import type { SessionController } from '../../auth/controllers/session-controller';
 import type { MatchController } from '../../matchmaking/controllers/match-controller';
+import type { PartyController } from '../../lobby/controllers/party-controller';
 import { ResultAnimation } from '../lib/result-animation';
 import { GUESS_INPUT_CUTOFF_MS, PRESSURE_VISIBLE_MS, RoundClock } from '../lib/round-clock';
 
@@ -40,6 +41,7 @@ export class GameController extends ObservableStore<GameState> {
   private state: GameState = initialState;
   private readonly matchController: MatchController;
   private readonly sessionController: SessionController;
+  private readonly partyController: PartyController | null;
   private readonly sfxController: SfxController;
   private unsubscribeMatch: (() => void) | null = null;
   private prevSnapshot: Snapshot | null = null;
@@ -64,11 +66,13 @@ export class GameController extends ObservableStore<GameState> {
     matchController: MatchController;
     sessionController: SessionController;
     sfxController: SfxController;
+    partyController?: PartyController | null;
   }) {
     super();
     this.config = params.config;
     this.matchController = params.matchController;
     this.sessionController = params.sessionController;
+    this.partyController = params.partyController ?? null;
     this.sfxController = params.sfxController;
     this.resultAnimation = new ResultAnimation();
   }
@@ -508,6 +512,7 @@ export class GameController extends ObservableStore<GameState> {
         : '';
     const playerIds = Object.keys(snapshot.players || {});
     const oppId = playerIds.find((id) => id !== userId) || '';
+    this.playMatchEndSfx(snapshot);
     this.patchState({
       resultPhase: 'hp_apply',
       showMatchEndPage: true,
@@ -680,13 +685,69 @@ export class GameController extends ObservableStore<GameState> {
     return true;
   };
 
+  private playMatchEndSfx(snapshot: Snapshot | null) {
+    const userId = this.sessionController.getState().userId;
+    if (!snapshot || !userId) return;
+    const partyTeamId =
+      this.partyController?.getState().snapshot?.members.find((m) => m.userId === userId)?.teamId || '';
+    const outcome = resolveSideOutcome(snapshot, userId, partyTeamId);
+    if (outcome === 'win') {
+      this.sfxController.play('duel-win');
+    } else if (outcome === 'lose') {
+      this.sfxController.play('duel-lose');
+    }
+  }
+
   setShowMatchEndPage = (value: boolean) => {
     if (value && !this.state.showMatchEndPage) {
       const snapshot = this.matchController.getState().snapshot;
-      const roundId = snapshot?.lastRoundResult?.roundId || 'recovered';
-      const matchId = snapshot?.matchId || 'match';
-      this.playResultExitSfx(`${matchId}:${roundId}:round-result-hide`);
+      this.playMatchEndSfx(snapshot);
     }
     this.patchState({ showMatchEndPage: value });
   };
+}
+
+export function resolveSideOutcome(
+  snapshot: Snapshot,
+  userId: string,
+  partyTeamId = '',
+): 'win' | 'lose' | 'draw' | null {
+  const mode = snapshot.mode;
+  if (mode === 'singleplayer') return null;
+  if (mode === 'team_duel') {
+    const selfTeamId = partyTeamId || snapshot.players[userId]?.teamId || 'a';
+    const oppTeamId =
+      Object.keys(snapshot.teams || {}).find((t) => t !== selfTeamId) || 'b';
+    const self = snapshot.teams?.[selfTeamId]?.hp ?? 0;
+    const opp = snapshot.teams?.[oppTeamId]?.hp ?? 0;
+    return compareSides(self, opp);
+  }
+  if (mode === 'free_for_all') {
+    if (!snapshot.players[userId]) return null;
+    const self = snapshot.players[userId]?.totalScore ?? 0;
+    const best = bestOpponentStat(snapshot, userId, (p) => p.totalScore ?? 0);
+    return best === null ? null : compareSides(self, best);
+  }
+  if (!snapshot.players[userId]) return null;
+  const self = snapshot.players[userId]?.hp ?? 0;
+  const best = bestOpponentStat(snapshot, userId, (p) => p.hp);
+  return best === null ? null : compareSides(self, best);
+}
+
+function compareSides(self: number, opp: number): 'win' | 'lose' | 'draw' {
+  return self === opp ? 'draw' : self > opp ? 'win' : 'lose';
+}
+
+function bestOpponentStat(
+  snapshot: Snapshot,
+  userId: string,
+  stat: (player: SnapshotPlayer) => number,
+): number | null {
+  const values = Object.keys(snapshot.players || {})
+    .filter((id) => id !== userId)
+    .map((id) => {
+      const player = snapshot.players[id];
+      return player ? stat(player) : 0;
+    });
+  return values.length === 0 ? null : Math.max(...values);
 }
