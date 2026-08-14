@@ -992,4 +992,543 @@ describe('GameController', () => {
     controller.destroy();
     vi.useRealTimers();
   });
+
+  it('flags opponentLeftNotice when the opponent disconnects mid-match', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('flags opponentLeftNotice when the opponent forfeits before any round result', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      state: 'ended',
+      phase: 'ended',
+      roundPhase: 'ended',
+      phaseEndsAt: Date.now(),
+      roundMsLeft: 0,
+      currentRound: undefined,
+      lastRoundResult: undefined,
+      players: {
+        self: {
+          userId: 'self',
+          displayName: 'Self',
+          hp: 5000,
+          mmr: 1000,
+          finalized: false,
+          isGuest: false,
+          disconnected: false
+        },
+        opp: {
+          userId: 'opp',
+          displayName: 'Opp',
+          hp: 0,
+          mmr: 1000,
+          finalized: false,
+          isGuest: false,
+          disconnected: false
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('does not flag opponentLeftNotice when the match ends through a round result', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      state: 'ended',
+      phase: 'round_result',
+      roundPhase: 'round_result',
+      players: {
+        self: {
+          userId: 'self',
+          displayName: 'Self',
+          hp: 5000,
+          mmr: 1000,
+          finalized: true,
+          isGuest: false,
+          disconnected: false
+        },
+        opp: {
+          userId: 'opp',
+          displayName: 'Opp',
+          hp: 0,
+          mmr: 1000,
+          finalized: true,
+          isGuest: false,
+          disconnected: false
+        }
+      },
+      lastRoundResult: {
+        roundId: 'round-1',
+        roundNumber: 1,
+        players: {
+          self: {
+            userId: 'self',
+            lat: 0,
+            lng: 0,
+            score: 8700,
+            distanceKm: 1,
+            damageTaken: 0,
+            hpAfterRound: 5000
+          },
+          opp: {
+            userId: 'opp',
+            lat: 0,
+            lng: 0,
+            score: 1200,
+            distanceKm: 500,
+            damageTaken: 7500,
+            hpAfterRound: 0
+          }
+        },
+        actualLocation: { lat: 0, lng: 0 }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('clears opponentLeftNotice when the opponent reconnects after dropping', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: false
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+    expect(controller.getState().opponentLeftNoticeName).toBe('');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('ignores an opponent disconnect inside the match-start window', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    const startedAt = Date.now() - 2000;
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      phaseStartedAt: startedAt,
+      serverUnixMs: Date.now(),
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      phaseStartedAt: startedAt,
+      serverUnixMs: Date.now(),
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('flags an opponent disconnect once the match-start window has passed', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    const startedAt = Date.now() - 15000;
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      phaseStartedAt: startedAt,
+      serverUnixMs: Date.now(),
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      phaseStartedAt: startedAt,
+      serverUnixMs: Date.now(),
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('flags an opponent disconnect after the match ended, even for a round-1 ending', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    const endedSnap = (overrides: Partial<Snapshot> = {}) =>
+      createSnapshot({
+        state: 'ended',
+        phase: 'ended',
+        roundPhase: 'ended',
+        phaseEndsAt: Date.now(),
+        roundMsLeft: 0,
+        currentRound: undefined,
+        lastRoundResult: {
+          ...createSnapshot().lastRoundResult!,
+          roundNumber: 1,
+          players: {
+            self: { userId: 'self', lat: 0, lng: 0, score: 5000, distanceKm: 0, damageTaken: 0, hpAfterRound: 5000 },
+            opp: { userId: 'opp', lat: 0, lng: 0, score: 0, distanceKm: 900, damageTaken: 5000, hpAfterRound: 0 }
+          }
+        },
+        phaseStartedAt: Date.now(),
+        serverUnixMs: Date.now(),
+        ...overrides
+      });
+
+    matchState.snapshot = endedSnap();
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+
+    matchState.snapshot = endedSnap({
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    } as Partial<Snapshot>);
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('keeps opponentLeftNotice while another teammate is still gone in a team duel', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState)
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    const teamPlayers = {
+      self: { userId: 'self', displayName: 'Self', teamId: 't1', hp: 5000, mmr: 1000, finalized: false, isGuest: false, disconnected: false },
+      a: { userId: 'a', displayName: 'Ace', teamId: 't2', hp: 5000, mmr: 1000, finalized: false, isGuest: false, disconnected: false },
+      b: { userId: 'b', displayName: 'Bee', teamId: 't2', hp: 5000, mmr: 1000, finalized: false, isGuest: false, disconnected: false }
+    };
+    const teamSnap = (overrides: Partial<Snapshot> = {}) =>
+      createSnapshot({
+        mode: 'team_duel',
+        phase: 'live',
+        roundPhase: 'round_live',
+        lastRoundResult: undefined,
+        players: teamPlayers,
+        ...overrides
+      });
+
+    matchState.snapshot = teamSnap();
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+
+    matchState.snapshot = teamSnap({
+      players: { ...teamPlayers, a: { ...teamPlayers.a, disconnected: true } }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Ace');
+
+    matchState.snapshot = teamSnap({
+      players: {
+        ...teamPlayers,
+        a: { ...teamPlayers.a, disconnected: true },
+        b: { ...teamPlayers.b, disconnected: true }
+      }
+    });
+    listener();
+    matchState.snapshot = teamSnap({
+      players: { ...teamPlayers, a: { ...teamPlayers.a, disconnected: true } }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Ace');
+
+    matchState.snapshot = teamSnap();
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+    expect(controller.getState().opponentLeftNoticeName).toBe('');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it('clears opponentLeftNotice when leaving the match', () => {
+    let listener: () => void = () => {};
+    const matchState = { snapshot: null as Snapshot | null };
+    const matchController = {
+      subscribe: vi.fn((next: () => void) => {
+        listener = next;
+        return () => {
+          listener = () => {};
+        };
+      }),
+      getState: vi.fn(() => matchState),
+      sendGameCommand: vi.fn(() => true),
+      resetConnectionState: vi.fn(),
+      setStatus: vi.fn()
+    } as any;
+    const sessionController = {
+      getState: vi.fn(() => ({ userId: 'self' }))
+    } as any;
+
+    const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+    controller.start();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined
+    });
+    listener();
+
+    matchState.snapshot = createSnapshot({
+      phase: 'live',
+      roundPhase: 'round_live',
+      lastRoundResult: undefined,
+      players: {
+        ...createSnapshot().players,
+        opp: {
+          ...createSnapshot().players.opp,
+          disconnected: true
+        }
+      }
+    });
+    listener();
+    expect(controller.getState().opponentLeftNotice).toBe(true);
+    expect(controller.getState().opponentLeftNoticeName).toBe('Opp');
+
+    controller.leaveGame();
+    expect(controller.getState().opponentLeftNotice).toBe(false);
+    expect(controller.getState().opponentLeftNoticeName).toBe('');
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
 });

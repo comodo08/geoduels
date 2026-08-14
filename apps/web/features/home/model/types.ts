@@ -164,6 +164,8 @@ export type HomeChatView = {
   messages: ChatMessage[];
   selfUserId: string;
   error: string;
+  opponentLeftNotice: boolean;
+  opponentLeftNoticeName: string;
 };
 
 export type HomeViewModel = {

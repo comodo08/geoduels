@@ -7,6 +7,8 @@ import type { MatchController } from '../../matchmaking/controllers/match-contro
 import { ResultAnimation } from '../lib/result-animation';
 import { GUESS_INPUT_CUTOFF_MS, PRESSURE_VISIBLE_MS, RoundClock } from '../lib/round-clock';
 
+const MATCH_START_GRACE_MS = 10_000;
+
 type Guess = { lat: number; lng: number } | undefined;
 
 export type GameState = {
@@ -20,6 +22,8 @@ export type GameState = {
   resultPhase: ResultPhase;
   resultShownHP: { self: number; opp: number };
   showMatchEndPage: boolean;
+  opponentLeftNotice: boolean;
+  opponentLeftNoticeName: string;
 };
 
 const initialState: GameState = {
@@ -32,7 +36,9 @@ const initialState: GameState = {
   guessSubmitted: false,
   resultPhase: 'base',
   resultShownHP: { self: 0, opp: 0 },
-  showMatchEndPage: false
+  showMatchEndPage: false,
+  opponentLeftNotice: false,
+  opponentLeftNoticeName: ''
 };
 
 export class GameController extends ObservableStore<GameState> {
@@ -47,6 +53,7 @@ export class GameController extends ObservableStore<GameState> {
   private prevSeq = 0;
   private resultAnimRound = '';
   private roundTimerSyncKey = '';
+  private opponentLeftNoticeMatchId = '';
   private readonly resultAnimation: ResultAnimation;
   private readonly roundClock = new RoundClock();
   private hpTransitionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -160,6 +167,7 @@ export class GameController extends ObservableStore<GameState> {
     this.syncResultAnimation(snapshot, userId);
     this.syncRecoveredEndedMatch(snapshot, userId);
     this.syncOpponentFinalized(prev, snapshot, userId);
+    this.syncOpponentLeftNotice(prev, snapshot, userId);
 
     this.prevSnapshot = snapshot;
   }
@@ -552,6 +560,100 @@ export class GameController extends ObservableStore<GameState> {
     }
   }
 
+  private syncOpponentLeftNotice(prev: Snapshot | null, next: Snapshot | null, userId: string) {
+    if (this.state.opponentLeftNotice && (!next || next.matchId !== this.opponentLeftNoticeMatchId)) {
+      this.patchState({ opponentLeftNotice: false, opponentLeftNoticeName: '' });
+    }
+    if (!prev || !next || prev.matchId !== next.matchId) return;
+    if (next.mode === 'singleplayer') return;
+
+    const nextPlayers = next.players || {};
+    const self = nextPlayers[userId];
+    if (!self) return;
+    const selfTeamId = self.teamId || '';
+    const opponentIds = Object.keys(nextPlayers).filter((id) => {
+      if (id === userId) return false;
+      if (next.mode === 'team_duel') {
+        return (nextPlayers[id].teamId || '') !== selfTeamId;
+      }
+      return true;
+    });
+    if (opponentIds.length === 0) return;
+
+    const transitionedOpponentId = (from: boolean, to: boolean) =>
+      opponentIds.find((id) => {
+        const prevOpp = prev.players?.[id];
+        const nextOpp = nextPlayers[id];
+        return !!prevOpp && prevOpp.disconnected === from && nextOpp.disconnected === to;
+      });
+
+    const cameBackId = transitionedOpponentId(true, false);
+    if (cameBackId) {
+      if (!this.state.opponentLeftNotice) return;
+      const stillGoneId = opponentIds.find((id) => nextPlayers[id].disconnected);
+      if (stillGoneId) {
+        this.patchState({
+          opponentLeftNoticeName: this.playerDisplayName(nextPlayers[stillGoneId])
+        });
+      } else {
+        this.patchState({ opponentLeftNotice: false, opponentLeftNoticeName: '' });
+      }
+      return;
+    }
+
+    if (this.state.opponentLeftNotice) return;
+
+    const leftId = transitionedOpponentId(false, true);
+    if (leftId) {
+      if (this.isWithinMatchStartWindow(next)) return;
+      this.opponentLeftNoticeMatchId = next.matchId;
+      this.patchState({
+        opponentLeftNotice: true,
+        opponentLeftNoticeName: this.playerDisplayName(nextPlayers[leftId])
+      });
+      return;
+    }
+
+    if (next.state === 'ended' && !this.opponentEndedViaRoundResult(next, opponentIds, selfTeamId)) {
+      const selfAlive =
+        next.mode === 'team_duel' ? (next.teams?.[selfTeamId]?.hp ?? 0) > 0 : self.hp > 0;
+      const deadOppId = opponentIds.find((id) => (nextPlayers[id].hp ?? 0) === 0);
+      if (selfAlive && deadOppId) {
+        this.opponentLeftNoticeMatchId = next.matchId;
+        this.patchState({
+          opponentLeftNotice: true,
+          opponentLeftNoticeName: this.playerDisplayName(nextPlayers[deadOppId])
+        });
+      }
+    }
+  }
+
+  private playerDisplayName(player: { displayName?: string; userId?: string; isGuest?: boolean } | undefined) {
+    const name = (player?.displayName || '').trim();
+    if (name) return name;
+    if (player?.isGuest) return 'Guest';
+    return player?.userId || '';
+  }
+
+  private isWithinMatchStartWindow(next: Snapshot) {
+    if (next.state === 'ended') return false;
+    const roundNumber = next.currentRound?.roundNumber || next.lastRoundResult?.roundNumber || 1;
+    if (roundNumber > 1) return false;
+    if (typeof next.serverUnixMs !== 'number' || typeof next.phaseStartedAt !== 'number') return false;
+    return next.serverUnixMs - next.phaseStartedAt < MATCH_START_GRACE_MS;
+  }
+
+  private opponentEndedViaRoundResult(next: Snapshot, opponentIds: string[], selfTeamId: string) {
+    const rr = next.lastRoundResult;
+    if (!rr) return false;
+    if (next.mode === 'team_duel') {
+      const oppTeamId = Object.keys(next.teams || {}).find((teamId) => teamId !== selfTeamId) || '';
+      const oppTeamResult = oppTeamId ? rr.teams?.[oppTeamId] : undefined;
+      return oppTeamResult ? oppTeamResult.hpAfterRound === 0 : false;
+    }
+    return opponentIds.some((id) => rr.players?.[id]?.hpAfterRound === 0);
+  }
+
   private getAnimatedStartHP(snapshot: Snapshot, playerId: string, hpAfterRound: number, hpNow: number) {
     const prevHP = this.prevSnapshot?.matchId === snapshot.matchId ? this.prevSnapshot.players?.[playerId]?.hp : undefined;
     if (typeof prevHP === 'number') {
@@ -663,6 +765,7 @@ export class GameController extends ObservableStore<GameState> {
     this.patchState(initialState);
     this.roundClock.reset();
     this.resultAnimRound = '';
+    this.opponentLeftNoticeMatchId = '';
     this.matchController.setStatus(session.nicknameRequired ? 'idle' : 'ready');
   };
 

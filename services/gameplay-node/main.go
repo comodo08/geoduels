@@ -37,6 +37,7 @@ const (
 	wsPingPeriod         = 25 * time.Second
 	matchLeaseRenewEvery = 10 * time.Second
 	matchLeaseTTL        = 45 * time.Second
+	endedMatchRetention  = 10 * time.Minute
 )
 
 var upgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
@@ -62,10 +63,11 @@ type gameplayNode struct {
 	conns      map[string]*websocket.Conn
 	connWrite  map[string]*sync.Mutex
 	connID     map[string]string
-	userMatch  map[string]string
-	matchUsers map[string][]string
-	matchModes map[string]contracts.MatchMode
-	finalizing map[string]bool
+	userMatch    map[string]string
+	matchUsers   map[string][]string
+	matchModes   map[string]contracts.MatchMode
+	finalizing   map[string]bool
+	endedMatches map[string]time.Time
 
 	metrics *observability.RuntimeMetrics
 
@@ -133,10 +135,11 @@ func main() {
 		conns:      map[string]*websocket.Conn{},
 		connWrite:  map[string]*sync.Mutex{},
 		connID:     map[string]string{},
-		userMatch:  map[string]string{},
-		matchUsers: map[string][]string{},
-		matchModes: map[string]contracts.MatchMode{},
-		finalizing: map[string]bool{},
+		userMatch:    map[string]string{},
+		matchUsers:   map[string][]string{},
+		matchModes:   map[string]contracts.MatchMode{},
+		finalizing:   map[string]bool{},
+		endedMatches: map[string]time.Time{},
 		metrics:    observability.NewRuntimeMetrics(),
 		drainTTL:   getenvDuration("GAMEPLAY_DRAIN_TIMEOUT", 9*time.Minute+30*time.Second),
 	}
@@ -471,6 +474,7 @@ func (g *gameplayNode) tick() {
 	t := time.NewTicker(1 * time.Second)
 	defer t.Stop()
 	for range t.C {
+		g.sweepEndedMatches()
 		changed := map[string]bool{}
 		for _, runtime := range g.runtimes {
 			for _, matchID := range runtime.Tick() {
@@ -487,6 +491,47 @@ func (g *gameplayNode) tick() {
 				continue
 			}
 			g.publishRuntimeState(matchID, snap, "")
+		}
+	}
+}
+
+func (g *gameplayNode) sweepEndedMatches() {
+	now := time.Now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for matchID, endedAt := range g.endedMatches {
+		if now.Sub(endedAt) < endedMatchRetention {
+			continue
+		}
+		g.releaseMatchRoutingLocked(matchID)
+	}
+}
+
+func (g *gameplayNode) releaseEndedMatchIfIdle(matchID string) {
+	if matchID == "" {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, ended := g.endedMatches[matchID]; !ended {
+		return
+	}
+	for _, userID := range g.matchUsers[matchID] {
+		if g.conns[userID] != nil {
+			return
+		}
+	}
+	g.releaseMatchRoutingLocked(matchID)
+}
+
+func (g *gameplayNode) releaseMatchRoutingLocked(matchID string) {
+	players := append([]string(nil), g.matchUsers[matchID]...)
+	delete(g.matchUsers, matchID)
+	delete(g.matchModes, matchID)
+	delete(g.endedMatches, matchID)
+	for _, userID := range players {
+		if g.userMatch[userID] == matchID {
+			delete(g.userMatch, userID)
 		}
 	}
 }
@@ -508,8 +553,12 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 	}
 
 	g.mu.Lock()
+	if _, ended := g.endedMatches[matchID]; ended || g.finalizing[matchID] {
+		g.mu.Unlock()
+		return
+	}
 	players, ok := g.matchUsers[matchID]
-	if !ok || g.finalizing[matchID] {
+	if !ok {
 		g.mu.Unlock()
 		return
 	}
@@ -529,13 +578,7 @@ func (g *gameplayNode) terminalize(matchID string, snap *contracts.MatchSnapshot
 
 	g.mu.Lock()
 	delete(g.finalizing, matchID)
-	delete(g.matchUsers, matchID)
-	delete(g.matchModes, matchID)
-	for _, userID := range players {
-		if g.userMatch[userID] == matchID {
-			delete(g.userMatch, userID)
-		}
-	}
+	g.endedMatches[matchID] = time.Now()
 	g.mu.Unlock()
 
 	g.clearQueuedMatchArtifacts(players)
@@ -655,6 +698,9 @@ func (g *gameplayNode) activeMatchCount() int {
 	defer g.mu.RUnlock()
 	total := 0
 	for matchID := range g.matchUsers {
+		if _, ended := g.endedMatches[matchID]; ended {
+			continue
+		}
 		if contracts.IsPrivatePartyMode(g.matchModes[matchID]) {
 			total++
 		}
@@ -685,6 +731,7 @@ func (g *gameplayNode) onDisconnect(userID, matchID, connID string) {
 				g.broadcastState(matchID, snap, "")
 			}
 		}
+		g.releaseEndedMatchIfIdle(matchID)
 	}
 }
 
