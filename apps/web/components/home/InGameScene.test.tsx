@@ -342,6 +342,17 @@ describe('InGameScene', () => {
     });
   });
 
+  it('instantly exits singleplayer practice on one LogOut click without a confirmation panel', () => {
+    const props = createProps({ isSingleplayer: true });
+    render(<InGameScene {...props} />);
+
+    screen.getByRole('button', { name: 'Forfeit match' }).click();
+
+    expect(props.onForfeit).toHaveBeenCalledTimes(1);
+    expect(props.onLeaveGame).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Keep Playing')).not.toBeInTheDocument();
+  });
+
   it('renders team identity without promoting member avatars, badges, or ratings', () => {
     const memberBadge = {
       id: 'badge-1',
