@@ -1,10 +1,13 @@
-import { Loader2, LogOut, Trash2 } from "lucide-react";
+import { Loader2, LogOut, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import AppModalShell from "../../../components/ui/AppModalShell";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Surface } from "../../../components/ui/Surface";
+import AvatarBadge from "../../../components/ui/AvatarBadge";
 import { useAccountSettings } from "../hooks/use-account-settings";
+import { useProfileOwnerActions } from "../hooks/use-profile-mutations";
 
 export function AccountSettingsModal({
   onClose,
@@ -14,8 +17,57 @@ export function AccountSettingsModal({
   profilePath: string;
 }) {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarError, setAvatarError] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
+  const queryClient = useQueryClient();
   const state = useAccountSettings(profilePath);
   const { account, accountQuery, deleteMutation, unlinkMutation } = state;
+  const owner = useProfileOwnerActions(account?.accessToken || "");
+
+  const currentAvatarUrl = previewUrl ?? account?.avatarUrl;
+  const hasCustomAvatar = !!currentAvatarUrl?.includes("/v1/avatars/");
+  const isGuest = !!account?.isGuest;
+
+  const resetAvatarState = () => {
+    setAvatarFile(null);
+    setAvatarError("");
+  };
+
+  const uploadAvatar = () => {
+    if (!avatarFile) return;
+    setAvatarError("");
+    owner.avatarUploadMutation.mutate(avatarFile, {
+      onSuccess: (payload: { user?: { avatar_url?: string } }) => {
+        if (payload?.user?.avatar_url) setPreviewUrl(payload.user.avatar_url);
+        queryClient.invalidateQueries({ queryKey: ["profile-account-settings"] });
+        resetAvatarState();
+      },
+      onError: (value: unknown) =>
+        setAvatarError(
+          value instanceof Error ? value.message : "Failed to upload avatar",
+        ),
+    });
+  };
+
+  const resetAvatar = () => {
+    setAvatarError("");
+    owner.avatarResetMutation.mutate(undefined, {
+      onSuccess: (payload: { user?: { avatar_url?: string } }) => {
+        setPreviewUrl(undefined);
+        queryClient.invalidateQueries({ queryKey: ["profile-account-settings"] });
+      },
+      onError: (value: unknown) =>
+        setAvatarError(
+          value instanceof Error ? value.message : "Failed to reset avatar",
+        ),
+    });
+  };
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarError("");
+    setAvatarFile(event.target.files?.[0] ?? null);
+  };
 
   return (
     <AppModalShell
@@ -46,6 +98,69 @@ export function AccountSettingsModal({
               {account.email}
             </p>
           </Surface>
+
+          {!isGuest ? (
+            <Surface variant="subtle" className="rounded-xl p-4">
+              <h3 className="text-sm font-black text-white">Profile picture</h3>
+              <div className="mt-3 flex items-center gap-4">
+                <AvatarBadge
+                  avatarUrl={currentAvatarUrl}
+                  fallback={(account.email || "?").slice(0, 1).toUpperCase()}
+                  alt="Your avatar"
+                  size="lg"
+                  className="shrink-0 bg-slate-900"
+                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    onChange={onFileChange}
+                    className="block w-full text-xs text-[#a9bfd4] file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-white/20"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={uploadAvatar}
+                      disabled={
+                        !avatarFile || owner.avatarUploadMutation.isPending
+                      }
+                    >
+                      {owner.avatarUploadMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                      Upload
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={resetAvatar}
+                      disabled={
+                        !hasCustomAvatar || owner.avatarResetMutation.isPending
+                      }
+                    >
+                      {owner.avatarResetMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-4 w-4" />
+                      )}
+                      Reset to provider
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#8caab0]">
+                PNG or JPEG, up to 2 MB and 512×512 px. Custom avatars override
+                your provider image and can be removed any time.
+              </p>
+              {avatarError ? (
+                <p className="mt-2 text-xs font-semibold text-red-300">
+                  {avatarError}
+                </p>
+              ) : null}
+            </Surface>
+          ) : null}
 
           <Surface variant="subtle" className="rounded-xl p-4">
             <h3 className="text-sm font-black text-white">

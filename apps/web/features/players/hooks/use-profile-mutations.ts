@@ -1,10 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { getHomeRuntime } from "../../home/state/home-runtime";
 import {
+  requestDeleteAvatar,
+  requestUpdateAvatar,
   requestUpdateNickname,
   requestUpdateSelectedBadge,
   requestUpdateProfileFlag,
 } from "../../auth/lib/auth-client";
+
+type AvatarPayload = {
+  user?: { avatar_url?: string };
+};
 
 export function useProfileOwnerActions(accessToken: string) {
   const config = getRuntimeConfig();
@@ -14,7 +21,15 @@ export function useProfileOwnerActions(accessToken: string) {
       queryClient.invalidateQueries({ queryKey: ["player-profile"] }),
       queryClient.invalidateQueries({ queryKey: ["optional-viewer"] }),
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
+      queryClient.invalidateQueries({ queryKey: ["me"] }),
     ]);
+  const applyAvatar = (payload: AvatarPayload | undefined) => {
+    if (payload?.user && typeof payload.user.avatar_url === "string") {
+      getHomeRuntime(config).sessionController.applyUserAvatar(
+        payload.user.avatar_url,
+      );
+    }
+  };
 
   return {
     nicknameMutation: useMutation({
@@ -31,6 +46,21 @@ export function useProfileOwnerActions(accessToken: string) {
       mutationFn: (flagCode: string) =>
         requestUpdateProfileFlag(config, accessToken, flagCode),
       onSuccess: refresh,
+    }),
+    avatarUploadMutation: useMutation({
+      mutationFn: (file: File) =>
+        requestUpdateAvatar(config, accessToken, file),
+      onSuccess: (payload) => {
+        applyAvatar(payload as AvatarPayload);
+        refresh();
+      },
+    }),
+    avatarResetMutation: useMutation({
+      mutationFn: () => requestDeleteAvatar(config, accessToken),
+      onSuccess: (payload) => {
+        applyAvatar(payload as AvatarPayload);
+        refresh();
+      },
     }),
   };
 }

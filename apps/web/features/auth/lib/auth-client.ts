@@ -161,6 +161,40 @@ export async function requestUpdateNickname(
   return resp.json();
 }
 
+export async function requestUpdateAvatar(
+  config: RuntimeConfig,
+  accessToken: string,
+  file: File,
+) {
+  const form = new FormData();
+  form.append("avatar", file);
+  const resp = await apiFetch(config, "/v1/me/avatar", {
+    method: "POST",
+    credentials: "include",
+    headers: authHeaders(accessToken),
+    body: form,
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to upload avatar"));
+  }
+  return resp.json();
+}
+
+export async function requestDeleteAvatar(
+  config: RuntimeConfig,
+  accessToken: string,
+) {
+  const resp = await apiFetch(config, "/v1/me/avatar", {
+    method: "DELETE",
+    credentials: "include",
+    headers: authHeaders(accessToken),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to reset avatar"));
+  }
+  return resp.json();
+}
+
 export async function requestUpdateSelectedBadge(
   config: RuntimeConfig,
   accessToken: string,

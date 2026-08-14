@@ -17,6 +17,7 @@ type AccountData = {
   accessToken: string;
   email: string;
   isGuest: boolean;
+  avatarUrl?: string;
   linkedProviders: string[];
 };
 
@@ -37,6 +38,7 @@ export function useAccountSettings(profilePath: string) {
         accessToken: session.accessToken,
         email: profile.email || session.user.email || "Guest account",
         isGuest: !!profile.isGuest,
+        avatarUrl: profile.avatar_url || session.user.avatar_url || undefined,
         linkedProviders: session.linkedProviders || [],
       };
     },

@@ -41,6 +41,7 @@ type api struct {
 	appAuthSecret           []byte
 	ticketAuth              []byte
 	internalSecret          string
+	apiPublicBaseURL        string
 	accessTokenTTL          time.Duration
 	refreshTokenTTL         time.Duration
 	refreshCookieName       string
@@ -151,6 +152,7 @@ func newAPI() (*api, error) {
 		appAuthSecret:           appAuthSecret,
 		ticketAuth:              ticketAuth,
 		internalSecret:          internalSecret,
+		apiPublicBaseURL:       strings.TrimSpace(os.Getenv("API_PUBLIC_BASE_URL")),
 		accessTokenTTL:          getenvDuration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
 		refreshTokenTTL:         getenvDuration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		refreshCookieName:       getenv("APP_REFRESH_COOKIE_NAME", "geoduels_refresh"),
@@ -196,7 +198,10 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/me/flag", a.updateProfileFlag).Methods(http.MethodPatch)
 	r.HandleFunc("/v1/me/nickname", a.updateNickname).Methods(http.MethodPut, http.MethodPatch)
 	r.HandleFunc("/v1/me", a.deleteAccount).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/me/avatar", a.updateAvatar).Methods(http.MethodPost)
+	r.HandleFunc("/v1/me/avatar", a.resetAvatar).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/me/auth-providers/{provider}", a.unlinkAuthProvider).Methods(http.MethodDelete)
+	r.HandleFunc("/v1/avatars/{userId}", a.serveAvatar).Methods(http.MethodGet)
 	r.HandleFunc("/v1/me/notifications", a.userNotifications).Methods(http.MethodGet)
 	r.HandleFunc("/v1/me/notifications/{id}/read", a.markUserNotificationRead).Methods(http.MethodPost)
 	r.HandleFunc("/v1/support/donate", a.createSupportDonation).Methods(http.MethodPost)
@@ -243,6 +248,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/admin/players/{id}/moderator", a.adminPromoteModerator).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/players/{id}/moderator", a.adminDemoteModerator).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/admin/players/{id}/map-tier", a.adminSetMapCreatorTier).Methods(http.MethodPut)
+	r.HandleFunc("/v1/admin/players/{id}/avatar", a.adminResetPlayerAvatar).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/admin/roles", a.adminListRoles).Methods(http.MethodGet)
 	r.HandleFunc("/v1/admin/roles", a.adminGrantRole).Methods(http.MethodPost)
 	r.HandleFunc("/v1/admin/roles/{id}/{role}", a.adminRevokeRole).Methods(http.MethodDelete)

@@ -17,6 +17,9 @@ type AccountRepository interface {
 	CreateGuestIdentity() (Identity, error)
 	GetIdentity(sub string) (Identity, error)
 	SetNickname(sub, displayName string) error
+	SetUserAvatar(userID, contentType string, data []byte, baseURL string) (string, error)
+	ResetUserAvatar(userID string) error
+	GetUserAvatar(userID string) (string, []byte, error)
 	SuggestNickname(sub, displayName string) (string, error)
 	DeleteAccount(userID string) error
 	DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error)

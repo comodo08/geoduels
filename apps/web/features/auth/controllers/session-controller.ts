@@ -601,6 +601,11 @@ export class SessionController extends ObservableStore<SessionState> {
     });
   }
 
+  applyUserAvatar(avatarUrl: string) {
+    if (typeof avatarUrl !== "string") return;
+    this.patchState({ userAvatar: avatarUrl });
+  }
+
   applyLeaderboardSummary(summary: unknown) {
     this.patchState({
       leaderboard: normalizeLeaderboardSummary(summary),
