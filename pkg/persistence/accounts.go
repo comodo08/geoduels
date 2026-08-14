@@ -211,7 +211,13 @@ func (s *pgStore) UpsertProviderIdentity(provider, providerUserID, email, provid
 				when users.nickname_claimed_at is not null and nullif(users.display_name, '') is not null then users.display_name
 				else excluded.display_name
 			end,
-			avatar_url = excluded.avatar_url,
+			avatar_url = case
+				when exists (
+					select 1 from user_avatars custom_avatar
+					where custom_avatar.user_id = users.id
+				) then users.avatar_url
+				else excluded.avatar_url
+			end,
 			account_type = 'registered'
 	`, userID, userEmail, providerName, nullable(avatarURL)); err != nil {
 		return Identity{}, err
@@ -390,7 +396,13 @@ func (s *pgStore) LinkProviderIdentity(provider, providerUserID, email, provider
 				when users.nickname_claimed_at is not null and nullif(users.display_name, '') is not null then users.display_name
 				else excluded.display_name
 			end,
-			avatar_url = excluded.avatar_url,
+			avatar_url = case
+				when exists (
+					select 1 from user_avatars custom_avatar
+					where custom_avatar.user_id = users.id
+				) then users.avatar_url
+				else excluded.avatar_url
+			end,
 			account_type = 'registered'
 	`, linkUserID, userEmail, providerName, nullable(avatarURL)); err != nil {
 		return Identity{}, err

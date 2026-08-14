@@ -82,6 +82,18 @@ func (s *recoverTestStore) SetNickname(sub, displayName string) error {
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) SetUserAvatar(userID, contentType string, data []byte, baseURL string) (string, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ResetUserAvatar(userID string) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetUserAvatar(userID string) (string, []byte, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) SuggestNickname(sub, displayName string) (string, error) {
 	panic("unexpected call")
 }
