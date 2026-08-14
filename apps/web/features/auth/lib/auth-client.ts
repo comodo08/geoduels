@@ -161,6 +161,25 @@ export async function requestUpdateNickname(
   return resp.json();
 }
 
+export async function requestUpdateAbout(
+  config: RuntimeConfig,
+  accessToken: string,
+  about: string,
+) {
+  const resp = await apiFetch(config, "/v1/me/about", {
+    method: "PUT",
+    credentials: "include",
+    headers: mergeHeaders({
+      "content-type": "application/json",
+    }, authHeaders(accessToken)),
+    body: JSON.stringify({ about }),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to save bio"));
+  }
+  return resp.json();
+}
+
 export async function requestUpdateAvatar(
   config: RuntimeConfig,
   accessToken: string,

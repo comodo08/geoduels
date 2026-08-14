@@ -4,6 +4,7 @@ import { getHomeRuntime } from "../../home/state/home-runtime";
 import {
   requestDeleteAvatar,
   requestUpdateAvatar,
+  requestUpdateAbout,
   requestUpdateNickname,
   requestUpdateSelectedBadge,
   requestUpdateProfileFlag,
@@ -61,6 +62,11 @@ export function useProfileOwnerActions(accessToken: string) {
         applyAvatar(payload as AvatarPayload);
         refresh();
       },
+    }),
+    aboutMutation: useMutation({
+      mutationFn: (about: string) =>
+        requestUpdateAbout(config, accessToken, about),
+      onSuccess: refresh,
     }),
   };
 }

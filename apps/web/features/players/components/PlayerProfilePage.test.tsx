@@ -138,6 +138,12 @@ function arrange({
       isError: false,
       error: null,
     },
+    aboutMutation: {
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    },
   });
 
   render(

@@ -23,6 +23,7 @@ type Profile struct {
 	IsModerator       bool                    `json:"isModerator"`
 	IsBanned          bool                    `json:"isBanned"`
 	BanReason         string                  `json:"banReason,omitempty"`
+	About             string                  `json:"about,omitempty"`
 	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
 	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
 	FlagCode          string                  `json:"flagCode,omitempty"`
@@ -70,6 +71,7 @@ type PublicPlayerProfile struct {
 	Wins              int                     `json:"wins"`
 	RankedGamesPlayed int                     `json:"rankedGamesPlayed"`
 	RankedWins        int                     `json:"rankedWins"`
+	About             string                  `json:"about,omitempty"`
 	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
 	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
 	FlagCode          string                  `json:"flagCode,omitempty"`

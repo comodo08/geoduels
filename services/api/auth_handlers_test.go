@@ -53,6 +53,13 @@ func (s *nicknameAuthTestStore) SyncLoginBadges(userID string) error {
 	return nil
 }
 
+func (s *nicknameAuthTestStore) SetAbout(sub, about string) (persistence.Profile, error) {
+	if s.setErr != nil {
+		return persistence.Profile{}, s.setErr
+	}
+	return persistence.Profile{About: about}, nil
+}
+
 func (s *nicknameAuthTestStore) SuggestNickname(sub, displayName string) (string, error) {
 	s.suggestionFrom = displayName
 	return s.suggestedName, nil
@@ -496,6 +503,92 @@ func TestUpdateNicknameReturnsConflictWhenTaken(t *testing.T) {
 	}
 	if !errors.Is(store.setErr, persistence.ErrNicknameTaken) {
 		t.Fatal("expected nickname conflict")
+	}
+}
+
+func TestUpdateAboutEchoesStoredBio(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:         "user-1",
+			DisplayName: "Player",
+			AccountType: "registered",
+		},
+	}
+	a := &api{
+		store:          store,
+		appAuthSecret:  secret,
+		accessTokenTTL: 15 * time.Minute,
+	}
+	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/me/about", strings.NewReader(`{"about":"  Geo enthusiast  "}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	a.updateAbout(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update about status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		About string `json:"about"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.About != "Geo enthusiast" {
+		t.Fatalf("about = %q, want %q", payload.About, "Geo enthusiast")
+	}
+}
+
+func TestUpdateAboutForbidsGuests(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:         "user-1",
+			AccountType: "guest",
+		},
+	}
+	a := &api{store: store, appAuthSecret: secret}
+	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/me/about", strings.NewReader(`{"about":"hi"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	a.updateAbout(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("update about status = %d, want 403", rec.Code)
+	}
+}
+
+func TestUpdateAboutRejectsProfanity(t *testing.T) {
+	secret := []byte("01234567890123456789012345678901")
+	store := &nicknameAuthTestStore{
+		identity: persistence.Identity{
+			Sub:         "user-1",
+			AccountType: "registered",
+		},
+	}
+	a := &api{store: store, appAuthSecret: secret}
+	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/v1/me/about", strings.NewReader(`{"about":"shit"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	a.updateAbout(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("update about status = %d, want 400", rec.Code)
 	}
 }
 

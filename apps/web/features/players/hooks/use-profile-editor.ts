@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { PublicPlayerProfile } from "../types";
 import { useProfileOwnerActions } from "./use-profile-mutations";
 
+const MAX_ABOUT_LENGTH = 150;
+
 export function useProfileEditor(
   profile: PublicPlayerProfile | undefined,
   accessToken: string,
@@ -13,13 +15,16 @@ export function useProfileEditor(
   const [choosingBadge, setChoosingBadge] = useState(false);
   const [badgeId, setBadgeId] = useState(profile?.selectedBadge?.id || "");
   const [flagCode, setFlagCode] = useState(profile?.flagCode || "");
+  const [editingAbout, setEditingAbout] = useState(false);
+  const [about, setAbout] = useState(profile?.about || "");
 
   useEffect(() => {
     if (!profile) return;
     if (!editingName) setNickname(profile.displayName);
     if (!choosingBadge) setBadgeId(profile.selectedBadge?.id || "");
     setFlagCode(profile.flagCode || "");
-  }, [choosingBadge, editingName, profile]);
+    if (!editingAbout) setAbout(profile.about || "");
+  }, [choosingBadge, editingName, editingAbout, profile]);
 
   const cancelName = () => {
     setNickname(profile?.displayName || "");
@@ -47,6 +52,14 @@ export function useProfileEditor(
       onError: () => setFlagCode(previous),
     });
   };
+  const cancelAbout = () => {
+    setAbout(profile?.about || "");
+    setEditingAbout(false);
+  };
+  const saveAbout = () =>
+    actions.aboutMutation.mutate(about.trim().slice(0, MAX_ABOUT_LENGTH), {
+      onSuccess: () => setEditingAbout(false),
+    });
 
   return {
     ...actions,
@@ -65,5 +78,11 @@ export function useProfileEditor(
     flagCode,
     setFlagCode,
     selectFlag,
+    editingAbout,
+    setEditingAbout,
+    about,
+    setAbout,
+    cancelAbout,
+    saveAbout,
   };
 }

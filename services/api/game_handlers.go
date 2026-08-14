@@ -60,6 +60,7 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 		"badges":            profile.Badges,
 		"selectedBadge":     profile.SelectedBadge,
 		"flagCode":          profile.FlagCode,
+		"about":             profile.About,
 	})
 }
 

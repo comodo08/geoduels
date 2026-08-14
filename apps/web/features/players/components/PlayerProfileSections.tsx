@@ -7,6 +7,7 @@ import { MmrDisplay } from "../../../components/ui/MmrDisplay";
 import PlayerBadge from "../../../components/ui/PlayerBadge";
 import { Surface } from "../../../components/ui/Surface";
 import { Tabs } from "../../../components/ui/Tabs";
+import { Textarea } from "../../../components/ui/textarea";
 import type { useProfileEditor } from "../hooks/use-profile-editor";
 import type { PlayerMatchSummary, PublicPlayerProfile } from "../types";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
@@ -146,7 +147,94 @@ export function ProfileOverview({
           </Button>
         ) : null}
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-2.5 border-t border-white/10 pt-5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-9 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="col-span-2 sm:col-span-3">
+          {owner && editor.editingAbout ? (
+            <div className="flex flex-col gap-2">
+              <Textarea
+                variant="game"
+                value={editor.about}
+                maxLength={150}
+                rows={4}
+                onChange={(event) => editor.setAbout(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") editor.cancelAbout();
+                }}
+                autoFocus
+                placeholder="Tell the world about yourself"
+                className="resize-none"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-[#8caab0]">
+                  {editor.about.length}/150
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Cancel bio"
+                    onClick={editor.cancelAbout}
+                    disabled={editor.aboutMutation.isPending}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    aria-label="Save bio"
+                    onClick={editor.saveAbout}
+                    disabled={editor.aboutMutation.isPending}
+                  >
+                    {editor.aboutMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : profile.about ? (
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 break-words whitespace-pre-wrap text-sm font-medium leading-normal text-white">
+                {profile.about}
+              </p>
+              {owner ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Edit bio"
+                  onClick={() => editor.setEditingAbout(true)}
+                  className="-mt-0.5 h-6 min-h-6 w-6 shrink-0"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          ) : owner ? (
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-[#8caab0]">No bio yet.</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Edit bio"
+                onClick={() => editor.setEditingAbout(true)}
+                className="h-8 min-h-8 w-8 shrink-0"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
+          <MutationError
+            mutation={editor.aboutMutation}
+            fallback="Failed to update bio"
+            className="mb-3"
+          />
+        </div>
+      </div>
+      <div className="mt-9 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map(([icon, label, value], index) => (
           <IconMetric
             key={label}

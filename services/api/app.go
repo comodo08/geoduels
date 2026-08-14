@@ -197,6 +197,7 @@ func routes(a *api) *mux.Router {
 	r.HandleFunc("/v1/me/badge", a.updateSelectedBadge).Methods(http.MethodPatch)
 	r.HandleFunc("/v1/me/flag", a.updateProfileFlag).Methods(http.MethodPatch)
 	r.HandleFunc("/v1/me/nickname", a.updateNickname).Methods(http.MethodPut, http.MethodPatch)
+	r.HandleFunc("/v1/me/about", a.updateAbout).Methods(http.MethodPut, http.MethodPatch)
 	r.HandleFunc("/v1/me", a.deleteAccount).Methods(http.MethodDelete)
 	r.HandleFunc("/v1/me/avatar", a.updateAvatar).Methods(http.MethodPost)
 	r.HandleFunc("/v1/me/avatar", a.resetAvatar).Methods(http.MethodDelete)

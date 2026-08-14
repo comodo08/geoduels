@@ -82,15 +82,7 @@ func (s *recoverTestStore) SetNickname(sub, displayName string) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetUserAvatar(userID, contentType string, data []byte, baseURL string) (string, error) {
-	panic("unexpected call")
-}
-
-func (s *recoverTestStore) ResetUserAvatar(userID string) error {
-	panic("unexpected call")
-}
-
-func (s *recoverTestStore) GetUserAvatar(userID string) (string, []byte, error) {
+func (s *recoverTestStore) SetAbout(sub, about string) (persistence.Profile, error) {
 	panic("unexpected call")
 }
 
@@ -1398,4 +1390,15 @@ func TestHeartbeatRejectsGuestAccount(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
 	}
+}
+func (s *recoverTestStore) SetUserAvatar(userID, contentType string, data []byte, baseURL string) (string, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) ResetUserAvatar(userID string) error {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) GetUserAvatar(userID string) (string, []byte, error) {
+	panic("unexpected call")
 }

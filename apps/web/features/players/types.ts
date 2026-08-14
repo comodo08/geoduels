@@ -14,6 +14,7 @@ export type PublicPlayerProfile = {
   badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
   flagCode?: string;
+  about?: string;
 };
 
 export type PlayerMatchSummary = {
