@@ -185,7 +185,7 @@ export type Snapshot = {
   graceWindowSec?: number;
 };
 
-export type ChatEmote = "skull" | "sob" | "thinking" | "sunglasses";
+export type ChatEmote = "greetings" | "skull" | "sob" | "thinking" | "sunglasses" | "laugh" | "pray";
 
 export type ChatMessage = {
   id: string;

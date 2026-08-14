@@ -1103,10 +1103,13 @@ const (
 type ChatEmote string
 
 const (
+	ChatEmoteGreetings  ChatEmote = "greetings"
 	ChatEmoteSkull      ChatEmote = "skull"
 	ChatEmoteSob        ChatEmote = "sob"
 	ChatEmoteThinking   ChatEmote = "thinking"
 	ChatEmoteSunglasses ChatEmote = "sunglasses"
+	ChatEmoteLaugh      ChatEmote = "laugh"
+	ChatEmotePray       ChatEmote = "pray"
 )
 
 type ChatMessage struct {

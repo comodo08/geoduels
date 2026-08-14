@@ -102,12 +102,12 @@ describe('InGameScene', () => {
     });
   });
 
-  it('keeps interactive Street View iframes in keyboard tab navigation', () => {
+  it('excludes interactive Street View iframes from keyboard tab navigation', () => {
     render(<InGameScene {...createProps()} />);
 
     const streetViewFrame = screen.getByTitle('Street View');
 
-    expect(streetViewFrame).not.toHaveAttribute('tabindex');
+    expect(streetViewFrame).toHaveAttribute('tabindex', '-1');
   });
 
   it('embeds extension rules in the Street View iframe hash', () => {
@@ -138,14 +138,15 @@ describe('InGameScene', () => {
     expect(streetViewFrame).toHaveAttribute('tabindex', '-1');
   });
 
-  it('allows interactive Street View iframes to keep focus', () => {
+  it('releases focus from interactive Street View iframes so keyboard shortcuts work', () => {
     render(<InGameScene {...createProps()} />);
 
     const streetViewFrame = screen.getByTitle('Street View');
 
     streetViewFrame.focus();
 
-    expect(document.activeElement).toBe(streetViewFrame);
+    expect(document.activeElement).not.toBe(streetViewFrame);
+    expect(document.activeElement?.tagName).toBe('SECTION');
   });
 
   it('releases focus if the NMPZ Street View iframe captures it', () => {

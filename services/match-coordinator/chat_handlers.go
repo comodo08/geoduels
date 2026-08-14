@@ -255,7 +255,7 @@ func sanitizeCoordinatorChatBody(body string) string {
 
 func validCoordinatorChatEmote(emote contracts.ChatEmote) bool {
 	switch emote {
-	case contracts.ChatEmoteSkull, contracts.ChatEmoteSob, contracts.ChatEmoteThinking, contracts.ChatEmoteSunglasses:
+	case contracts.ChatEmoteGreetings, contracts.ChatEmoteSkull, contracts.ChatEmoteSob, contracts.ChatEmoteThinking, contracts.ChatEmoteSunglasses, contracts.ChatEmoteLaugh, contracts.ChatEmotePray:
 		return true
 	default:
 		return false
