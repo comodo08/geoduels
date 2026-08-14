@@ -27,6 +27,8 @@ type Props =
       extensionStatus: ExtensionAvailabilityStatus;
       mode: GameRuleset;
       streetNames: StreetNamesVisibility;
+      endless: boolean;
+      onEndlessChange: (value: boolean) => void;
       disabled: boolean;
       onModeChange: (mode: GameRuleset) => void;
       onStreetNamesChange: (value: StreetNamesVisibility) => void;
@@ -237,6 +239,36 @@ export function PlayLaunchModal(props: Props) {
           <p className="text-sm font-semibold text-amber-200">
             Select at least one mode.
           </p>
+        ) : null}
+
+        {props.kind === "singleplayer" && !props.disabled ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={props.endless}
+            aria-label="Endless mode"
+            onClick={() => props.onEndlessChange(!props.endless)}
+            className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-left transition-colors hover:bg-white/[0.075]"
+          >
+            <span className="flex flex-col" aria-hidden="true">
+              <span className="text-sm font-black text-white">Endless</span>
+              <span className="text-xs font-medium text-white/55">
+                Keep playing past 5 rounds until you quit.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                props.endless ? "bg-accentPrimary" : "bg-white/10"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${
+                  props.endless ? "left-6" : "left-1"
+                }`}
+              />
+            </span>
+          </button>
         ) : null}
 
         <PlayModeActionButton

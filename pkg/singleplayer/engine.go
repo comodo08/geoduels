@@ -160,7 +160,7 @@ func (e *Engine) AdvanceRound(matchID, userID string) (*contracts.MatchSnapshot,
 	if !session.AwaitingAdvance {
 		return session.snapshot(), nil
 	}
-	if session.CurrentIndex+1 >= maxRounds {
+	if !session.Config.Endless && session.CurrentIndex+1 >= maxRounds {
 		session.State = contracts.MatchEnded
 		session.AwaitingAdvance = false
 		session.LastActivity = time.Now()

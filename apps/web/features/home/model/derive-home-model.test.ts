@@ -666,6 +666,30 @@ describe('deriveHomeModel', () => {
     expect(model.meta.activeMatchId).toBe('match-1');
   });
 
+  it('hides the total round count for endless singleplayer', () => {
+    const snapshot = createSnapshot({
+      mode: 'singleplayer',
+      config: {
+        endless: true
+      },
+      currentRound: {
+        roundId: 'round-7',
+        roundNumber: 7,
+        location: { panoId: 'pano-123' }
+      }
+    });
+    const model = deriveHomeModel({
+      auth: createAuthState(),
+      match: createMatchState(snapshot),
+      game: createGameState(),
+      config,
+      routeMatchId: 'match-1'
+    });
+
+    expect(model.game.totalRounds).toBeUndefined();
+    expect(model.game.currentRoundNumber).toBe(7);
+  });
+
   it('uses the same moving timer border for free-for-all rounds', () => {
     const model = deriveHomeModel({
       auth: createAuthState(),
@@ -691,5 +715,6 @@ describe('deriveHomeModel', () => {
     expect(model.game.isRoundTimerRunning).toBe(true);
     expect(model.game.timerProgressPct).toBe(50);
     expect(model.game.isTimerCritical).toBe(true);
+    expect(model.game.totalRounds).toBe(5);
   });
 });

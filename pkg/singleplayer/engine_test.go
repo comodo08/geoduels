@@ -93,6 +93,95 @@ func TestSingleplayerSnapshotPreservesMatchConfig(t *testing.T) {
 	}
 }
 
+func TestSingleplayerEndlessAdvancesPastMaxRounds(t *testing.T) {
+	engine := New(func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{
+			Lat:     float64(roundIndex),
+			Lng:     float64(roundIndex),
+			Country: "US",
+		}, nil
+	})
+	_, err := engine.CreateMatchWithConfig("solo-endless", []string{"u1"}, map[string]contracts.PlayerProfile{
+		"u1": {UserID: "u1", DisplayName: "Solo"},
+	}, contracts.MatchConfig{
+		Endless: true,
+	})
+	if err != nil {
+		t.Fatalf("create match: %v", err)
+	}
+
+	for i := 0; i < maxRounds+5; i++ {
+		if _, err := engine.SubmitGuess(contracts.GuessPayload{
+			UserID:   "u1",
+			MatchID:  "solo-endless",
+			RoundID:  roundID("solo-endless", i+1),
+			Lat:      0,
+			Lng:      0,
+			Finalize: true,
+		}); err != nil {
+			t.Fatalf("submit guess round %d: %v", i+1, err)
+		}
+		snap, err := engine.AdvanceRound("solo-endless", "u1")
+		if err != nil {
+			t.Fatalf("advance round %d: %v", i+1, err)
+		}
+		if snap.State != contracts.MatchLive {
+			t.Fatalf("expected endless match to stay live past round %d, got state %q", i+1, snap.State)
+		}
+		if len(snap.RoundResults) != i+1 {
+			t.Fatalf("expected %d round results, got %d", i+1, len(snap.RoundResults))
+		}
+	}
+
+	snap, err := engine.GetSnapshot("solo-endless")
+	if err != nil {
+		t.Fatalf("get snapshot: %v", err)
+	}
+	if snap.Config.Endless != true {
+		t.Fatalf("expected endless config to be preserved, got %v", snap.Config.Endless)
+	}
+}
+
+func TestSingleplayerNonEndlessStopsAtMaxRounds(t *testing.T) {
+	engine := New(func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{
+			Lat:     float64(roundIndex),
+			Lng:     float64(roundIndex),
+			Country: "US",
+		}, nil
+	})
+	_, err := engine.CreateMatch("solo-capped", []string{"u1"}, map[string]contracts.PlayerProfile{
+		"u1": {UserID: "u1", DisplayName: "Solo"},
+	})
+	if err != nil {
+		t.Fatalf("create match: %v", err)
+	}
+
+	for i := 0; i < maxRounds; i++ {
+		if _, err := engine.SubmitGuess(contracts.GuessPayload{
+			UserID:   "u1",
+			MatchID:  "solo-capped",
+			RoundID:  roundID("solo-capped", i+1),
+			Lat:      0,
+			Lng:      0,
+			Finalize: true,
+		}); err != nil {
+			t.Fatalf("submit guess round %d: %v", i+1, err)
+		}
+		snap, err := engine.AdvanceRound("solo-capped", "u1")
+		if err != nil {
+			t.Fatalf("advance round %d: %v", i+1, err)
+		}
+		if i < maxRounds-1 {
+			if snap.State != contracts.MatchLive {
+				t.Fatalf("expected live at round %d, got %q", i+1, snap.State)
+			}
+		} else if snap.State != contracts.MatchEnded {
+			t.Fatalf("expected match ended after %d rounds, got %q", maxRounds, snap.State)
+		}
+	}
+}
+
 func TestSingleplayerDisconnectResume(t *testing.T) {
 	engine := New(func(matchID string, roundIndex int) (contracts.LocationPoint, error) {
 		return contracts.LocationPoint{

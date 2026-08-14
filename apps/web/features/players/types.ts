@@ -27,6 +27,8 @@ export type PlayerMatchSummary = {
   ranked: boolean;
   ratingDelta?: number;
   totalScore?: number;
+  roundCount?: number;
+  endless?: boolean;
   opponentUserId?: string;
   opponentDisplayName?: string;
 };

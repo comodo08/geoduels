@@ -304,6 +304,7 @@ export default function LobbyScreen({
     void startSingleplayer({
       ruleset: singleplayer.mode,
       streetNames: singleplayer.streetNames,
+      endless: singleplayer.endless,
     });
   };
 
@@ -473,6 +474,10 @@ export default function LobbyScreen({
           extensionStatus={extensionStatus}
           mode={singleplayer.mode}
           streetNames={singleplayer.streetNames}
+          endless={singleplayer.endless}
+          onEndlessChange={(endless) =>
+            setSingleplayer((current) => ({ ...current, endless }))
+          }
           disabled={singleplayerDisabled}
           onModeChange={(mode) =>
             setSingleplayer((current) => ({ ...current, mode }))

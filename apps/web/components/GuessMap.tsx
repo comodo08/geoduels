@@ -80,6 +80,31 @@ function isPointVisible(point: L.Point, map: L.Map) {
   return point.x >= 0 && point.x <= clientWidth && point.y >= 0 && point.y <= clientHeight;
 }
 
+function isMapAlive(map: L.Map): boolean {
+  const container = map.getContainer?.();
+  if (!container || !container.isConnected) return false;
+  return !!(map as L.Map & { _mapPane?: HTMLElement })._mapPane;
+}
+
+function useViewportVersion(map: L.Map) {
+  const [viewportVersion, setViewportVersion] = useState(0);
+  useMapEvents({
+    move() {
+      if (!isMapAlive(map)) return;
+      setViewportVersion((value) => value + 1);
+    },
+    zoom() {
+      if (!isMapAlive(map)) return;
+      setViewportVersion((value) => value + 1);
+    },
+    resize() {
+      if (!isMapAlive(map)) return;
+      setViewportVersion((value) => value + 1);
+    }
+  });
+  return viewportVersion;
+}
+
 function distanceBetweenPoints(a: L.Point, b: L.Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -210,25 +235,19 @@ function WrappedResultLayer({
   resultPlayerBorderColors
 }: WrappedResultLayerProps) {
   const map = useMap();
-  const [viewportVersion, setViewportVersion] = useState(0);
+  const viewportVersion = useViewportVersion(map);
   const actualLocationIcon = useMemo(
     () => createActualLocationIcon(result.actualLocation.lat, result.actualLocation.lng),
     [result.actualLocation.lat, result.actualLocation.lng]
   );
 
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
-
   const layout = useMemo(() => {
+    if (!isMapAlive(map)) {
+      return {
+        actualLatLng: L.latLng(result.actualLocation.lat, result.actualLocation.lng),
+        players: [] as { id: string; result: RoundPlayerResult; displayedLatLng: L.LatLng }[]
+      };
+    }
     const container = map.getContainer();
     const centerPoint = L.point(container.clientWidth / 2, container.clientHeight / 2);
     const actual = pickBestWrappedCandidate(map, result.actualLocation.lat, result.actualLocation.lng, centerPoint);
@@ -294,21 +313,10 @@ function WrappedResultsLayer({
   resultPlayerBorderColors
 }: WrappedResultsLayerProps) {
   const map = useMap();
-  const [viewportVersion, setViewportVersion] = useState(0);
-
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
+  const viewportVersion = useViewportVersion(map);
 
   const layout = useMemo(() => {
+    if (!isMapAlive(map)) return [];
     const container = map.getContainer();
     const centerPoint = L.point(container.clientWidth / 2, container.clientHeight / 2);
 

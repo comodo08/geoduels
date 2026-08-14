@@ -22,6 +22,7 @@ export type MatchConfig = {
   roundTimerMode?: 'none' | 'pressure' | 'fixed';
   roundTimeLimitMs?: number;
   pressureTimeLimitMs?: number;
+  endless?: boolean;
 };
 
 export type QueueEvent =

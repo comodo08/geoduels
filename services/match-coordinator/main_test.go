@@ -284,6 +284,10 @@ func (s *recoverTestStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoc
 	panic("unexpected call")
 }
 
+func (s *recoverTestStore) FinalizeMatchSummary(snap contracts.MatchSnapshot, ownerEpoch int64) (contracts.MatchSnapshot, error) {
+	panic("unexpected call")
+}
+
 func (s *recoverTestStore) RenewMatchSessionLeases(nodeID string, ownerEpoch int64, matchIDs []string, ttl time.Duration) error {
 	panic("unexpected call")
 }
@@ -301,6 +305,14 @@ func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, 
 }
 
 func (s *recoverTestStore) PlayerParticipatedInMatch(userID, matchID string) (bool, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) RandomLocationForMatch(ctx context.Context, matchID, mapID string, roundIndex int) (contracts.LocationPoint, error) {
+	panic("unexpected call")
+}
+
+func (s *recoverTestStore) FirstAdminUserID(ctx context.Context) (string, bool, error) {
 	panic("unexpected call")
 }
 

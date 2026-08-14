@@ -110,6 +110,7 @@ function createModel(overrides?: Partial<HomeModel["view"]>): HomeModel {
         guess: undefined,
         currentRoundId: "round-1",
         currentRoundNumber: 1,
+        totalRounds: undefined,
         userAvatar: "",
         guessSubmitted: false,
         opponentGuessAlert: false,

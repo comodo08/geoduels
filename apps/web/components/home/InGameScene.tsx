@@ -374,10 +374,12 @@ export default function InGameScene({
               {totalRounds ? `/${totalRounds}` : ''}
             </p>
           </div>
-          <div>
-            <p className="font-hud text-[10px] uppercase tracking-[0.16em] text-white/60">Points</p>
-            <p className="mt-1 text-2xl font-black text-white">{totalScore.toLocaleString()}</p>
-          </div>
+          {totalRounds ? (
+            <div>
+              <p className="font-hud text-[10px] uppercase tracking-[0.16em] text-white/60">Points</p>
+              <p className="mt-1 text-2xl font-black text-white">{totalScore.toLocaleString()}</p>
+            </div>
+          ) : null}
         </div>
       ) : (
         <>

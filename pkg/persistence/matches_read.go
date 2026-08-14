@@ -92,6 +92,8 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 			coalesce(h.ranked, false) and h.mode = 'duel',
 			coalesce(p.final_ranked_delta, 0),
 			coalesce(p.total_score, 0),
+			coalesce(h.round_count, 0),
+			coalesce(h.endless, false),
 			coalesce(opponent.user_id, ''),
 			coalesce(opponent.display_name, '')
 		from match_players p
@@ -139,6 +141,8 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 			&item.Ranked,
 			&item.RatingDelta,
 			&item.TotalScore,
+			&item.RoundCount,
+			&item.Endless,
 			&item.OpponentUserID,
 			&item.OpponentDisplayName,
 		); err != nil {
