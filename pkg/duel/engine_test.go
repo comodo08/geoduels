@@ -208,7 +208,6 @@ func TestDisconnectForfeitAfterGrace(t *testing.T) {
 	if _, err := e.MarkDisconnected("m3", "u1"); err != nil {
 		t.Fatal(err)
 	}
-	// force due in the past
 	m.Players["u1"].DisconnectDue = time.Now().Add(-1 * time.Second).UnixMilli()
 	e.Tick()
 	snap, _ := e.GetSnapshot("m3")
@@ -306,7 +305,7 @@ func TestRoundResultPhaseAndDamageFromScoreDelta(t *testing.T) {
 	if r1.Score <= r2.Score {
 		t.Fatalf("expected u1 to outscore u2")
 	}
-	wantDamage := int(float64(r1.Score-r2.Score) * roundDamageMultiplier(1))
+	wantDamage := r1.Score - r2.Score
 	if r1.DamageDealt != wantDamage || r2.DamageTaken != wantDamage {
 		t.Fatalf("expected damage=%d got dealt=%d taken=%d", wantDamage, r1.DamageDealt, r2.DamageTaken)
 	}
@@ -355,23 +354,223 @@ func TestRoundHistoryPersistsAcrossAdvance(t *testing.T) {
 	}
 }
 
-func TestRoundDamageMultiplierSchedule(t *testing.T) {
-	cases := []struct {
-		round int
-		want  float64
-	}{
-		{round: 1, want: 1.0},
-		{round: 2, want: 1.0},
-		{round: 3, want: 1.5},
-		{round: 4, want: 2.0},
-		{round: 5, want: 2.5},
-		{round: 10, want: 5.0},
+func liveRoundID(t *testing.T, e *Engine, m *Match) string {
+	t.Helper()
+	m.RoundStartedAt = time.Now().Add(-roundIntro)
+	snap, err := e.GetSnapshot(m.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		got := roundDamageMultiplier(tc.round)
-		if got != tc.want {
-			t.Fatalf("round %d multiplier=%v want=%v", tc.round, got, tc.want)
+	if snap.CurrentRound == nil {
+		t.Fatalf("expected a live round, got %+v", snap)
+	}
+	return snap.CurrentRound.RoundID
+}
+
+func advanceToNextRound(t *testing.T, e *Engine, m *Match) {
+	t.Helper()
+	m.IntermissionUntil = time.Now().Add(-time.Millisecond)
+	e.Tick()
+}
+
+func playRound(t *testing.T, e *Engine, m *Match, guesses map[string][2]float64) *contracts.MatchSnapshot {
+	t.Helper()
+	roundID := liveRoundID(t, e, m)
+	var snap *contracts.MatchSnapshot
+	var err error
+	for userID, latLng := range guesses {
+		snap, err = e.SubmitGuess(contracts.GuessPayload{
+			UserID:   userID,
+			MatchID:  m.ID,
+			RoundID:  roundID,
+			Lat:      latLng[0],
+			Lng:      latLng[1],
+			Finalize: true,
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
+	}
+	if snap == nil || snap.LastRoundResult == nil {
+		t.Fatalf("expected a resolved round result, got %+v", snap)
+	}
+	return snap
+}
+
+func TestDuelDamageMultiplierAccumulatesPerWin(t *testing.T) {
+	e := New(func(_ string, _ int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{Lat: 0, Lng: 0, Country: "US"}, nil
+	})
+	m, err := e.CreateMatch("m-mult-duel", []string{"u1", "u2"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	round1 := playRound(t, e, m, map[string][2]float64{
+		"u1": {0, 0},
+		"u2": {0.5, 0.5},
+	})
+	winner1 := round1.LastRoundResult.Players["u1"]
+	loser1 := round1.LastRoundResult.Players["u2"]
+	if winner1.Score <= loser1.Score {
+		t.Fatalf("expected u1 to outscore u2, got %d vs %d", winner1.Score, loser1.Score)
+	}
+	scoreDelta1 := winner1.Score - loser1.Score
+	if winner1.DamageMultiplier != 1.0 || loser1.DamageMultiplier != 1.0 {
+		t.Fatalf("expected 1x applied in round 1, got %v and %v", winner1.DamageMultiplier, loser1.DamageMultiplier)
+	}
+	if winner1.DamageDealt != scoreDelta1 {
+		t.Fatalf("expected round 1 damage=%d got %d", scoreDelta1, winner1.DamageDealt)
+	}
+	if round1.Players["u1"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected the winner multiplier to still read 1x while the result is shown, got %v", round1.Players["u1"].DamageMultiplier)
+	}
+
+	advanceToNextRound(t, e, m)
+	liveSnap, err := e.GetSnapshot("m-mult-duel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if liveSnap.Players["u1"].DamageMultiplier != 1.5 {
+		t.Fatalf("expected winner multiplier 1.5 in round 2, got %v", liveSnap.Players["u1"].DamageMultiplier)
+	}
+	if liveSnap.Players["u2"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected loser multiplier to stay 1, got %v", liveSnap.Players["u2"].DamageMultiplier)
+	}
+
+	hpBeforeRound2 := liveSnap.Players["u2"].HP
+	round2 := playRound(t, e, m, map[string][2]float64{
+		"u1": {0, 0},
+		"u2": {0.5, 0.5},
+	})
+	winner2 := round2.LastRoundResult.Players["u1"]
+	loser2 := round2.LastRoundResult.Players["u2"]
+	scoreDelta2 := winner2.Score - loser2.Score
+	wantDamage2 := scaledDamage(scoreDelta2, 1.5)
+	if winner2.DamageMultiplier != 1.5 {
+		t.Fatalf("expected applied multiplier 1.5 in round 2, got %v", winner2.DamageMultiplier)
+	}
+	if winner2.DamageDealt != wantDamage2 || loser2.DamageTaken != wantDamage2 {
+		t.Fatalf("expected round 2 damage=%d got dealt=%d taken=%d", wantDamage2, winner2.DamageDealt, loser2.DamageTaken)
+	}
+	if round2.Players["u2"].HP != hpBeforeRound2-wantDamage2 {
+		t.Fatalf("expected hp=%d got %d", hpBeforeRound2-wantDamage2, round2.Players["u2"].HP)
+	}
+
+	advanceToNextRound(t, e, m)
+	round3Snap, err := e.GetSnapshot("m-mult-duel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if round3Snap.Players["u1"].DamageMultiplier != 2.0 {
+		t.Fatalf("expected winner multiplier 2 after a second win, got %v", round3Snap.Players["u1"].DamageMultiplier)
+	}
+	if round3Snap.Players["u2"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected loser multiplier to stay 1, got %v", round3Snap.Players["u2"].DamageMultiplier)
+	}
+}
+
+func TestDuelTieRaisesBothDamageMultipliers(t *testing.T) {
+	e := New(func(_ string, _ int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{Lat: 0, Lng: 0, Country: "US"}, nil
+	})
+	m, err := e.CreateMatch("m-mult-tie", []string{"u1", "u2"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tied := playRound(t, e, m, map[string][2]float64{
+		"u1": {0.5, 0.5},
+		"u2": {0.5, 0.5},
+	})
+	if tied.LastRoundResult.Players["u1"].DamageDealt != 0 || tied.LastRoundResult.Players["u2"].DamageDealt != 0 {
+		t.Fatalf("expected no damage on a tie, got %+v", tied.LastRoundResult.Players)
+	}
+
+	advanceToNextRound(t, e, m)
+	snap, err := e.GetSnapshot("m-mult-tie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Players["u1"].DamageMultiplier != 1.5 || snap.Players["u2"].DamageMultiplier != 1.5 {
+		t.Fatalf("expected both multipliers at 1.5 after a tie, got %v and %v",
+			snap.Players["u1"].DamageMultiplier, snap.Players["u2"].DamageMultiplier)
+	}
+}
+
+func TestTeamDuelDamageMultiplierAccumulatesPerWin(t *testing.T) {
+	e := New(func(_ string, _ int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{Lat: 0, Lng: 0, Country: "US"}, nil
+	})
+	m, err := e.CreateMatchWithOptions("m-mult-team", []string{"a1", "a2", "b1"}, nil, MatchOptions{
+		Mode: contracts.ModeTeamDuel,
+		Teams: map[string]string{
+			"a1": "a",
+			"a2": "a",
+			"b1": "b",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	round1 := playRound(t, e, m, map[string][2]float64{
+		"a1": {0.5, 0.5},
+		"a2": {0, 0},
+		"b1": {0.5, 0.5},
+	})
+	teamA1 := round1.LastRoundResult.Teams["a"]
+	teamB1 := round1.LastRoundResult.Teams["b"]
+	if teamA1.Score <= teamB1.Score {
+		t.Fatalf("expected team a to outscore team b, got %d vs %d", teamA1.Score, teamB1.Score)
+	}
+	if teamA1.DamageMultiplier != 1.0 {
+		t.Fatalf("expected 1x applied in round 1, got %v", teamA1.DamageMultiplier)
+	}
+	if teamA1.DamageDealt != teamA1.Score-teamB1.Score {
+		t.Fatalf("expected round 1 damage=%d got %d", teamA1.Score-teamB1.Score, teamA1.DamageDealt)
+	}
+	if round1.Teams["a"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected team multiplier to still read 1x while the result is shown, got %v", round1.Teams["a"].DamageMultiplier)
+	}
+
+	advanceToNextRound(t, e, m)
+	liveSnap, err := e.GetSnapshot("m-mult-team")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if liveSnap.Teams["a"].DamageMultiplier != 1.5 {
+		t.Fatalf("expected winning team multiplier 1.5, got %v", liveSnap.Teams["a"].DamageMultiplier)
+	}
+	if liveSnap.Teams["b"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected losing team multiplier to stay 1, got %v", liveSnap.Teams["b"].DamageMultiplier)
+	}
+	for _, userID := range []string{"a1", "a2"} {
+		if liveSnap.Players[userID].DamageMultiplier != 1.5 {
+			t.Fatalf("expected %s to mirror the team multiplier, got %v", userID, liveSnap.Players[userID].DamageMultiplier)
+		}
+	}
+	if liveSnap.Players["b1"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected b1 to mirror the losing team multiplier, got %v", liveSnap.Players["b1"].DamageMultiplier)
+	}
+
+	hpBeforeRound2 := liveSnap.Teams["b"].HP
+	round2 := playRound(t, e, m, map[string][2]float64{
+		"a1": {0.5, 0.5},
+		"a2": {0, 0},
+		"b1": {0.5, 0.5},
+	})
+	teamA2 := round2.LastRoundResult.Teams["a"]
+	teamB2 := round2.LastRoundResult.Teams["b"]
+	wantDamage := scaledDamage(teamA2.Score-teamB2.Score, 1.5)
+	if teamA2.DamageMultiplier != 1.5 {
+		t.Fatalf("expected applied team multiplier 1.5 in round 2, got %v", teamA2.DamageMultiplier)
+	}
+	if teamA2.DamageDealt != wantDamage || teamB2.DamageTaken != wantDamage {
+		t.Fatalf("expected round 2 damage=%d got dealt=%d taken=%d", wantDamage, teamA2.DamageDealt, teamB2.DamageTaken)
+	}
+	if round2.Teams["b"].HP != hpBeforeRound2-wantDamage {
+		t.Fatalf("expected team b hp=%d got %d", hpBeforeRound2-wantDamage, round2.Teams["b"].HP)
 	}
 }
 
@@ -567,8 +766,6 @@ func TestActiveUntimedRoundDoesNotResolveAtIdleCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Round started well beyond the idle cap ago, but players have stayed
-	// active: with "time limit = none" the round must not be force-resolved.
 	m.RoundStartedAt = time.Now().Add(-(roundIntro + roundIdleCap + time.Minute))
 	m.LastActivity = time.Now()
 	e.Tick()
@@ -700,5 +897,44 @@ func TestRoundScoreIsMonotonicDecreasing(t *testing.T) {
 			t.Fatalf("score increased at distance %.2fkm: got=%d prev=%d", d, got, prev)
 		}
 		prev = got
+	}
+}
+
+func TestLiveTickAppliesMultiplierBonus(t *testing.T) {
+	e := New(func(_ string, _ int) (contracts.LocationPoint, error) {
+		return contracts.LocationPoint{Lat: 0, Lng: 0, Country: "US"}, nil
+	})
+	m, err := e.CreateMatch("m-live-tick", []string{"u1", "u2"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m.RoundStartedAt = time.Now().Add(-roundIntro)
+	rid := liveRoundID(t, e, m)
+	for _, g := range []contracts.GuessPayload{
+		{UserID: "u1", MatchID: "m-live-tick", RoundID: rid, Lat: 0, Lng: 0, Finalize: true},
+		{UserID: "u2", MatchID: "m-live-tick", RoundID: rid, Lat: 0.5, Lng: 0.5, Finalize: true},
+	} {
+		if _, err := e.SubmitGuess(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !m.PendingAdvance {
+		t.Fatalf("expected match to be pending advance after round 1")
+	}
+
+	m.IntermissionUntil = time.Now().Add(-time.Millisecond)
+	e.Tick()
+
+	snap, err := e.GetSnapshot("m-live-tick")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Players["u1"].DamageMultiplier != 1.5 {
+		t.Fatalf("expected live Tick to apply the win bonus (1.5), got %v",
+			snap.Players["u1"].DamageMultiplier)
+	}
+	if snap.Players["u2"].DamageMultiplier != 1.0 {
+		t.Fatalf("expected loser to stay at 1.0, got %v", snap.Players["u2"].DamageMultiplier)
 	}
 }

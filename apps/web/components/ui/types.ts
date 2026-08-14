@@ -10,6 +10,7 @@ export type RoundPlayerResult = {
   score: number;
   damageDealt?: number;
   damageTaken?: number;
+  damageMultiplier?: number;
   hpAfterRound?: number;
   guessUnixMs?: number;
   guessMs?: number;
@@ -24,6 +25,7 @@ export type RoundTeamResult = {
   score: number;
   damageDealt?: number;
   damageTaken?: number;
+  damageMultiplier?: number;
   hpAfterRound?: number;
 };
 
@@ -100,7 +102,6 @@ export type RoundResultOverlayProps = {
   showScoreReveal: boolean;
   winner: RoundResultWinner;
   damage: number;
-  damageMultiplier: number;
   sides: MatchSidesView;
   hpPct: (hp: number) => string;
 };
@@ -127,6 +128,7 @@ export type SnapshotPlayer = {
   teamId?: string;
   hp: number;
   totalScore?: number;
+  damageMultiplier?: number;
   finalized: boolean;
   disconnected: boolean;
 };
@@ -175,7 +177,16 @@ export type Snapshot = {
   lastRoundResult?: RoundResult;
   roundResults?: RoundResult[];
   players: Record<string, SnapshotPlayer>;
-  teams?: Record<string, { teamId: string; name?: string; hp?: number; players: string[] }>;
+  teams?: Record<
+    string,
+    {
+      teamId: string;
+      name?: string;
+      hp?: number;
+      damageMultiplier?: number;
+      players: string[];
+    }
+  >;
   self?: {
     userId: string;
     currentGuess?: { lat: number; lng: number };

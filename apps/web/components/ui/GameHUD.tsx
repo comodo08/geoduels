@@ -1,27 +1,22 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { formatDamageMultiplierLabel } from './damage-multiplier';
 
 type Props = {
   mm: string;
   ss: string;
-  damageMultiplier: number;
   isRoundTimerRunning?: boolean;
   timerProgressPct: number;
   isTimerCritical: boolean;
   isTimerPulseActive: boolean;
-  hideMultiplier?: boolean;
   hasTopCompass?: boolean;
 };
 
 export default function GameHUD({
   mm,
   ss,
-  damageMultiplier,
   isRoundTimerRunning = true,
   timerProgressPct,
   isTimerCritical,
   isTimerPulseActive,
-  hideMultiplier = false,
   hasTopCompass = false,
 }: Props) {
   const ringColor = isTimerCritical ? '#ff6d42' : '#2ad18f';
@@ -37,7 +32,6 @@ export default function GameHUD({
   const topY = inset;
   const bottomY = height - inset;
   const progressPath = `M ${centerX} ${topY} H ${leftX} A ${radius} ${radius} 0 0 0 ${leftX} ${bottomY} H ${rightX} A ${radius} ${radius} 0 0 0 ${rightX} ${topY} H ${centerX}`;
-  const multiplierLabel = formatDamageMultiplierLabel(damageMultiplier);
 
   return (
     <div
@@ -93,31 +87,6 @@ export default function GameHUD({
               </motion.div>
             )}
           </AnimatePresence>
-
-          {!hideMultiplier && multiplierLabel && (
-            <div
-              data-testid="multiplier-badge"
-              className="font-hud relative grid h-[54px] w-[58px] shrink-0 place-items-center text-[20px] tracking-[-0.03em] text-[#dfffee] drop-shadow-[0_8px_16px_rgba(0,0,0,0.28)] md:h-[60px] md:w-[66px] md:text-[20px]"
-            >
-              <div
-                className="absolute inset-0 backdrop-blur-hud bg-hudBg"
-                style={{
-                  clipPath: 'polygon(50% 0%, 91% 25%, 91% 75%, 50% 100%, 9% 75%, 9% 25%)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.2), 0 12px 24px rgba(0,0,0,0.28)'
-                }}
-              />
-              <div
-                className="absolute left-1/2 top-1/2 h-[20px] w-[40px] -translate-x-1/2 -translate-y-1/2 blur-[12px]"
-                style={{ background: 'rgba(48, 255, 173, 0.36)' }}
-              />
-              <span
-                className="relative z-10"
-                style={{ textShadow: '0 0 12px rgba(80, 255, 191, 0.75), 0 0 24px rgba(80, 255, 191, 0.4)' }}
-              >
-                {multiplierLabel}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     </div>

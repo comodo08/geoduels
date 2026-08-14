@@ -5,6 +5,7 @@ import {
   ParticipantName,
   type MatchSideView,
 } from "./ParticipantIdentity";
+import { formatDamageMultiplierLabel } from "./damage-multiplier";
 
 type Props = {
   position: "left" | "right";
@@ -32,6 +33,9 @@ export default function MatchSideHPCard({
       ? "Opponent team connection degraded"
       : "Opponent disconnected";
   const hp = side.hp ?? 0;
+  const multiplierLabel = formatDamageMultiplierLabel(
+    side.participant.damageMultiplier,
+  );
 
   const hpFill = useMemo(
     () =>
@@ -56,54 +60,64 @@ export default function MatchSideHPCard({
       <div
         className={`flex items-center ${isLeft ? "flex-row" : "flex-row-reverse"}`}
       >
-        {/* Avatar Profile Picture */}
-        <div className="relative z-10 w-[54px] h-[54px] shrink-0 drop-shadow-[0_4px_6px_rgba(0,0,0,0.6)]">
-          <ParticipantAvatar
-            participant={side.participant}
-            size="lg"
-            opponent={opponent}
-            className="h-full w-full border-0 shadow-lg"
-          />
-        </div>
-
-        {/* HP Bar Container */}
         <div
-          className={`relative h-[28px] flex-1 rounded-[4px] bg-[linear-gradient(180deg,#595B69_0%,#3C3E4F_100%)] p-[1px] drop-shadow-[0_4px_4px_rgba(0,0,0,0.6)] ${skewClass}`}
-          style={{
-            marginLeft: isLeft ? "-12px" : "0",
-            marginRight: !isLeft ? "-12px" : "0",
-          }}
+          className={`flex w-full shrink-0 items-center ${isLeft ? "flex-row" : "flex-row-reverse"}`}
         >
-          {showDisconnectBadge ? (
-            <div
-              aria-label={connectionLabel}
-              data-testid="disconnect-badge"
-              title={connectionLabel}
-              className={`absolute -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-red-200/45 bg-red-500 text-white shadow-[0_4px_12px_rgba(0,0,0,0.45)] ${reverseSkewClass} ${isLeft ? "-right-2" : "-left-2"}`}
-            >
-              <WifiOff aria-hidden="true" size={15} strokeWidth={2.6} />
-            </div>
-          ) : null}
-
-          {/* Inner dark background */}
-          <div className="relative h-full w-full overflow-hidden rounded-[3px]">
-            {/* The colored fill */}
-            <div
-              className={`absolute top-0 bottom-0 ${isLeft ? "left-0" : "right-0"} transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]`}
-              style={{ width: hpPct, ...hpFill }}
+          <div className="relative z-10 w-[54px] h-[54px] shrink-0 drop-shadow-[0_4px_6px_rgba(0,0,0,0.6)]">
+            <ParticipantAvatar
+              participant={side.participant}
+              size="lg"
+              opponent={opponent}
+              className="h-full w-full border-0 shadow-lg"
             />
+          </div>
 
-            {/* HP Text */}
-            <div
-              className={`font-hud absolute inset-0 flex items-center justify-center text-md text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] ${reverseSkewClass}`}
-            >
-              {hp}
+          <div
+            className={`relative h-[28px] flex-1 rounded-[4px] bg-[linear-gradient(180deg,#595B69_0%,#3C3E4F_100%)] p-[1px] drop-shadow-[0_4px_4px_rgba(0,0,0,0.6)] ${skewClass}`}
+            style={{
+              marginLeft: isLeft ? "-12px" : "0",
+              marginRight: !isLeft ? "-12px" : "0",
+            }}
+          >
+            {showDisconnectBadge ? (
+              <div
+                aria-label={connectionLabel}
+                data-testid="disconnect-badge"
+                title={connectionLabel}
+                className={`absolute -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-red-200/45 bg-red-500 text-white shadow-[0_4px_12px_rgba(0,0,0,0.45)] ${reverseSkewClass} ${isLeft ? "-right-2" : "-left-2"}`}
+              >
+                <WifiOff aria-hidden="true" size={15} strokeWidth={2.6} />
+              </div>
+            ) : null}
+
+            <div className="relative h-full w-full overflow-hidden rounded-[3px]">
+              <div
+                className={`absolute top-0 bottom-0 ${isLeft ? "left-0" : "right-0"} transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]`}
+                style={{ width: hpPct, ...hpFill }}
+              />
+
+              <div
+                className={`font-hud absolute inset-0 flex items-center justify-center text-md text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] ${reverseSkewClass}`}
+              >
+                {hp}
+              </div>
             </div>
           </div>
         </div>
+
+        {multiplierLabel && (
+          <span
+            data-testid="player-multiplier-badge"
+            aria-label={`Damage multiplier ${multiplierLabel}`}
+            className={`font-hud flex h-[28px] shrink-0 items-center rounded-[6px] border border-white/20 bg-white/10 px-2 text-[15px] font-bold leading-none text-white backdrop-blur ${skewClass} ${isLeft ? "ml-2" : "mr-2"}`}
+          >
+            <span className={`inline-block ${reverseSkewClass}`}>
+              {multiplierLabel}
+            </span>
+          </span>
+        )}
       </div>
 
-      {/* Player Name */}
       <div
         className={`-mt-2 flex items-center ${isLeft ? "justify-start pl-[50px]" : "justify-end pr-[50px]"}`}
         data-testid="player-name-row"

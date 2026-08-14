@@ -26,6 +26,9 @@ const (
 	maxDistanceKm   = math.Pi * 6371.0
 	maxScore        = gameplay.MaxScore
 	perfectGuessKm  = 0.15
+
+	baseDamageMultiplier = 1.0
+	damageMultiplierStep = 0.5
 )
 
 type Guess struct {
@@ -36,29 +39,30 @@ type Guess struct {
 }
 
 type Match struct {
-	ID                 string
-	Mode               contracts.MatchMode
-	SeasonID           string
-	Config             contracts.MatchConfig
-	State              contracts.MatchState
-	Unranked           bool
-	Players            map[string]*contracts.PlayerState
-	Teams              map[string]*contracts.TeamState
-	CurrentLocation    contracts.LocationPoint
-	CurrentIndex       int
-	RoundStartedAt     time.Time
-	RoundDeadline      time.Time
-	RoundID            string
-	Guesses            map[string]Guess
-	LastRoundResult    *contracts.RoundResult
-	RoundResults       []*contracts.RoundResult
-	RatingPreview      map[string]contracts.RatingDeltaPreview
-	IntermissionUntil  time.Time
-	PendingAdvance     bool
-	EventSeq           int64
-	RoundLiveAnnounced bool
-	CreatedAt          time.Time
-	LastActivity       time.Time
+	ID                string
+	Mode              contracts.MatchMode
+	SeasonID          string
+	Config            contracts.MatchConfig
+	State             contracts.MatchState
+	Unranked          bool
+	Players           map[string]*contracts.PlayerState
+	Teams             map[string]*contracts.TeamState
+	CurrentLocation   contracts.LocationPoint
+	CurrentIndex      int
+	RoundStartedAt    time.Time
+	RoundDeadline     time.Time
+	RoundID           string
+	Guesses           map[string]Guess
+	LastRoundResult   *contracts.RoundResult
+	RoundResults      []*contracts.RoundResult
+	RatingPreview          map[string]contracts.RatingDeltaPreview
+	IntermissionUntil      time.Time
+	PendingAdvance         bool
+	PendingMultiplierBonus map[string]float64
+	EventSeq               int64
+	RoundLiveAnnounced     bool
+	CreatedAt              time.Time
+	LastActivity           time.Time
 }
 
 type RoundProvider func(matchID string, roundIndex int) (contracts.LocationPoint, error)
@@ -136,6 +140,7 @@ func (e *Engine) CreateMatchWithOptions(matchID string, playerIDs []string, prof
 		player.DisplayName = name
 		player.TeamID = teamID
 		player.HP = startingHP
+		player.DamageMultiplier = baseDamageMultiplier
 		players[id] = &player
 	}
 	teams := buildTeams(mode, playerIDs, players)
@@ -464,28 +469,38 @@ func resolveDuelDamage(m *Match, result *contracts.RoundResult, userIDs []string
 	if len(userIDs) == 2 {
 		a := result.Players[userIDs[0]]
 		b := result.Players[userIDs[1]]
-		multiplier := roundDamageMultiplier(result.RoundNumber)
-		damage := int(math.Round(float64(absInt(a.Score-b.Score)) * multiplier))
+		playerA := m.Players[userIDs[0]]
+		playerB := m.Players[userIDs[1]]
+		multiplierA := effectiveDamageMultiplier(playerA.DamageMultiplier)
+		multiplierB := effectiveDamageMultiplier(playerB.DamageMultiplier)
+		a.DamageMultiplier = multiplierA
+		b.DamageMultiplier = multiplierB
+		scoreDelta := absInt(a.Score - b.Score)
 		switch {
 		case a.Score > b.Score:
+			damage := scaledDamage(scoreDelta, multiplierA)
 			a.DamageDealt = damage
 			b.DamageTaken = damage
-			p := m.Players[userIDs[1]]
-			p.HP -= damage
-			if p.HP < 0 {
-				p.HP = 0
+			playerB.HP -= damage
+			if playerB.HP < 0 {
+				playerB.HP = 0
 			}
+			queueMultiplierBonus(m, userIDs[0])
 		case b.Score > a.Score:
+			damage := scaledDamage(scoreDelta, multiplierB)
 			b.DamageDealt = damage
 			a.DamageTaken = damage
-			p := m.Players[userIDs[0]]
-			p.HP -= damage
-			if p.HP < 0 {
-				p.HP = 0
+			playerA.HP -= damage
+			if playerA.HP < 0 {
+				playerA.HP = 0
 			}
+			queueMultiplierBonus(m, userIDs[1])
+		default:
+			queueMultiplierBonus(m, userIDs[0])
+			queueMultiplierBonus(m, userIDs[1])
 		}
-		a.HPAfterRound = m.Players[userIDs[0]].HP
-		b.HPAfterRound = m.Players[userIDs[1]].HP
+		a.HPAfterRound = playerA.HP
+		b.HPAfterRound = playerB.HP
 		result.Players[userIDs[0]] = a
 		result.Players[userIDs[1]] = b
 	}
@@ -516,17 +531,27 @@ func resolveTeamDuelDamage(m *Match, result *contracts.RoundResult) {
 	}
 	a := result.Teams["a"]
 	b := result.Teams["b"]
-	multiplier := roundDamageMultiplier(result.RoundNumber)
-	damage := int(math.Round(float64(absInt(a.Score-b.Score)) * multiplier))
+	multiplierA := effectiveDamageMultiplier(m.Teams["a"].DamageMultiplier)
+	multiplierB := effectiveDamageMultiplier(m.Teams["b"].DamageMultiplier)
+	a.DamageMultiplier = multiplierA
+	b.DamageMultiplier = multiplierB
+	scoreDelta := absInt(a.Score - b.Score)
 	switch {
 	case a.Score > b.Score:
+		damage := scaledDamage(scoreDelta, multiplierA)
 		a.DamageDealt = damage
 		b.DamageTaken = damage
 		m.Teams["b"].HP -= damage
+		queueMultiplierBonus(m, "a")
 	case b.Score > a.Score:
+		damage := scaledDamage(scoreDelta, multiplierB)
 		b.DamageDealt = damage
 		a.DamageTaken = damage
 		m.Teams["a"].HP -= damage
+		queueMultiplierBonus(m, "b")
+	default:
+		queueMultiplierBonus(m, "a")
+		queueMultiplierBonus(m, "b")
 	}
 	for teamID, team := range m.Teams {
 		if team.HP < 0 {
@@ -548,6 +573,45 @@ func resolveTeamDuelDamage(m *Match, result *contracts.RoundResult) {
 	b.HPAfterRound = m.Teams["b"].HP
 	result.Teams["a"] = a
 	result.Teams["b"] = b
+}
+
+func effectiveDamageMultiplier(value float64) float64 {
+	if value <= 0 {
+		return baseDamageMultiplier
+	}
+	return value
+}
+
+func queueMultiplierBonus(m *Match, id string) {
+	if m.PendingMultiplierBonus == nil {
+		m.PendingMultiplierBonus = map[string]float64{}
+	}
+	m.PendingMultiplierBonus[id] += damageMultiplierStep
+}
+
+func applyPendingMultiplierBonus(m *Match) {
+	for id, bonus := range m.PendingMultiplierBonus {
+		if bonus <= 0 {
+			continue
+		}
+		if m.Mode == contracts.ModeTeamDuel {
+			team := m.Teams[id]
+			if team == nil {
+				continue
+			}
+			team.DamageMultiplier = effectiveDamageMultiplier(team.DamageMultiplier) + bonus
+			for _, userID := range team.Players {
+				if p := m.Players[userID]; p != nil {
+					p.DamageMultiplier = team.DamageMultiplier
+				}
+			}
+			continue
+		}
+		if p := m.Players[id]; p != nil {
+			p.DamageMultiplier = effectiveDamageMultiplier(p.DamageMultiplier) + bonus
+		}
+	}
+	m.PendingMultiplierBonus = nil
 }
 
 func guessUnixMS(g Guess) int64 {
@@ -589,6 +653,7 @@ func (e *Engine) advanceRound(m *Match) {
 	m.RoundStartedAt = time.Now()
 	m.RoundDeadline = time.Time{}
 	m.RoundLiveAnnounced = false
+	applyPendingMultiplierBonus(m)
 	e.startRoundTimer(m)
 	for _, p := range m.Players {
 		p.Finalized = false
@@ -661,10 +726,11 @@ func (m *Match) snapshot() *contracts.MatchSnapshot {
 	for id, team := range m.Teams {
 		teams[id] = *team
 		teams[id] = contracts.TeamState{
-			TeamID:  team.TeamID,
-			Name:    team.Name,
-			HP:      team.HP,
-			Players: append([]string(nil), team.Players...),
+			TeamID:           team.TeamID,
+			Name:             team.Name,
+			HP:               team.HP,
+			DamageMultiplier: team.DamageMultiplier,
+			Players:          append([]string(nil), team.Players...),
 		}
 	}
 	if len(teams) == 0 {
@@ -744,8 +810,8 @@ func buildTeams(mode contracts.MatchMode, playerIDs []string, players map[string
 		return nil
 	}
 	teams := map[string]*contracts.TeamState{
-		"a": {TeamID: "a", Name: "Team Red", HP: startingHP, Players: []string{}},
-		"b": {TeamID: "b", Name: "Team Blue", HP: startingHP, Players: []string{}},
+		"a": {TeamID: "a", Name: "Team Red", HP: startingHP, DamageMultiplier: baseDamageMultiplier, Players: []string{}},
+		"b": {TeamID: "b", Name: "Team Blue", HP: startingHP, DamageMultiplier: baseDamageMultiplier, Players: []string{}},
 	}
 	for index, userID := range playerIDs {
 		player := players[userID]
@@ -761,6 +827,7 @@ func buildTeams(mode contracts.MatchMode, playerIDs []string, players map[string
 		}
 		teams[teamID].Players = append(teams[teamID].Players, userID)
 		player.HP = teams[teamID].HP
+		player.DamageMultiplier = teams[teamID].DamageMultiplier
 	}
 	for teamID, team := range teams {
 		if len(team.Players) == 0 {
@@ -781,11 +848,6 @@ func (e *Engine) roundExpired(m *Match, now time.Time) bool {
 	if !m.RoundDeadline.IsZero() {
 		return now.After(m.RoundDeadline)
 	}
-	// No fixed deadline (time limit "none", or pressure mode before the first
-	// finalize). Fall back to an idle watchdog so genuinely abandoned rounds
-	// don't pin a gameplay node forever. Measure the idle window from the last
-	// player activity (pin placement/move, (re)connect) rather than the round
-	// start, so an actively-played unlimited round is never force-resolved.
 	liveAt := m.RoundStartedAt.Add(roundIntro)
 	idleSince := m.LastActivity
 	if idleSince.Before(liveAt) {
@@ -832,13 +894,10 @@ func absInt(v int) int {
 	return v
 }
 
-func roundScore(distanceKm float64) int {
-	return gameplay.RoundScore(distanceKm)
+func scaledDamage(scoreDelta int, multiplier float64) int {
+	return int(math.Round(float64(scoreDelta) * multiplier))
 }
 
-func roundDamageMultiplier(roundNumber int) float64 {
-	if roundNumber <= 2 {
-		return 1.0
-	}
-	return 1.0 + (0.5 * float64(roundNumber-2))
+func roundScore(distanceKm float64) int {
+	return gameplay.RoundScore(distanceKm)
 }

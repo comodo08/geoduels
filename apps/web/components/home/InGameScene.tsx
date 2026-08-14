@@ -55,7 +55,6 @@ export type InGameSceneProps = {
   resultPlayerAvatars?: Record<string, string | undefined>;
   resultPlayerFallbacks?: Record<string, string | undefined>;
   participantsById?: Record<string, PlayerIdentityView>;
-  damageMultiplier: number;
   guessSubmitted: boolean;
   opponentGuessAlert: boolean;
   connectionIssue: string;
@@ -129,7 +128,6 @@ export default function InGameScene({
   resultPlayerAvatars = {},
   resultPlayerFallbacks = {},
   participantsById = {},
-  damageMultiplier,
   guessSubmitted,
   opponentGuessAlert,
   connectionIssue,
@@ -355,11 +353,9 @@ export default function InGameScene({
               mm={mm}
               ss={ss}
               isRoundTimerRunning={isRoundTimerRunning}
-              damageMultiplier={damageMultiplier}
               timerProgressPct={timerProgressPct}
               isTimerCritical={isTimerCritical}
               isTimerPulseActive={isTimerPulseActive}
-              hideMultiplier={partyMode === "free_for_all"}
               hasTopCompass={
                 extension.available &&
                 extension.capabilities?.heading === true

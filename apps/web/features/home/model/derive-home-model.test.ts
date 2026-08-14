@@ -139,8 +139,28 @@ describe('deriveHomeModel', () => {
     expect(model.game.sides.self.participant.name).toBe('Self');
     expect(model.game.sides.opponent.participant.name).toBe('Opponent');
     expect(model.game.sides.opponent.connection).toBe('connected');
-    expect(model.game.damageMultiplier).toBe(1.5);
     expect(model.meta.appVersion).toBe('dev');
+  });
+
+  it('exposes the authoritative per-player damage multipliers on each side', () => {
+    const base = createSnapshot();
+    const snapshot = createSnapshot({
+      players: {
+        self: { ...base.players.self, damageMultiplier: 1.5 },
+        opp: { ...base.players.opp, damageMultiplier: 1 }
+      }
+    });
+
+    const model = deriveHomeModel({
+      auth: createAuthState(),
+      match: createMatchState(snapshot),
+      game: createGameState(),
+      config,
+      routeMatchId: 'match-1'
+    });
+
+    expect(model.game.sides.self.participant.damageMultiplier).toBe(1.5);
+    expect(model.game.sides.opponent.participant.damageMultiplier).toBe(1);
   });
 
   it('uses a question mark avatar fallback for users without a linked account', () => {

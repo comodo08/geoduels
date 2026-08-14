@@ -104,7 +104,7 @@ type MatchConfig struct {
 	StreetNames         StreetNamesVisibility `json:"streetNames,omitempty"`
 	MapID               string                `json:"mapId,omitempty"`
 	MapName             string                `json:"mapName,omitempty"`
-	MapKey              string                `json:"mapKey,omitempty"` // Legacy read compatibility.
+	MapKey              string                `json:"mapKey,omitempty"`
 	RoundTimerMode      RoundTimerMode        `json:"roundTimerMode,omitempty"`
 	RoundTimeLimitMS    int64                 `json:"roundTimeLimitMs,omitempty"`
 	PressureTimeLimitMS int64                 `json:"pressureTimeLimitMs,omitempty"`
@@ -221,6 +221,7 @@ type PlayerState struct {
 	TeamID            string       `json:"teamId,omitempty"`
 	HP                int          `json:"hp"`
 	TotalScore        int          `json:"totalScore,omitempty"`
+	DamageMultiplier  float64      `json:"damageMultiplier,omitempty"`
 	Finalized         bool         `json:"finalized"`
 	LastGuessLat      float64      `json:"lastGuessLat"`
 	LastGuessLng      float64      `json:"lastGuessLng"`
@@ -231,10 +232,11 @@ type PlayerState struct {
 }
 
 type TeamState struct {
-	TeamID  string   `json:"teamId"`
-	Name    string   `json:"name,omitempty"`
-	HP      int      `json:"hp,omitempty"`
-	Players []string `json:"players"`
+	TeamID           string   `json:"teamId"`
+	Name             string   `json:"name,omitempty"`
+	HP               int      `json:"hp,omitempty"`
+	DamageMultiplier float64  `json:"damageMultiplier,omitempty"`
+	Players          []string `json:"players"`
 }
 
 type RatingDeltaPreview struct {
@@ -244,16 +246,17 @@ type RatingDeltaPreview struct {
 }
 
 type RoundPlayerResult struct {
-	UserID       string  `json:"userId"`
-	Lat          float64 `json:"lat"`
-	Lng          float64 `json:"lng"`
-	DistanceKm   float64 `json:"distanceKm"`
-	Score        int     `json:"score"`
-	DamageDealt  int     `json:"damageDealt"`
-	DamageTaken  int     `json:"damageTaken"`
-	HPAfterRound int     `json:"hpAfterRound"`
-	GuessUnixMS  int64   `json:"guessUnixMs,omitempty"`
-	GuessMS      int64   `json:"guessMs,omitempty"`
+	UserID           string  `json:"userId"`
+	Lat              float64 `json:"lat"`
+	Lng              float64 `json:"lng"`
+	DistanceKm       float64 `json:"distanceKm"`
+	Score            int     `json:"score"`
+	DamageDealt      int     `json:"damageDealt"`
+	DamageTaken      int     `json:"damageTaken"`
+	DamageMultiplier float64 `json:"damageMultiplier,omitempty"`
+	HPAfterRound     int     `json:"hpAfterRound"`
+	GuessUnixMS      int64   `json:"guessUnixMs,omitempty"`
+	GuessMS          int64   `json:"guessMs,omitempty"`
 }
 
 type RoundTeamResult struct {
@@ -265,6 +268,7 @@ type RoundTeamResult struct {
 	Score                int     `json:"score"`
 	DamageDealt          int     `json:"damageDealt"`
 	DamageTaken          int     `json:"damageTaken"`
+	DamageMultiplier     float64 `json:"damageMultiplier,omitempty"`
 	HPAfterRound         int     `json:"hpAfterRound"`
 }
 
@@ -299,8 +303,6 @@ type MatchSnapshot struct {
 	GraceWindowSec  int                           `json:"graceWindowSec"`
 }
 
-// NormalizeSnapshotEntityIDs upgrades retained legacy replay payloads after
-// database entity keys have moved to UUIDs.
 func NormalizeSnapshotEntityIDs(snap MatchSnapshot, resolve func(entityType, value string) string) MatchSnapshot {
 	if resolve == nil {
 		return snap
@@ -371,6 +373,7 @@ type ClientPlayerState struct {
 	TeamID            string       `json:"teamId,omitempty"`
 	HP                int          `json:"hp"`
 	TotalScore        int          `json:"totalScore,omitempty"`
+	DamageMultiplier  float64      `json:"damageMultiplier,omitempty"`
 	Finalized         bool         `json:"finalized"`
 	Disconnected      bool         `json:"disconnected"`
 	DisconnectDue     int64        `json:"disconnectDue"`
@@ -407,6 +410,7 @@ func ClientPlayerStateFromPlayer(p PlayerState) ClientPlayerState {
 		TeamID:            p.TeamID,
 		HP:                p.HP,
 		TotalScore:        p.TotalScore,
+		DamageMultiplier:  p.DamageMultiplier,
 		Finalized:         p.Finalized,
 		Disconnected:      p.Disconnected,
 		DisconnectDue:     p.DisconnectDue,
@@ -724,7 +728,7 @@ type MatchFound struct {
 	ResolvedMap           ResolvedMap              `json:"resolvedMap"`
 	PlannedRounds         []PlannedRound           `json:"plannedRounds"`
 	MapAccessUserID       string                   `json:"mapAccessUserId,omitempty"`
-	MapScope              string                   `json:"mapScope,omitempty"` // Legacy read compatibility.
+	MapScope              string                   `json:"mapScope,omitempty"`
 	SourcePartyID         string                   `json:"sourcePartyId,omitempty"`
 	SourcePartyInviteCode string                   `json:"sourcePartyInviteCode,omitempty"`
 }

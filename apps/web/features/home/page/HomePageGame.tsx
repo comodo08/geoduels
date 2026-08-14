@@ -100,7 +100,6 @@ export default function HomePageGame({
         />
       }
       resultMapNode={framedResultMap}
-      damageMultiplier={game.damageMultiplier}
       guessSubmitted={game.guessSubmitted}
       opponentGuessAlert={game.opponentGuessAlert}
       connectionIssue={game.connectionIssue}

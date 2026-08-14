@@ -164,8 +164,6 @@ export function deriveHomeModel({
       : Math.round((auth.wins / auth.gamesPlayed) * 100);
   const currentRoundNumber =
     snapshot?.currentRound?.roundNumber || roundResult?.roundNumber || 1;
-  const damageMultiplier =
-    currentRoundNumber <= 2 ? 1 : 1 + 0.5 * (currentRoundNumber - 2);
   const isRoundTimerRunning =
     isSingleplayer ||
     !!(
@@ -371,7 +369,6 @@ export function deriveHomeModel({
       showScoreReveal,
       winner: resultWinner,
       damage: resultDamage,
-      damageMultiplier,
       sides: {
         self: {
           ...resultSides.self,
@@ -480,7 +477,6 @@ export function deriveHomeModel({
       currentRoundNumber,
       totalRounds: isSingleplayer || isFreeForAll ? SINGLEPLAYER_TOTAL_ROUNDS : undefined,
       userAvatar: auth.userAvatar,
-      damageMultiplier,
       guessSubmitted: game.guessSubmitted,
       opponentGuessAlert: isPointsMode ? false : game.opponentGuessAlert,
       connectionIssue: match.connectionIssue,

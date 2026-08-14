@@ -68,6 +68,7 @@ function playerIdentity(
     isGuest: player?.isGuest ?? fallback?.isGuest,
     rating: player?.mmr ?? fallback?.rating,
     disconnected: !!player?.disconnected,
+    damageMultiplier: player?.damageMultiplier,
   };
 }
 
@@ -79,6 +80,14 @@ function sideConnection(members: PlayerIdentityView[]) {
     return "disconnected" as const;
   }
   return "degraded" as const;
+}
+
+function withTeamMultiplier(
+  members: PlayerIdentityView[],
+  damageMultiplier?: number,
+): PlayerIdentityView[] {
+  if (damageMultiplier === undefined) return members;
+  return members.map((member) => ({ ...member, damageMultiplier }));
 }
 
 export function deriveMatchSides(params: {
@@ -138,7 +147,8 @@ export function deriveMatchSides(params: {
       name: selfPresentation.name,
       avatarFallback: selfPresentation.fallback,
       avatarColor: selfPresentation.color,
-      members: selfMembers,
+      members: withTeamMultiplier(selfMembers, selfTeam?.damageMultiplier),
+      damageMultiplier: selfTeam?.damageMultiplier,
     };
     const opponentParticipant: ParticipantIdentityView = {
       kind: "team",
@@ -146,7 +156,11 @@ export function deriveMatchSides(params: {
       name: opponentPresentation.name,
       avatarFallback: opponentPresentation.fallback,
       avatarColor: opponentPresentation.color,
-      members: opponentMembers,
+      members: withTeamMultiplier(
+        opponentMembers,
+        opponentTeam?.damageMultiplier,
+      ),
+      damageMultiplier: opponentTeam?.damageMultiplier,
     };
     return {
       sides: {
@@ -227,8 +241,13 @@ export function withRoundSideResults(
       side.participant.kind === "team"
         ? round.teams?.[side.id]
         : round.players[side.id];
+    const participant =
+      result?.damageMultiplier === undefined
+        ? side.participant
+        : { ...side.participant, damageMultiplier: result.damageMultiplier };
     return {
       ...side,
+      participant,
       hp: result?.hpAfterRound ?? side.hp,
       score: result?.score,
       distanceKm: result?.distanceKm,

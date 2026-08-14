@@ -11,18 +11,29 @@ function createProps(overrides: Partial<RoundResultOverlayProps> = {}): RoundRes
     showScoreReveal: true,
     winner: 'self',
     damage: 123,
-    damageMultiplier: 1.5,
     sides: {
       self: {
         id: 'self',
-        participant: { kind: 'player', id: 'self', name: 'You', avatarFallback: 'Y' },
+        participant: {
+          kind: 'player',
+          id: 'self',
+          name: 'You',
+          avatarFallback: 'Y',
+          damageMultiplier: 1.5,
+        },
         hp: 4000,
         score: 4321,
         connection: 'connected',
       },
       opponent: {
         id: 'opp',
-        participant: { kind: 'player', id: 'opp', name: 'Opp', avatarFallback: 'O' },
+        participant: {
+          kind: 'player',
+          id: 'opp',
+          name: 'Opp',
+          avatarFallback: 'O',
+          damageMultiplier: 1,
+        },
         hp: 3200,
         score: 1111,
         connection: 'connected',
@@ -30,6 +41,17 @@ function createProps(overrides: Partial<RoundResultOverlayProps> = {}): RoundRes
     },
     hpPct: (hp) => `${Math.max(0, Math.min(100, (hp / 6000) * 100))}%`,
     ...overrides
+  };
+}
+
+function withSelfMultiplier(multiplier?: number) {
+  const base = createProps();
+  return {
+    ...base.sides,
+    self: {
+      ...base.sides.self,
+      participant: { ...base.sides.self.participant, damageMultiplier: multiplier },
+    },
   };
 }
 
@@ -65,14 +87,14 @@ describe('RoundResultOverlay component', () => {
     });
   });
 
-  it('reveals the damage multiplier and updates the shown damage when the multiplier phase starts', () => {
+  it('scales the damage with the winning side multiplier when the multiplier phase starts', () => {
     render(
       <RoundResultOverlay
         {...createProps({
           phase: 'damage_multiplier',
           winner: 'self',
           damage: 123,
-          damageMultiplier: 1.5
+          sides: withSelfMultiplier(1.5)
         })}
       />
     );
@@ -88,7 +110,7 @@ describe('RoundResultOverlay component', () => {
           phase: 'damage_multiplier',
           winner: 'self',
           damage: 123,
-          damageMultiplier: 1
+          sides: withSelfMultiplier(1)
         })}
       />
     );
@@ -97,14 +119,37 @@ describe('RoundResultOverlay component', () => {
     expect(screen.getAllByText('123').length).toBeGreaterThan(0);
   });
 
-  it('formats whole-number damage multipliers without decimals', () => {
+  it('falls back to unscaled damage when the round predates per-player multipliers', () => {
     render(
       <RoundResultOverlay
         {...createProps({
           phase: 'damage_multiplier',
           winner: 'self',
           damage: 123,
-          damageMultiplier: 2
+          sides: withSelfMultiplier(undefined)
+        })}
+      />
+    );
+
+    expect(screen.queryByTestId('damage-multiplier-label')).not.toBeInTheDocument();
+    expect(screen.getAllByText('123').length).toBeGreaterThan(0);
+  });
+
+  it('uses the opponent multiplier when the opponent wins the round', () => {
+    const base = createProps();
+    render(
+      <RoundResultOverlay
+        {...createProps({
+          phase: 'damage_multiplier',
+          winner: 'opp',
+          damage: 123,
+          sides: {
+            self: base.sides.self,
+            opponent: {
+              ...base.sides.opponent,
+              participant: { ...base.sides.opponent.participant, damageMultiplier: 2 },
+            },
+          }
         })}
       />
     );

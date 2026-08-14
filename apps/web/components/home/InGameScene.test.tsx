@@ -61,7 +61,6 @@ function createProps(overrides: Partial<InGameSceneProps> = {}): InGameSceneProp
     onFinalizeGuess: vi.fn(),
     guessMapNode: null,
     selfUserId: 'self',
-    damageMultiplier: 1,
     guessSubmitted: false,
     opponentGuessAlert: false,
     connectionIssue: '',
