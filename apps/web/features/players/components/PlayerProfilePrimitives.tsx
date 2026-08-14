@@ -30,6 +30,7 @@ export const profileMetrics = {
   winRate: Percent,
   rankedGames: ShieldCheck,
   rankedWins: Medal,
+  rankedWinRate: Percent,
 } as const;
 
 export function ProfileBadgeCollection({

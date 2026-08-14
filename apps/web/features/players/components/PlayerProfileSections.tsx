@@ -31,12 +31,18 @@ export function ProfileOverview({
   const winRate = profile.gamesPlayed
     ? Math.round((profile.wins / profile.gamesPlayed) * 100)
     : 0;
-  const stats = [
+  const rankedWinRate = profile.rankedGamesPlayed
+    ? Math.round((profile.rankedWins / profile.rankedGamesPlayed) * 100)
+    : 0;
+  const duelStats = [
     [profileMetrics.games, "Duels played", profile.gamesPlayed],
     [profileMetrics.wins, "Duel wins", profile.wins],
     [profileMetrics.winRate, "Duel win rate", `${winRate}%`],
-    [profileMetrics.rankedGames, "Ranked duels", profile.rankedGamesPlayed],
-    [profileMetrics.rankedWins, "Ranked wins", profile.rankedWins],
+  ] as const;
+  const seasonStats = [
+    [profileMetrics.rankedGames, "Season duels", profile.rankedGamesPlayed],
+    [profileMetrics.rankedWins, "Season wins", profile.rankedWins],
+    [profileMetrics.rankedWinRate, "Season win rate", `${rankedWinRate}%`],
   ] as const;
 
   return (
@@ -128,16 +134,35 @@ export function ProfileOverview({
           </Button>
         ) : null}
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-2.5 border-t border-white/10 pt-5 sm:grid-cols-3 lg:grid-cols-5">
-        {stats.map(([icon, label, value], index) => (
-          <IconMetric
-            key={label}
-            icon={icon}
-            label={label}
-            value={value}
-            className={index === 4 ? "col-span-2 sm:col-span-1" : undefined}
+      <div className="mt-6 border-t border-white/10 pt-5">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-stretch">
+          <div className="grid flex-1 grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {duelStats.map(([icon, label, value], index) => (
+              <IconMetric
+                key={label}
+                icon={icon}
+                label={label}
+                value={value}
+                className={index === 2 ? "col-span-2 sm:col-span-1" : undefined}
+              />
+            ))}
+          </div>
+          <div
+            aria-hidden
+            className="h-px w-full flex-none bg-white/10 lg:h-auto lg:w-px"
           />
-        ))}
+          <div className="grid flex-1 grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {seasonStats.map(([icon, label, value], index) => (
+              <IconMetric
+                key={label}
+                icon={icon}
+                label={label}
+                value={value}
+                className={index === 2 ? "col-span-2 sm:col-span-1" : undefined}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </Surface>
   );

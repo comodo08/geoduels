@@ -164,12 +164,14 @@ describe("PlayerProfilePage", () => {
     expect(screen.getByText("Duels played")).toBeInTheDocument();
     expect(screen.getByText("Duel wins")).toBeInTheDocument();
     expect(screen.getByText("Duel win rate")).toBeInTheDocument();
-    expect(screen.getByText("Ranked duels")).toBeInTheDocument();
+    expect(screen.getByText("Season duels")).toBeInTheDocument();
+    expect(screen.getByText("Season win rate")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
     expect(screen.getByText("14")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText("57%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Account settings" })).toBeInTheDocument();
 
     const badge = screen
