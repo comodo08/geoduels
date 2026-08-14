@@ -3,6 +3,7 @@ import { getRuntimeConfig } from "../../../lib/runtime-config";
 import {
   requestUpdateNickname,
   requestUpdateSelectedBadge,
+  requestUpdateProfileFlag,
 } from "../../auth/lib/auth-client";
 
 export function useProfileOwnerActions(accessToken: string) {
@@ -12,6 +13,7 @@ export function useProfileOwnerActions(accessToken: string) {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["player-profile"] }),
       queryClient.invalidateQueries({ queryKey: ["optional-viewer"] }),
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] }),
     ]);
 
   return {
@@ -23,6 +25,11 @@ export function useProfileOwnerActions(accessToken: string) {
     badgeMutation: useMutation({
       mutationFn: (badgeId: string) =>
         requestUpdateSelectedBadge(config, accessToken, badgeId),
+      onSuccess: refresh,
+    }),
+    flagMutation: useMutation({
+      mutationFn: (flagCode: string) =>
+        requestUpdateProfileFlag(config, accessToken, flagCode),
       onSuccess: refresh,
     }),
   };

@@ -11,6 +11,7 @@ export type PartyMember = {
   userId: string;
   displayName: string;
   avatarUrl?: string;
+  flagCode?: string;
   isGuest?: boolean;
   isAdmin?: boolean;
   selectedBadge?: PlayerBadgeInfo | null;

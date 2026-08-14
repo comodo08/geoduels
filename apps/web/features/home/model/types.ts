@@ -34,6 +34,7 @@ export type HomeAuthView = {
   linkedProviders?: string[];
   badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string | null;
   canPlay?: boolean;
   isAdmin: boolean;
   isModerator?: boolean;

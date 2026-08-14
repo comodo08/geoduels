@@ -63,6 +63,7 @@ type Props = {
   isGuest: boolean;
   authMigrationRequired?: boolean;
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
   connected: boolean;
   mmr: number;
   leaderboard: LeaderboardSummary | null;
@@ -147,6 +148,7 @@ export default function LobbyScreen({
   isGuest,
   authMigrationRequired = false,
   selectedBadge = null,
+  flagCode,
   connected,
   mmr,
   leaderboard,
@@ -533,6 +535,7 @@ export default function LobbyScreen({
                 avatarFallback: userAvatarFallback,
                 mmr,
                 selectedBadge,
+                flagCode,
               }
             : null
         }

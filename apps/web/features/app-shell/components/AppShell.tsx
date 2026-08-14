@@ -55,6 +55,7 @@ export type AppShellViewer = {
   avatarFallback: string;
   mmr?: number;
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
 };
 
 type AppShellProps = {
@@ -229,6 +230,7 @@ function AppShellHeader({
                 name={viewer.displayName || "Player"}
                 isAdmin={isAdmin}
                 selectedBadge={null}
+                flagCode={viewer.flagCode}
                 nameClassName="text-[12px] font-bold leading-tight text-white transition-colors group-hover:text-emerald-100 sm:text-[15px]"
               />
               {typeof viewer.mmr === "number" ? (

@@ -95,7 +95,8 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 				coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false) as is_banned,
 				coalesce(u.ban_reason, '') as ban_reason,
 				coalesce(u.selected_badge_code, 0) as selected_badge_code,
-				coalesce(u.selected_badge_season_id, '') as selected_badge_season_id
+				coalesce(u.selected_badge_season_id, '') as selected_badge_season_id,
+				coalesce(u.flag_code, '') as flag_code
 		from (select $1::uuid as user_id) seed
 		left join users u on u.id = seed.user_id
 		left join lateral (
@@ -136,6 +137,7 @@ func (s *pgStore) GetProfile(userID string) (Profile, error) {
 		&p.BanReason,
 		&selectedBadgeCode,
 		&selectedBadgeSeasonID,
+		&p.FlagCode,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return p, nil
@@ -182,7 +184,8 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 			coalesce(rs.games_played, 0),
 			coalesce(rs.wins, 0),
 			coalesce(u.selected_badge_code, 0),
-			coalesce(u.selected_badge_season_id, '')
+			coalesce(u.selected_badge_season_id, ''),
+			coalesce(u.flag_code, '')
 		from users u
 		left join lateral (
 			select provider_name, avatar_url
@@ -218,6 +221,7 @@ func (s *pgStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 		&p.RankedWins,
 		&selectedBadgeCode,
 		&selectedBadgeSeasonID,
+		&p.FlagCode,
 	)
 	if err != nil {
 		return p, err
@@ -275,6 +279,29 @@ func (s *pgStore) UpdateSelectedBadge(userID, badgeID string) (Profile, error) {
 			selected_badge_season_id = $3
 		where id = $1
 	`, userID, ref.Code, ref.SeasonID); err != nil {
+		return Profile{}, err
+	}
+	return s.GetProfile(userID)
+}
+
+var ErrFlagCodeUnavailable = errors.New("flag code unavailable")
+
+func (s *pgStore) UpdateProfileFlag(userID, flagCode string) (Profile, error) {
+	userID = strings.TrimSpace(userID)
+	flagCode = strings.TrimSpace(flagCode)
+	if userID == "" {
+		return Profile{}, errors.New("user id required")
+	}
+	if flagCode != "" && !contracts.IsCountryCodeAllowed(flagCode) {
+		return Profile{}, ErrFlagCodeUnavailable
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	if _, err := s.pool.Exec(ctx, `
+		update users
+		set flag_code = nullif($2, '')
+		where id = $1
+	`, userID, flagCode); err != nil {
 		return Profile{}, err
 	}
 	return s.GetProfile(userID)

@@ -25,6 +25,38 @@ type Profile struct {
 	BanReason         string                  `json:"banReason,omitempty"`
 	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
 	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
+	FlagCode          string                  `json:"flagCode,omitempty"`
+}
+
+func (p Profile) PlayerProfile() contracts.PlayerProfile {
+	return contracts.PlayerProfile{
+		UserID:            p.UserID,
+		DisplayName:       p.DisplayName,
+		MMR:               p.MMR,
+		RatingRD:          p.RatingRD,
+		RankedGamesPlayed: p.RankedGamesPlayed,
+		AvatarURL:         p.AvatarURL,
+		IsGuest:           p.IsGuest,
+		IsAdmin:           p.IsAdmin,
+		SelectedBadge:     p.SelectedBadge,
+		FlagCode:          p.FlagCode,
+	}
+}
+
+func (p Profile) QueueJoinRequest() contracts.QueueJoinRequest {
+	return contracts.QueueJoinRequest{
+		UserID:            p.UserID,
+		DisplayName:       p.DisplayName,
+		AvatarURL:         p.AvatarURL,
+		MMR:               p.MMR,
+		RatingRD:          p.RatingRD,
+		SeasonID:          p.SeasonID,
+		RankedGamesPlayed: p.RankedGamesPlayed,
+		IsGuest:           p.IsGuest,
+		IsAdmin:           p.IsAdmin,
+		SelectedBadge:     p.SelectedBadge,
+		FlagCode:          p.FlagCode,
+	}
 }
 
 type PublicPlayerProfile struct {
@@ -40,6 +72,7 @@ type PublicPlayerProfile struct {
 	RankedWins        int                     `json:"rankedWins"`
 	Badges            []contracts.PlayerBadge `json:"badges,omitempty"`
 	SelectedBadge     *contracts.PlayerBadge  `json:"selectedBadge,omitempty"`
+	FlagCode          string                  `json:"flagCode,omitempty"`
 }
 
 type LeaderboardEntry struct {
@@ -47,6 +80,7 @@ type LeaderboardEntry struct {
 	UserID      string `json:"userId"`
 	DisplayName string `json:"displayName"`
 	AvatarURL   string `json:"avatarUrl,omitempty"`
+	FlagCode    string `json:"flagCode,omitempty"`
 	MMR         int    `json:"mmr"`
 	GamesPlayed int    `json:"gamesPlayed"`
 	Wins        int    `json:"wins"`

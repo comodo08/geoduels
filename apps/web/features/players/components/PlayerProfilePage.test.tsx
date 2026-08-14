@@ -132,6 +132,12 @@ function arrange({
       isError: false,
       error: null,
     },
+    flagMutation: {
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    },
   });
 
   render(

@@ -123,6 +123,7 @@ export type SnapshotPlayer = {
   isGuest?: boolean;
   isAdmin?: boolean;
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
   teamId?: string;
   hp: number;
   totalScore?: number;

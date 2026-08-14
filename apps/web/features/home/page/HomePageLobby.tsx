@@ -64,6 +64,7 @@ export default function HomePageLobby({
       isGuest={auth.isGuest}
       authMigrationRequired={!!auth.authMigrationRequired}
       selectedBadge={auth.selectedBadge}
+      flagCode={auth.flagCode ?? undefined}
       connected={lobby.connected}
       mmr={lobby.mmr}
       leaderboard={lobby.leaderboard}

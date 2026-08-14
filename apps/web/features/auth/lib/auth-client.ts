@@ -180,6 +180,25 @@ export async function requestUpdateSelectedBadge(
   return resp.json();
 }
 
+export async function requestUpdateProfileFlag(
+  config: RuntimeConfig,
+  accessToken: string,
+  flagCode: string,
+) {
+  const resp = await apiFetch(config, "/v1/me/flag", {
+    method: "PATCH",
+    credentials: "include",
+    headers: mergeHeaders({
+      "content-type": "application/json",
+    }, authHeaders(accessToken)),
+    body: JSON.stringify({ flagCode }),
+  });
+  if (!resp.ok) {
+    throw new Error(await readError(resp, "Failed to update flag"));
+  }
+  return resp.json();
+}
+
 export async function requestGoogleStart(
   config: RuntimeConfig,
   params: {

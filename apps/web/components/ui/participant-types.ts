@@ -8,6 +8,7 @@ export type PlayerIdentityView = {
   avatarUrl?: string;
   avatarFallback: string;
   selectedBadge?: PlayerBadgeInfo | null;
+  flagCode?: string;
   isAdmin?: boolean;
   isGuest?: boolean;
   rating?: number;

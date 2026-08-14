@@ -144,6 +144,7 @@ type ticket struct {
 	IsGuest           bool                            `json:"isGuest,omitempty"`
 	IsAdmin           bool                            `json:"isAdmin,omitempty"`
 	SelectedBadge     *contracts.PlayerBadge          `json:"selectedBadge,omitempty"`
+	FlagCode          string                          `json:"flagCode,omitempty"`
 	Ruleset           contracts.GameRuleset           `json:"ruleset,omitempty"`
 	StreetNames       contracts.StreetNamesVisibility `json:"streetNames,omitempty"`
 	Queue             QueueVariant                    `json:"queue,omitempty"`
@@ -315,27 +316,7 @@ func (r *redisStore) Join(pool QueuePool, queue QueueVariant, req contracts.Queu
 	ctx := context.Background()
 	queue = NormalizeQueueVariant(queue)
 	config := QueueVariantConfig(queue)
-	name := req.DisplayName
-	if name == "" {
-		name = req.UserID
-	}
-	t := ticket{
-		ID:                ticketID(req.UserID),
-		UserID:            req.UserID,
-		DisplayName:       name,
-		AvatarURL:         req.AvatarURL,
-		MMR:               req.MMR,
-		RatingRD:          req.RatingRD,
-		SeasonID:          req.SeasonID,
-		RankedGamesPlayed: req.RankedGamesPlayed,
-		IsGuest:           req.IsGuest,
-		IsAdmin:           req.IsAdmin,
-		SelectedBadge:     req.SelectedBadge,
-		Ruleset:           config.Ruleset,
-		StreetNames:       config.StreetNames,
-		Queue:             queue,
-		JoinedAtUnixMS:    time.Now().UnixMilli(),
-	}
+	t := ticketFromQueueJoinRequest(req, queue, config, time.Now().UnixMilli())
 	tb, _ := json.Marshal(t)
 	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		for _, other := range allQueuePools {
@@ -566,6 +547,31 @@ func ticketID(userID string) string {
 	return userID + "-" + intStr(time.Now().UnixMilli())
 }
 
+func ticketFromQueueJoinRequest(req contracts.QueueJoinRequest, queue QueueVariant, config contracts.MatchConfig, joinedAtUnixMS int64) ticket {
+	name := req.DisplayName
+	if name == "" {
+		name = req.UserID
+	}
+	return ticket{
+		ID:                ticketID(req.UserID),
+		UserID:            req.UserID,
+		DisplayName:       name,
+		AvatarURL:         req.AvatarURL,
+		MMR:               req.MMR,
+		RatingRD:          req.RatingRD,
+		SeasonID:          req.SeasonID,
+		RankedGamesPlayed: req.RankedGamesPlayed,
+		IsGuest:           req.IsGuest,
+		IsAdmin:           req.IsAdmin,
+		SelectedBadge:     req.SelectedBadge,
+		FlagCode:          req.FlagCode,
+		Ruleset:           config.Ruleset,
+		StreetNames:       config.StreetNames,
+		Queue:             queue,
+		JoinedAtUnixMS:    joinedAtUnixMS,
+	}
+}
+
 func matchFromTickets(opponent, self ticket) contracts.MatchFound {
 	ruleset := contracts.NormalizeRuleset(self.Ruleset)
 	seasonID := self.SeasonID
@@ -582,14 +588,14 @@ func matchFromTickets(opponent, self ticket) contracts.MatchFound {
 		}),
 		Players: []string{opponent.UserID, self.UserID},
 		Profiles: map[string]contracts.PlayerProfile{
-			opponent.UserID: profileFromTicket(opponent),
-			self.UserID:     profileFromTicket(self),
+			opponent.UserID: opponent.PlayerProfile(),
+			self.UserID:     self.PlayerProfile(),
 		},
 		MapScope: "world",
 	}
 }
 
-func profileFromTicket(t ticket) contracts.PlayerProfile {
+func (t ticket) PlayerProfile() contracts.PlayerProfile {
 	return contracts.PlayerProfile{
 		UserID:            t.UserID,
 		DisplayName:       t.DisplayName,
@@ -600,6 +606,7 @@ func profileFromTicket(t ticket) contracts.PlayerProfile {
 		IsGuest:           t.IsGuest,
 		IsAdmin:           t.IsAdmin,
 		SelectedBadge:     t.SelectedBadge,
+		FlagCode:          t.FlagCode,
 	}
 }
 

@@ -281,19 +281,9 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var found *contracts.MatchFound
+	joinRequest := profile.QueueJoinRequest()
 	for _, queue := range selectedQueues {
-		_, nextFound, err := q.store.Join(queuePool, queue, contracts.QueueJoinRequest{
-			UserID:            userID,
-			DisplayName:       profile.DisplayName,
-			AvatarURL:         profile.AvatarURL,
-			MMR:               profile.MMR,
-			RatingRD:          profile.RatingRD,
-			SeasonID:          profile.SeasonID,
-			RankedGamesPlayed: profile.RankedGamesPlayed,
-			IsGuest:           profile.IsGuest,
-			IsAdmin:           profile.IsAdmin,
-			SelectedBadge:     profile.SelectedBadge,
-		})
+		_, nextFound, err := q.store.Join(queuePool, queue, joinRequest)
 		if err != nil {
 			http.Error(w, "queue unavailable", http.StatusBadGateway)
 			return

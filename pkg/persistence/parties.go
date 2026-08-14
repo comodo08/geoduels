@@ -638,6 +638,7 @@ func partyReadQuery(whereClause string) string {
 func (s *pgStore) listPartyMembers(ctx context.Context, partyID string) ([]contracts.PartyMember, error) {
 	rows, err := s.pool.Query(ctx, `
 		select m.user_id, u.display_name, coalesce(u.avatar_url, ''),
+			coalesce(u.flag_code, ''),
 			u.account_type = 'guest',
 			coalesce(u.is_admin, false),
 			coalesce(u.selected_badge_code, 0),
@@ -658,7 +659,7 @@ func (s *pgStore) listPartyMembers(ctx context.Context, partyID string) ([]contr
 		var member contracts.PartyMember
 		var selectedBadgeCode int16
 		var selectedBadgeSeasonID string
-		if err := rows.Scan(&member.UserID, &member.DisplayName, &member.AvatarURL, &member.IsGuest, &member.IsAdmin, &selectedBadgeCode, &selectedBadgeSeasonID, &member.TeamID, &member.Role, &member.Ready, &member.JoinedAt); err != nil {
+		if err := rows.Scan(&member.UserID, &member.DisplayName, &member.AvatarURL, &member.FlagCode, &member.IsGuest, &member.IsAdmin, &selectedBadgeCode, &selectedBadgeSeasonID, &member.TeamID, &member.Role, &member.Ready, &member.JoinedAt); err != nil {
 			rows.Close()
 			return nil, err
 		}

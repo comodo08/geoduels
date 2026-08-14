@@ -3,6 +3,7 @@ import { Copy, Crown, Loader2, LogOut, Map as MapIcon, Play, UserMinus, UserPlus
 import { motion } from "framer-motion";
 import { toPublicEntityId } from "../../../lib/entity-id";
 import PlayerProfileLink from "../../../components/ui/PlayerProfileLink";
+import { CountryFlag } from "../../../components/ui/CountryFlag";
 import type { MatchConfig, GameRuleset } from "../../matchmaking/lib/queue-client";
 import type { PartyRuntimeStatus } from "../controllers/party-controller";
 import type { PartySnapshot, PartyTeamId, PartyMode } from "../lib/party-client";
@@ -439,8 +440,9 @@ function PartyMemberList({
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <PlayerProfileLink userId={member.userId} nickname={member.displayName} disabled={member.isGuest} className="truncate text-[16px] font-extrabold text-white hover:text-emerald-200">
+                <PlayerProfileLink userId={member.userId} nickname={member.displayName} disabled={member.isGuest} className="flex items-center gap-2 truncate text-[16px] font-extrabold text-white hover:text-emerald-200">
                   {member.displayName || member.userId}
+                  <CountryFlag code={member.flagCode} />
                 </PlayerProfileLink>
                 {isLeader ? (
                   <LobbyPill tone="success">
