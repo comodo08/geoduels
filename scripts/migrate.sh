@@ -14,9 +14,19 @@ DB_URL_FOR_CONTAINER="$MIGRATIONS_DB_URL"
 DB_URL_FOR_CONTAINER="${DB_URL_FOR_CONTAINER//@127.0.0.1/@host.docker.internal}"
 DB_URL_FOR_CONTAINER="${DB_URL_FOR_CONTAINER//@localhost/@host.docker.internal}"
 
+# Git Bash/MSYS2 converts POSIX-looking paths inside docker -v arguments, which
+# breaks the migrations bind mount on Windows. Use a Windows-style source path
+# (via cygpath when available) and disable MSYS path conversion for docker.
+MIGRATIONS_SRC="$(pwd)/db/migrations"
+if command -v cygpath >/dev/null 2>&1; then
+  MIGRATIONS_SRC="$(cygpath -w "$MIGRATIONS_SRC")"
+fi
+
+export MSYS_NO_PATHCONV=1
+
 exec docker run --rm \
   --add-host=host.docker.internal:host-gateway \
-  -v "$(pwd)/db/migrations:/migrations:ro" \
+  -v "$MIGRATIONS_SRC:/migrations:ro" \
   migrate/migrate:v4.18.3 \
   -path=/migrations \
   -database "$DB_URL_FOR_CONTAINER" \

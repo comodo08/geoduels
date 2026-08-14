@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers (mounted from the working tree),
+# where CRLF line endings break sh. Always check them out as LF, even on
+# Windows checkouts with core.autocrlf=true.
+*.sh text eol=lf
