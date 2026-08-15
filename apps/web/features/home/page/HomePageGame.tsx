@@ -17,6 +17,7 @@ type HomePageGameProps = {
     | "advanceRound"
     | "forfeitMatch"
     | "leaveGame"
+    | "toggleMusicMuted"
   >;
 };
 
@@ -102,6 +103,8 @@ export default function HomePageGame({
       resultMapNode={framedResultMap}
       guessSubmitted={game.guessSubmitted}
       opponentGuessAlert={game.opponentGuessAlert}
+      musicMuted={game.musicMuted}
+      onToggleMusic={actions.toggleMusicMuted}
       connectionIssue={game.connectionIssue}
       roundNumber={game.currentRoundNumber}
       totalRounds={game.totalRounds}

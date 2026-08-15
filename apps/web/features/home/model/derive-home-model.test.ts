@@ -118,6 +118,7 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     showMatchEndPage: false,
     opponentLeftNotice: false,
     opponentLeftNoticeName: '',
+    musicMuted: false,
     ...overrides
   };
 }
