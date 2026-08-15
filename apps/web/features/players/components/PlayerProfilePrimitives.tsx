@@ -126,7 +126,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
   return (
     <Link
       href={`/match/${encodeURIComponent(toPublicEntityId(match.matchId))}`}
-      className="group grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 transition hover:border-white/20 hover:bg-white/[0.06] sm:grid-cols-[minmax(180px,0.85fr)_minmax(160px,1fr)_120px_24px] sm:items-center"
+      className="group grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 rounded-xl border border-white/10 bg-black/20 px-3.5 py-3 transition hover:border-white/20 hover:bg-white/[0.06] sm:grid-cols-[160px_minmax(0,1fr)_120px_24px] sm:items-center"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -147,7 +147,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
         </div>
       </div>
 
-      <div className="col-start-1 flex min-w-0 flex-wrap items-center gap-2 pl-12 sm:col-start-auto sm:pl-0">
+      <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-center gap-2 sm:col-span-1 sm:col-start-2">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-bold text-white">
           <Gamepad2 size={15} className="shrink-0 text-[#77f0be]" aria-hidden="true" />
           <span className="truncate">
@@ -163,7 +163,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
         ) : null}
       </div>
 
-      <div className="col-start-2 row-span-2 row-start-1 flex min-w-[90px] items-center justify-end text-sm font-extrabold sm:col-start-auto sm:row-span-1 sm:row-start-auto">
+      <div className="col-start-2 row-start-1 flex min-w-[90px] items-center justify-end text-sm font-extrabold sm:col-start-3">
         {singleplayer && typeof match.totalScore === "number" ? (
           <span className="inline-flex items-center gap-1.5 text-white">
             <Target size={15} className="text-[#77f0be]" aria-hidden="true" />
@@ -180,7 +180,7 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
           </span>
         ) : null}
       </div>
-      <div className="col-start-2 row-start-2 flex items-center justify-end sm:col-start-auto sm:row-start-auto">
+      <div className="hidden items-center justify-end sm:col-start-auto sm:row-start-auto sm:flex">
         <ExternalLink
           size={15}
           className="text-[#718b94] transition group-hover:text-white"
