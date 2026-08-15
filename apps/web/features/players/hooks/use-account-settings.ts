@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import { useState } from "react";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { getHomeRuntime } from "../../home/state/home-runtime";
 import {
   requestDeleteAccount,
   requestDiscordStart,
@@ -55,10 +56,15 @@ export function useAccountSettings(profilePath: string) {
     onSuccess: refresh,
     onError: fail("Failed to unlink sign-in method"),
   });
+  const sharedSessionController =
+    typeof window !== "undefined" ? getHomeRuntime(config).sessionController : null;
   const deleteMutation = useMutation({
     mutationFn: () =>
       requestDeleteAccount(config, account?.accessToken || ""),
-    onSuccess: () => exit(),
+    onSuccess: () => {
+      sharedSessionController?.clearAuthSession();
+      exit();
+    },
     onError: fail("Failed to delete account"),
   });
   const exit = async () => {
@@ -66,7 +72,11 @@ export function useAccountSettings(profilePath: string) {
     await router.push("/");
   };
   const signOut = async () => {
-    await requestLogout(config);
+    if (sharedSessionController) {
+      await sharedSessionController.signOut(() => requestLogout(config));
+    } else {
+      await requestLogout(config);
+    }
     await exit();
   };
   const startProvider = async (provider: Provider) => {

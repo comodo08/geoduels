@@ -60,6 +60,27 @@ describe('SessionController', () => {
     controller.destroy();
   });
 
+  it('re-validates the session against the server after the local session is cleared', async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      userId: 'user-1',
+      accessToken: tokenWithExp(Date.now() + 60 * 60_000),
+      nicknameRequired: false,
+      nicknameInput: 'Player'
+    }));
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.setNetworkHandlers({ bootstrapSession });
+
+    await controller.bootstrapSession();
+    await controller.bootstrapSession();
+    expect(bootstrapSession).toHaveBeenCalledTimes(1);
+
+    controller.clearAuthSession();
+    await controller.bootstrapSession();
+
+    expect(bootstrapSession).toHaveBeenCalledTimes(2);
+    controller.destroy();
+  });
+
   it('refreshes an expired playable session before returning it', async () => {
     const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
     controller.applySessionSnapshot(
@@ -204,5 +225,50 @@ describe('SessionController', () => {
         rankedWins: 4
       })
     );
+  });
+
+  it('blocks session restoration during sign out and restores it after', async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      userId: 'user-1',
+      accessToken: tokenWithExp(Date.now() + 60 * 60_000),
+      nicknameRequired: false,
+      nicknameInput: 'Player'
+    }));
+    const refreshSession = vi.fn(async () => null);
+    const getPlayableSession = vi.fn(async () => null);
+    const controller = new SessionController({ config: runtimeConfig, onResetSession: vi.fn() });
+    controller.applySessionSnapshot(
+      {
+        userId: 'user-1',
+        accessToken: tokenWithExp(Date.now() + 60 * 60_000),
+        nicknameRequired: false,
+        nicknameInput: 'Player'
+      },
+      { displayName: 'Player' }
+    );
+    controller.setNetworkHandlers({ bootstrapSession, refreshSession, getPlayableSession });
+    controller.start();
+
+    let finishLogout!: () => void;
+    const logoutRequest = new Promise<void>((resolve) => {
+      finishLogout = resolve;
+    });
+    const signOutPromise = controller.signOut(() => logoutRequest);
+
+    expect(await controller.bootstrapSession()).toBeNull();
+    expect(await controller.refreshSession()).toBeNull();
+    expect(await controller.ensureFreshSession()).toBeNull();
+    expect(await controller.getPlayableSession()).toBeNull();
+    expect(bootstrapSession).not.toHaveBeenCalled();
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(getPlayableSession).not.toHaveBeenCalled();
+
+    finishLogout();
+    await signOutPromise;
+
+    expect(controller.getState().userId).toBe('');
+    expect((await controller.bootstrapSession())?.userId).toBe('user-1');
+
+    controller.destroy();
   });
 });

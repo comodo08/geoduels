@@ -192,6 +192,7 @@ export class SessionController extends ObservableStore<SessionState> {
   private bootstrapResult: AuthSessionSnapshot | null = null;
   private mounted = true;
   private started = false;
+  private loggingOut = false;
   private networkHandlers: SessionNetworkHandlers = {
     bootstrapSession: async () => null,
     refreshSession: async () => null,
@@ -333,9 +334,21 @@ export class SessionController extends ObservableStore<SessionState> {
     });
   }
 
+  async signOut(requestLogout: () => Promise<void>) {
+    this.loggingOut = true;
+    try {
+      await requestLogout();
+    } finally {
+      this.clearAuthSession();
+      this.loggingOut = false;
+    }
+  }
+
   clearAuthSession = (message?: string) => {
     this.onResetSession();
     this.session = emptyAuthSession();
+    this.bootstrapCompleted = false;
+    this.bootstrapResult = null;
     this.patchState({
       ...initialState,
       googleSignInEnabled: this.state.googleSignInEnabled,
@@ -347,6 +360,7 @@ export class SessionController extends ObservableStore<SessionState> {
   };
 
   bootstrapSession = async (options?: { force?: boolean }): Promise<AuthSessionSnapshot | null> => {
+    if (this.loggingOut) return null;
     if (this.bootstrapPromise) {
       return this.bootstrapPromise;
     }
@@ -376,6 +390,7 @@ export class SessionController extends ObservableStore<SessionState> {
   };
 
   refreshSession = async (): Promise<AuthSessionSnapshot | null> => {
+    if (this.loggingOut) return null;
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -457,6 +472,7 @@ export class SessionController extends ObservableStore<SessionState> {
     minValidityMs = 60_000,
     options?: { allowNicknameRequired?: boolean; forceRefresh?: boolean },
   ): Promise<AuthSessionSnapshot | null> {
+    if (this.loggingOut) return null;
     const allowNicknameRequired = !!options?.allowNicknameRequired;
     const forceRefresh = !!options?.forceRefresh;
     if (!this.session.userId || !this.session.accessToken) {
@@ -488,6 +504,7 @@ export class SessionController extends ObservableStore<SessionState> {
   }
 
   getPlayableSession = async (): Promise<AuthSessionSnapshot | null> => {
+    if (this.loggingOut) return null;
     if (hasPlayableSession(this.session)) {
       const fresh = await this.ensureFreshSession(60_000, {
         forceRefresh: this.state.isGuest,

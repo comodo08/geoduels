@@ -852,8 +852,7 @@ export function useHomeModel(options?: {
   const devLogin = () => ensurePlayableSession();
 
   const logout = () => {
-    void requestLogout(config);
-    sessionController.clearAuthSession();
+    void sessionController.signOut(() => requestLogout(config));
   };
 
   const deleteAccount = async () => {
