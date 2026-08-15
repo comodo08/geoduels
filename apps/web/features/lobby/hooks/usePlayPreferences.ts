@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SetStateAction } from "react";
 import type {
   GameRuleset,
   StreetNamesVisibility,
@@ -19,6 +19,8 @@ type SingleplayerPreferences = {
 const DUEL_STORAGE_KEY = "geoduels.play.duels";
 const SINGLEPLAYER_STORAGE_KEY = "geoduels.play.singleplayer";
 const LEGACY_STORAGE_KEY = "geoduels.queueRulesets";
+const DUEL_CONFIGURED_KEY = "geoduels.play.duels.configured";
+const SINGLEPLAYER_CONFIGURED_KEY = "geoduels.play.singleplayer.configured";
 
 const supportedModes = new Set<GameRuleset>(["moving", "no_move", "nmpz"]);
 
@@ -70,52 +72,79 @@ function readPreferences() {
       };
     }
   } catch {
-    // Defaults keep the launcher usable when storage is unavailable or invalid.
   }
   if (!duel.modes.length) duel.modes = ["moving"];
   return { duel, singleplayer };
 }
 
-export function usePlayPreferences(extensionAvailable: boolean | null) {
-  const [initial] = useState(readPreferences);
-  const [duel, setDuel] = useState<DuelPreferences>(initial.duel);
-  const [singleplayer, setSingleplayer] =
-    useState<SingleplayerPreferences>(initial.singleplayer);
+function readConfigured(key: string) {
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
 
-  useEffect(() => {
-    if (extensionAvailable !== false) return;
-    setDuel((current) => {
-      const modes = current.modes.filter((mode) => mode !== "no_move");
-      return {
-        modes: modes.length ? modes : ["moving"],
-        streetNames: "shown",
-      };
-    });
-    setSingleplayer((current) => ({
-      mode: current.mode === "no_move" ? "moving" : current.mode,
-      streetNames: "shown",
-    }));
-  }, [extensionAvailable]);
+export function usePlayPreferences() {
+  const [initial] = useState(readPreferences);
+  const [duel, setDuelState] = useState<DuelPreferences>(initial.duel);
+  const [singleplayer, setSingleplayerState] =
+    useState<SingleplayerPreferences>(initial.singleplayer);
+  const [duelConfigured, setDuelConfigured] = useState(() =>
+    readConfigured(DUEL_CONFIGURED_KEY),
+  );
+  const [singleplayerConfigured, setSingleplayerConfigured] = useState(() =>
+    readConfigured(SINGLEPLAYER_CONFIGURED_KEY),
+  );
 
   useEffect(() => {
     try {
       window.localStorage.setItem(DUEL_STORAGE_KEY, JSON.stringify(duel));
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-    } catch {
-      // Storage failures do not block launching.
-    }
-  }, [duel]);
-
-  useEffect(() => {
-    try {
       window.localStorage.setItem(
         SINGLEPLAYER_STORAGE_KEY,
         JSON.stringify(singleplayer),
       );
     } catch {
-      // Storage failures do not block launching.
     }
-  }, [singleplayer]);
+  }, [duel, singleplayer]);
 
-  return { duel, setDuel, singleplayer, setSingleplayer };
+  const markDuelConfigured = () => {
+    setDuelConfigured(true);
+    try {
+      window.localStorage.setItem(DUEL_CONFIGURED_KEY, "1");
+    } catch {
+    }
+  };
+
+  const markSingleplayerConfigured = () => {
+    setSingleplayerConfigured(true);
+    try {
+      window.localStorage.setItem(SINGLEPLAYER_CONFIGURED_KEY, "1");
+    } catch {
+    }
+  };
+
+  const setDuel = (updater: SetStateAction<DuelPreferences>) => {
+    setDuelState(updater);
+    markDuelConfigured();
+  };
+
+  const setSingleplayer = (
+    updater: SetStateAction<SingleplayerPreferences>,
+  ) => {
+    setSingleplayerState(updater);
+    markSingleplayerConfigured();
+  };
+
+  return {
+    duel,
+    setDuel,
+    singleplayer,
+    setSingleplayer,
+    duelConfigured,
+    singleplayerConfigured,
+    markDuelConfigured,
+    markSingleplayerConfigured,
+  };
 }

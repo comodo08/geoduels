@@ -14,6 +14,8 @@ function resetStoredQueueRulesets() {
   window.localStorage.removeItem('geoduels.queueRulesets');
   window.localStorage.removeItem('geoduels.play.duels');
   window.localStorage.removeItem('geoduels.play.singleplayer');
+  window.localStorage.removeItem('geoduels.play.duels.configured');
+  window.localStorage.removeItem('geoduels.play.singleplayer.configured');
 }
 
 function reportExtensionAvailable(extensionVersion = '0.1.3') {
@@ -138,7 +140,7 @@ describe('LobbyScreen', () => {
   it('opens the duel chooser and requires at least one mode', () => {
     renderLobbyScreen();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
 
     expect(screen.getByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Moving' }));
@@ -180,10 +182,62 @@ describe('LobbyScreen', () => {
     expect(joinQueue).not.toHaveBeenCalled();
   });
 
+  it('hides duel settings for signed-out players and routes ranked play to sign-in', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({
+      userId: '',
+      userEmail: '',
+      displayName: '',
+      googleClientId: 'google-client',
+      joinQueue
+    });
+
+    expect(screen.queryByRole('button', { name: 'Duel settings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(screen.getByRole('dialog', { name: 'Sign In' })).toBeInTheDocument();
+    expect(joinQueue).not.toHaveBeenCalled();
+  });
+
+  it('hides duel settings for guests and routes ranked play to sign-in', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({
+      isGuest: true,
+      googleClientId: 'google-client',
+      joinQueue
+    });
+
+    expect(screen.queryByRole('button', { name: 'Duel settings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(screen.getByRole('dialog', { name: 'Sign In' })).toBeInTheDocument();
+    expect(joinQueue).not.toHaveBeenCalled();
+  });
+
+  it('shows duel settings for signed-in players', () => {
+    renderLobbyScreen();
+
+    expect(screen.getByRole('button', { name: 'Duel settings' })).toBeInTheDocument();
+  });
+
+  it('keeps singleplayer settings open for signed-out players', () => {
+    renderLobbyScreen({
+      userId: '',
+      userEmail: '',
+      displayName: ''
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Singleplayer settings' }));
+
+    expect(
+      screen.getByRole('dialog', { name: 'Start Singleplayer' })
+    ).toBeInTheDocument();
+  });
+
   it('locks extension-only modes and visibility without the extension', () => {
     renderLobbyScreen();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
 
     expect(screen.getByRole('button', { name: 'No Move' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Hidden' })).not.toBeInTheDocument();
@@ -201,7 +255,7 @@ describe('LobbyScreen', () => {
     renderLobbyScreen();
     reportExtensionAvailable('0.1.2');
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
 
     expect(screen.getByRole('button', { name: 'No Move' })).toBeDisabled();
     expect(screen.getByText(/update the official GeoDuels browser extension/i)).toBeInTheDocument();
@@ -217,7 +271,7 @@ describe('LobbyScreen', () => {
     renderLobbyScreen();
     reportExtensionAvailable();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
 
     expect(screen.getByRole('button', { name: 'Moving' })).toHaveAttribute(
       'aria-pressed',
@@ -238,7 +292,7 @@ describe('LobbyScreen', () => {
     renderLobbyScreen({ joinQueue });
     reportExtensionAvailable();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
     expect(await screen.findByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'No Move' }));
     fireEvent.click(screen.getByRole('button', { name: 'NMPZ' }));
@@ -260,7 +314,7 @@ describe('LobbyScreen', () => {
     renderLobbyScreen({ startSingleplayer });
     reportExtensionAvailable();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Singleplayer settings' }));
     expect(
       await screen.findByRole('dialog', { name: 'Start Singleplayer' }),
     ).toBeInTheDocument();
@@ -286,6 +340,103 @@ describe('LobbyScreen', () => {
 
     expect(loadingButton).toBeDisabled();
     expect(loadingButton.querySelector('.animate-spin')).toBeInTheDocument();
+  });
+
+  it('reopens the duel chooser when no duel modes are selected', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({ joinQueue });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Moving' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Find a Duel' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(joinQueue).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
+  });
+
+  it('opens the duel chooser before the first launch when settings are not configured', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({ joinQueue });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(joinQueue).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
+  });
+
+  it('launches the duel queue in one click once settings are configured', () => {
+    const joinQueue = vi.fn();
+    renderLobbyScreen({ joinQueue });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duel settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    expect(joinQueue).toHaveBeenCalledTimes(1);
+    expect(joinQueue).toHaveBeenCalledWith(['moving']);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(joinQueue).toHaveBeenCalledTimes(2);
+    expect(joinQueue).toHaveBeenLastCalledWith(['moving']);
+  });
+
+  it('opens the singleplayer chooser before the first launch when settings are not configured', () => {
+    const startSingleplayer = vi.fn();
+    renderLobbyScreen({ startSingleplayer });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[1]);
+
+    expect(startSingleplayer).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', { name: 'Start Singleplayer' }),
+    ).toBeInTheDocument();
+  });
+
+  it('launches singleplayer in one click once settings are configured', () => {
+    const startSingleplayer = vi.fn();
+    renderLobbyScreen({ startSingleplayer });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Singleplayer settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    expect(startSingleplayer).toHaveBeenCalledTimes(1);
+    expect(startSingleplayer).toHaveBeenCalledWith({
+      ruleset: 'moving',
+      streetNames: 'shown',
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[1]);
+
+    expect(startSingleplayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the duel chooser instead of launching when saved prefs need the extension', () => {
+    const joinQueue = vi.fn();
+    window.localStorage.setItem(
+      'geoduels.play.duels',
+      JSON.stringify({ modes: ['no_move'], streetNames: 'shown' }),
+    );
+    renderLobbyScreen({ joinQueue });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[0]);
+
+    expect(joinQueue).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Find a Duel' })).toBeInTheDocument();
+  });
+
+  it('opens the singleplayer chooser instead of launching when saved prefs need the extension', () => {
+    const startSingleplayer = vi.fn();
+    window.localStorage.setItem(
+      'geoduels.play.singleplayer',
+      JSON.stringify({ mode: 'no_move', streetNames: 'shown' }),
+    );
+    renderLobbyScreen({ startSingleplayer });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play' })[1]);
+
+    expect(startSingleplayer).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', { name: 'Start Singleplayer' }),
+    ).toBeInTheDocument();
   });
 
   it('replaces the tabbed lobby content when an invite lobby is active', () => {
