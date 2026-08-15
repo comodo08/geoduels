@@ -479,6 +479,7 @@ export function deriveHomeModel({
       userAvatar: auth.userAvatar,
       damageMultiplier,
       guessSubmitted: game.guessSubmitted,
+      musicMuted: game.musicMuted,
       opponentGuessAlert: isPointsMode ? false : game.opponentGuessAlert,
       connectionIssue: match.connectionIssue,
       modeName: isSingleplayer

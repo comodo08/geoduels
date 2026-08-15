@@ -4,6 +4,7 @@ import type { SfxController } from '../../../lib/audio/sfx';
 import { ObservableStore } from '../../../lib/observable-store';
 import type { SessionController } from '../../auth/controllers/session-controller';
 import type { MatchController } from '../../matchmaking/controllers/match-controller';
+import { MUSIC_MUTED_STORAGE_KEY, isMusicMuted, setMusicMuted } from '../lib/music-preferences';
 import { ResultAnimation } from '../lib/result-animation';
 import { GUESS_INPUT_CUTOFF_MS, PRESSURE_VISIBLE_MS, RoundClock } from '../lib/round-clock';
 
@@ -20,6 +21,7 @@ export type GameState = {
   resultPhase: ResultPhase;
   resultShownHP: { self: number; opp: number };
   showMatchEndPage: boolean;
+  musicMuted: boolean;
 };
 
 const initialState: GameState = {
@@ -32,7 +34,8 @@ const initialState: GameState = {
   guessSubmitted: false,
   resultPhase: 'base',
   resultShownHP: { self: 0, opp: 0 },
-  showMatchEndPage: false
+  showMatchEndPage: false,
+  musicMuted: false
 };
 
 export class GameController extends ObservableStore<GameState> {
@@ -54,6 +57,7 @@ export class GameController extends ObservableStore<GameState> {
   private introCountdownSfxKey = '';
   private roundCountdownSfxKey = '';
   private gameStartSfxKey = '';
+  private singleplayerMusicKey = '';
   private readonly guessSfxKeys = new Set<string>();
   private readonly resultExitSfxKeys = new Set<string>();
   private destroyed = false;
@@ -73,10 +77,39 @@ export class GameController extends ObservableStore<GameState> {
     this.resultAnimation = new ResultAnimation();
   }
 
+  toggleMusicMuted = (): boolean => {
+    const next = !this.state.musicMuted;
+    setMusicMuted(next);
+    this.patchState({ musicMuted: next });
+    if (next) {
+      this.stopSingleplayerMusic();
+    } else {
+      this.syncSingleplayerMusic(this.matchController.getState().snapshot);
+    }
+    return next;
+  };
+
+  private syncMusicMutedFromStorage() {
+    const muted = isMusicMuted();
+    if (muted !== this.state.musicMuted) {
+      this.patchState({ musicMuted: muted });
+    }
+  }
+
+  private handleMusicStorageChange = (event: StorageEvent) => {
+    if (event.key === MUSIC_MUTED_STORAGE_KEY) {
+      this.syncMusicMutedFromStorage();
+    }
+  };
+
   start() {
     if (this.started) return;
     this.destroyed = false;
     this.started = true;
+    this.syncMusicMutedFromStorage();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', this.handleMusicStorageChange);
+    }
     this.unsubscribeMatch = this.matchController.subscribe(() => {
       this.handleMatchChange(this.matchController.getState().snapshot);
     });
@@ -86,6 +119,9 @@ export class GameController extends ObservableStore<GameState> {
   destroy() {
     this.destroyed = true;
     this.started = false;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', this.handleMusicStorageChange);
+    }
     this.unsubscribeMatch?.();
     this.unsubscribeMatch = null;
     this.clearTimers();
@@ -115,6 +151,7 @@ export class GameController extends ObservableStore<GameState> {
     this.guessSfxKeys.clear();
     this.resultExitSfxKeys.clear();
     this.roundTimerSyncKey = '';
+    this.stopSingleplayerMusic();
   }
 
   private handleMatchChange(snapshot: Snapshot | null) {
@@ -160,6 +197,7 @@ export class GameController extends ObservableStore<GameState> {
     this.syncResultAnimation(snapshot, userId);
     this.syncRecoveredEndedMatch(snapshot, userId);
     this.syncOpponentFinalized(prev, snapshot, userId);
+    this.syncSingleplayerMusic(snapshot);
 
     this.prevSnapshot = snapshot;
   }
@@ -261,6 +299,26 @@ export class GameController extends ObservableStore<GameState> {
     if (key === this.gameStartSfxKey) return;
     this.gameStartSfxKey = key;
     this.sfxController.play('duel-game-start');
+  }
+
+  private syncSingleplayerMusic(snapshot: Snapshot | null) {
+    const isActiveSingleplayer =
+      !!snapshot?.matchId &&
+      snapshot.mode === 'singleplayer' &&
+      snapshot.state !== 'ended';
+    if (!isActiveSingleplayer) {
+      this.stopSingleplayerMusic();
+      return;
+    }
+    if (this.state.musicMuted || snapshot.matchId === this.singleplayerMusicKey) return;
+    this.singleplayerMusicKey = snapshot.matchId;
+    this.sfxController.playLoop('singleplayer-music');
+  }
+
+  private stopSingleplayerMusic() {
+    if (!this.singleplayerMusicKey) return;
+    this.singleplayerMusicKey = '';
+    this.sfxController.stop('singleplayer-music');
   }
 
   private syncCountdownLoopSnapshot(snapshot: Snapshot | null) {
@@ -660,7 +718,8 @@ export class GameController extends ObservableStore<GameState> {
       this.matchController.sendGameCommand('session.leave_match', { userId: session.userId, matchId: snapshot.matchId }, { silent: true });
     }
     this.matchController.resetConnectionState();
-    this.patchState(initialState);
+    this.stopSingleplayerMusic();
+    this.patchState({ ...initialState, musicMuted: this.state.musicMuted });
     this.roundClock.reset();
     this.resultAnimRound = '';
     this.matchController.setStatus(session.nicknameRequired ? 'idle' : 'ready');

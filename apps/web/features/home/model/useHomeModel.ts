@@ -1175,6 +1175,7 @@ export function useHomeModel(options?: {
       advanceRound: gameController.advanceRound,
       forfeitMatch: gameController.forfeitMatch,
       leaveGame: gameController.leaveGame,
+      toggleMusicMuted: gameController.toggleMusicMuted,
       sendChatMessage,
       sendChatEmote,
       reportPlayer,

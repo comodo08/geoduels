@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Flag, LogOut, X } from 'lucide-react';
+import { AlertTriangle, Flag, LogOut, Volume2, VolumeX, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import GameHUD from '../ui/GameHUD';
 import MinimapPanel from '../ui/MinimapPanel';
@@ -58,6 +58,8 @@ export type InGameSceneProps = {
   damageMultiplier: number;
   guessSubmitted: boolean;
   opponentGuessAlert: boolean;
+  musicMuted: boolean;
+  onToggleMusic: () => void;
   connectionIssue: string;
   roundNumber?: number;
   totalRounds?: number;
@@ -132,6 +134,8 @@ export default function InGameScene({
   damageMultiplier,
   guessSubmitted,
   opponentGuessAlert,
+  musicMuted,
+  onToggleMusic,
   connectionIssue,
   roundNumber = 1,
   totalRounds,
@@ -140,6 +144,7 @@ export default function InGameScene({
   selfUserId
 }: InGameSceneProps) {
   const showGuessAlertBorder = opponentGuessAlert;
+  const musicToggleLabel = musicMuted ? 'Unmute music' : 'Mute music';
   const [confirmForfeit, setConfirmForfeit] = useState(false);
   const [forfeitRequested, setForfeitRequested] = useState(false);
   const [streetViewResetCount, setStreetViewResetCount] = useState(0);
@@ -397,6 +402,22 @@ export default function InGameScene({
             opponent
           />
         </>
+      )}
+
+      {isSingleplayer && (
+        <button
+          type="button"
+          onClick={onToggleMusic}
+          aria-label={musicToggleLabel}
+          title={musicToggleLabel}
+          className="pointer-events-auto absolute right-3 top-[104px] z-30 flex h-11 w-11 items-center justify-center rounded-full bg-hudBg text-white/80 shadow-elev-2 backdrop-blur-hud transition hover:bg-white/10 hover:text-white md:right-4 md:top-[108px]"
+        >
+          {musicMuted ? (
+            <VolumeX size={18} strokeWidth={2.4} />
+          ) : (
+            <Volume2 size={18} strokeWidth={2.4} />
+          )}
+        </button>
       )}
 
       <AnimatePresence>

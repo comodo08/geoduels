@@ -116,6 +116,7 @@ function createGameState(overrides: Partial<GameState> = {}): GameState {
     resultPhase: 'base',
     resultShownHP: { self: 5000, opp: 4500 },
     showMatchEndPage: false,
+    musicMuted: false,
     ...overrides
   };
 }

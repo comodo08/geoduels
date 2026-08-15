@@ -75,6 +75,7 @@ describe('GameController', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    window.localStorage.clear();
     sfxController = {
       start: vi.fn(),
       destroy: vi.fn(),
@@ -991,5 +992,106 @@ describe('GameController', () => {
 
     controller.destroy();
     vi.useRealTimers();
+  });
+
+  describe('singleplayer music', () => {
+    function createHarness() {
+      let listener: () => void = () => {};
+      const matchState = { snapshot: null as Snapshot | null };
+      const matchController = {
+        subscribe: vi.fn((next: () => void) => {
+          listener = next;
+          return () => {
+            listener = () => {};
+          };
+        }),
+        getState: vi.fn(() => matchState)
+      } as any;
+      const sessionController = {
+        getState: vi.fn(() => ({ userId: 'self' }))
+      } as any;
+      const controller = new GameController({ config: runtimeConfig, matchController, sessionController, sfxController });
+      controller.start();
+      return {
+        controller,
+        matchState,
+        emit: () => listener()
+      };
+    }
+
+    function liveSingleplayerSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
+      return createSnapshot({
+        mode: 'singleplayer',
+        phase: 'live',
+        roundPhase: 'round_live',
+        state: 'active',
+        players: {
+          self: {
+            userId: 'self',
+            displayName: 'Self',
+            hp: 0,
+            totalScore: 0,
+            mmr: 1000,
+            finalized: false,
+            isGuest: false,
+            disconnected: false
+          }
+        },
+        lastRoundResult: undefined,
+        ...overrides
+      });
+    }
+
+    it('plays background music once per active singleplayer match', () => {
+      const { controller, matchState, emit } = createHarness();
+      matchState.snapshot = liveSingleplayerSnapshot();
+      emit();
+      matchState.snapshot = liveSingleplayerSnapshot({ eventSequence: 2 });
+      emit();
+      expect(sfxController.playLoop).toHaveBeenCalledTimes(1);
+      expect(sfxController.playLoop).toHaveBeenCalledWith('singleplayer-music');
+      controller.destroy();
+      vi.useRealTimers();
+    });
+
+    it('stops background music when the singleplayer match ends', () => {
+      const { controller, matchState, emit } = createHarness();
+      matchState.snapshot = liveSingleplayerSnapshot();
+      emit();
+      matchState.snapshot = liveSingleplayerSnapshot({ state: 'ended' });
+      emit();
+      expect(sfxController.stop).toHaveBeenCalledWith('singleplayer-music');
+      controller.destroy();
+      vi.useRealTimers();
+    });
+
+    it('muting stops the music and unmuting restarts it for the active match', () => {
+      const { controller, matchState, emit } = createHarness();
+      matchState.snapshot = liveSingleplayerSnapshot();
+      emit();
+      expect(controller.toggleMusicMuted()).toBe(true);
+      expect(sfxController.stop).toHaveBeenCalledWith('singleplayer-music');
+      matchState.snapshot = liveSingleplayerSnapshot({ eventSequence: 2 });
+      emit();
+      expect(sfxController.playLoop).toHaveBeenCalledTimes(1);
+      expect(controller.toggleMusicMuted()).toBe(false);
+      expect(sfxController.playLoop).toHaveBeenCalledTimes(2);
+      controller.destroy();
+      vi.useRealTimers();
+    });
+
+    it('picks up mute preference changes from other tabs', () => {
+      const { controller, matchState, emit } = createHarness();
+      matchState.snapshot = liveSingleplayerSnapshot();
+      emit();
+      window.localStorage.setItem('geoduels.musicMuted', 'true');
+      window.dispatchEvent(new StorageEvent('storage', { key: 'geoduels.musicMuted' }));
+      expect(controller.getState().musicMuted).toBe(true);
+      matchState.snapshot = liveSingleplayerSnapshot({ eventSequence: 2 });
+      emit();
+      expect(sfxController.playLoop).toHaveBeenCalledTimes(1);
+      controller.destroy();
+      vi.useRealTimers();
+    });
   });
 });

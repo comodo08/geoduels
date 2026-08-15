@@ -64,6 +64,8 @@ function createProps(overrides: Partial<InGameSceneProps> = {}): InGameSceneProp
     damageMultiplier: 1,
     guessSubmitted: false,
     opponentGuessAlert: false,
+    musicMuted: false,
+    onToggleMusic: vi.fn(),
     connectionIssue: '',
     ...overrides,
   };
@@ -403,5 +405,35 @@ describe('InGameScene', () => {
     expect(screen.queryByText('Red Member')).not.toBeInTheDocument();
     expect(screen.queryByText('(2100)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Member Badge/)).not.toBeInTheDocument();
+  });
+
+  it('shows the music toggle only in singleplayer and reflects the muted state', () => {
+    const onToggleMusic = vi.fn();
+    const { rerender } = render(<InGameScene {...createProps()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Mute music' }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <InGameScene
+        {...createProps({ isSingleplayer: true, onToggleMusic })}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Mute music' });
+    button.click();
+    expect(onToggleMusic).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <InGameScene
+        {...createProps({
+          isSingleplayer: true,
+          musicMuted: true,
+          onToggleMusic,
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Unmute music' }),
+    ).toBeInTheDocument();
   });
 });

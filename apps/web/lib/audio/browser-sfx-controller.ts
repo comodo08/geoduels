@@ -161,6 +161,7 @@ export class BrowserSfxController implements SfxController {
   private preloadAll() {
     if (!this.unlocked) return;
     (Object.keys(sfxRegistry) as SfxName[]).forEach((name) => {
+      if (sfxRegistry[name].lazy) return;
       void this.loadBuffer(name);
     });
   }

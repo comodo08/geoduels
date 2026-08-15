@@ -118,6 +118,7 @@ export type HomeGameView = {
   userAvatar: string;
   damageMultiplier: number;
   guessSubmitted: boolean;
+  musicMuted: boolean;
   opponentGuessAlert: boolean;
   connectionIssue: string;
   modeName: string;
@@ -197,6 +198,7 @@ export type HomeActions = {
   advanceRound: () => boolean;
   forfeitMatch: () => boolean;
   leaveGame: () => void;
+  toggleMusicMuted: () => boolean;
   sendChatMessage: (body: string) => boolean;
   sendChatEmote: (emote: ChatEmote) => boolean;
   reportPlayer: (
