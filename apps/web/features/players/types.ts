@@ -20,6 +20,7 @@ export type PublicPlayerProfile = {
 export type PlayerMatchSummary = {
   matchId: string;
   mode: string;
+  ruleset?: string;
   startedAt?: string;
   endedAt: string;
   winnerUserId?: string;

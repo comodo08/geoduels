@@ -81,7 +81,7 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 	defer cancel()
 	query := `
 		select
-			h.match_id, h.mode, h.started_at, h.ended_at,
+			h.match_id, h.mode, h.ruleset, h.started_at, h.ended_at,
 			coalesce(h.winner_user_id::text, ''),
 			case
 				when h.mode = 'singleplayer' then 'completed'
@@ -134,6 +134,7 @@ func (s *pgStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEnd
 		if err := rows.Scan(
 			&item.MatchID,
 			&item.Mode,
+			&item.Ruleset,
 			&item.StartedAt,
 			&item.EndedAt,
 			&item.WinnerUserID,

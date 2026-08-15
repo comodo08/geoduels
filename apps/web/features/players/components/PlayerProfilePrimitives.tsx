@@ -166,6 +166,11 @@ export function MatchHistoryRow({ match }: { match: PlayerMatchSummary }) {
             {match.roundCount} rounds
           </span>
         ) : null}
+        {match.ruleset ? (
+          <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-[#a9bfd4]">
+            {formatRuleset(match.ruleset)}
+          </span>
+        ) : null}
         {match.ranked ? (
           <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-[#a9bfd4]">
             Ranked
@@ -216,4 +221,10 @@ function formatMode(mode: string) {
     .split("_")
     .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatRuleset(ruleset: string) {
+  if (ruleset === "no_move") return "No Move";
+  if (ruleset === "nmpz") return "NMPZ";
+  return "Moving";
 }

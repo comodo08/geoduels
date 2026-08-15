@@ -137,6 +137,7 @@ type MapImportSummary = contracts.MapImportSummary
 type MatchHistorySummary struct {
 	MatchID             string    `json:"matchId"`
 	Mode                string    `json:"mode"`
+	Ruleset             string    `json:"ruleset,omitempty"`
 	StartedAt           time.Time `json:"startedAt"`
 	EndedAt             time.Time `json:"endedAt"`
 	WinnerUserID        string    `json:"winnerUserId,omitempty"`
