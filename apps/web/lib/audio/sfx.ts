@@ -8,7 +8,9 @@ export type SfxName =
   | 'duel-round-result-enter'
   | 'duel-round-result-exit'
   | 'duel-round-result-score-reveal'
-  | 'duel-round-result-hp-hit';
+  | 'duel-round-result-hp-hit'
+  | 'duel-win'
+  | 'duel-lose';
 
 export type SfxSource = {
   src: string;
@@ -71,6 +73,14 @@ export const sfxRegistry: SfxRegistry = {
   'duel-round-result-exit': {
     sources: [{ src: '/sfx/duel-round-result-exit.v1.ogg', type: 'audio/ogg; codecs=vorbis' }],
     volume: 0.8
+  },
+  'duel-win': {
+    sources: [{ src: '/sfx/duel-game-win.ogg', type: 'audio/ogg; codecs=vorbis' }],
+    volume: 0.9
+  },
+  'duel-lose': {
+    sources: [{ src: '/sfx/duel-game-lose.ogg', type: 'audio/ogg; codecs=vorbis' }],
+    volume: 0.9
   }
 };
 

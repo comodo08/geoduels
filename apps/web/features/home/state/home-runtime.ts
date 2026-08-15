@@ -55,7 +55,8 @@ function createHomeRuntime(config: RuntimeConfig): HomeRuntime {
     config,
     matchController: runtime.matchController,
     sessionController: runtime.sessionController,
-    sfxController: runtime.sfxController
+    sfxController: runtime.sfxController,
+    partyController: runtime.partyController
   });
   runtime.chatController = new ChatController({
     config,
