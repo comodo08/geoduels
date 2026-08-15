@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { Flag, RotateCcw, List, LogOut } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type CSSProperties } from "react";
 import {
   ParticipantIdentityCard,
   ParticipantIdentityRow,
@@ -35,11 +35,18 @@ type Props = {
     reason?: string,
   ) => Promise<void> | void;
   asPage?: boolean;
+  maxHP?: number;
 };
 
 function formatGuessTime(ms?: number) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function getHpBarFill(pct: number): CSSProperties {
+  if (pct > 50) return { backgroundImage: "linear-gradient(180deg, #09C967 0%, #52B891 100%)" };
+  if (pct > 25) return { backgroundImage: "linear-gradient(180deg, #F7D046 0%, #FACC15 100%)" };
+  return { backgroundImage: "linear-gradient(180deg, #F87171 0%, #EF4444 100%)" };
 }
 
 type EndMatchMode = "duel" | "singleplayer" | "team_duel" | "free_for_all";
@@ -61,6 +68,7 @@ export default function EndMatchOverlay({
   onPlayAgain,
   backLabel = "Back to lobby",
   asPage = false,
+  maxHP = 6000,
 }: Props) {
   const [reportedUserIds, setReportedUserIds] = useState<Record<string, boolean>>({});
   const [reportBusyUserId, setReportBusyUserId] = useState("");
@@ -162,14 +170,26 @@ export default function EndMatchOverlay({
     const guessTime = formatGuessTime(
       guessPlayerId ? round.players[guessPlayerId]?.guessMs : undefined,
     );
+    const hpPct = Math.max(0, Math.min(100, (hp / (maxHP ?? 6000)) * 100));
     return (
-      <div className={`flex items-baseline gap-2 ${highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}`}>
-        <span>{hp.toLocaleString()} HP</span>
-        {guessTime ? (
-          <span className="text-[11px] font-bold tracking-[0.1em] text-[#8caab0]">
-            {guessTime}
-          </span>
-        ) : null}
+      <div className={`flex flex-wrap items-center gap-x-1 gap-y-1 sm:flex-nowrap sm:gap-3 ${highlight ? "font-black text-white" : "font-bold text-[#dbe7ff]"}`}>
+        <span className="w-[72px] shrink-0 whitespace-nowrap">{hp.toLocaleString()} HP</span>
+        <span className="w-8 shrink-0 whitespace-nowrap text-[11px] font-bold tracking-[0.1em] text-[#8caab0] sm:w-12">
+          {guessTime}
+        </span>
+        <div
+          role="meter"
+          aria-valuenow={Math.round(hpPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          data-testid="hp-bar"
+          className="ml-3 h-[6px] min-w-[28px] flex-1 max-w-[48px] overflow-hidden rounded-full sm:min-w-[64px] sm:max-w-[160px] lg:max-w-none lg:w-44 lg:flex-none lg:shrink-0"
+        >
+          <div
+            className="h-full rounded-full transition-[width] duration-700"
+            style={{ width: `${hpPct}%`, ...getHpBarFill(hpPct) }}
+          />
+        </div>
       </div>
     );
   }

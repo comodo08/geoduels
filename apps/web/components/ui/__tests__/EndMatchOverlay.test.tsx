@@ -95,6 +95,81 @@ describe("EndMatchOverlay breakdown", () => {
     expect(screen.queryByText("Total")).not.toBeInTheDocument();
   });
 
+  it("renders an HP bar in each health cell sized to hp / maxHP", () => {
+    render(<EndMatchOverlay {...createProps()} />);
+    openBreakdown();
+
+    const bars = screen.getAllByTestId("hp-bar");
+    expect(bars).toHaveLength(2);
+    // mobile keeps the bar small but always visible; sm+ grows it, lg+ is a fixed wider pill
+    expect(bars[0].className).toContain("min-w-[28px]");
+    expect(bars[0].className).toContain("max-w-[48px]");
+    expect(bars[0].className).toContain("sm:min-w-[64px]");
+    expect(bars[0].className).toContain("sm:max-w-[160px]");
+    expect(bars[0].className).toContain("lg:max-w-none");
+    expect(bars[0].className).toContain("lg:w-44");
+    expect(bars[0]).toHaveAttribute("role", "meter");
+    expect(bars[0]).toHaveAttribute("aria-valuenow", "83");
+    expect(bars[0]).toHaveAttribute("aria-valuemax", "100");
+    expect(bars[0].firstElementChild).toHaveStyle({
+      width: `${(5000 / 6000) * 100}%`,
+    });
+    expect(bars[1]).toHaveAttribute("aria-valuenow", "0");
+    expect(bars[1].firstElementChild).toHaveStyle({
+      width: `${(0 / 6000) * 100}%`,
+    });
+  });
+
+  it("colors the HP bar green when health is high", () => {
+    render(<EndMatchOverlay {...createProps()} />);
+    openBreakdown();
+
+    const bars = screen.getAllByTestId("hp-bar");
+    expect(bars[0].firstElementChild).toHaveStyle({
+      backgroundImage: "linear-gradient(180deg, #09C967 0%, #52B891 100%)",
+    });
+  });
+
+  it("colors the HP bar yellow at medium health", () => {
+    const props = createProps();
+    render(
+      <EndMatchOverlay
+        {...props}
+        roundResults={[
+          {
+            ...props.roundResults[0],
+            players: {
+              self: { ...props.roundResults[0].players.self, hpAfterRound: 5000 },
+              opponent: {
+                ...props.roundResults[0].players.opponent,
+                hpAfterRound: 2000,
+              },
+            },
+          },
+        ]}
+      />,
+    );
+    openBreakdown();
+
+    const bars = screen.getAllByTestId("hp-bar");
+    expect(bars[0].firstElementChild).toHaveStyle({
+      backgroundImage: "linear-gradient(180deg, #09C967 0%, #52B891 100%)",
+    });
+    expect(bars[1].firstElementChild).toHaveStyle({
+      backgroundImage: "linear-gradient(180deg, #F7D046 0%, #FACC15 100%)",
+    });
+  });
+
+  it("colors the HP bar red when health is low", () => {
+    render(<EndMatchOverlay {...createProps()} />);
+    openBreakdown();
+
+    const bars = screen.getAllByTestId("hp-bar");
+    expect(bars[1].firstElementChild).toHaveStyle({
+      backgroundImage: "linear-gradient(180deg, #F87171 0%, #EF4444 100%)",
+    });
+  });
+
   it("switches a duel breakdown between health and points", () => {
     render(<EndMatchOverlay {...createProps()} />);
     openBreakdown();

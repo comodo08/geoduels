@@ -241,6 +241,7 @@ export default function MatchPage() {
         <HomePageOverlays
           auth={model.view.auth}
           overlays={model.view.overlays}
+          maxHP={model.view.meta.maxHP}
           actions={{
             ...model.actions,
             leaveGame: handleLeaveToParty,
@@ -259,6 +260,7 @@ export default function MatchPage() {
             <EndMatchOverlay
               onLeaveGame={handleLeaveToParty}
               backLabel={backLabel}
+              maxHP={model.view.meta.maxHP}
               mode={historyOverlay.mode}
               outcome={historyOverlay.outcome}
               sides={historyOverlay.sides}
