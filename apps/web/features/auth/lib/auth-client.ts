@@ -179,7 +179,6 @@ export async function requestUpdateAbout(
   }
   return resp.json();
 }
-
 export async function requestUpdateAvatar(
   config: RuntimeConfig,
   accessToken: string,

@@ -76,6 +76,20 @@ func TestRiskEngineSignalsDoNotCreateLegacyCases(t *testing.T) {
 	}
 }
 
+func TestOAuthIdentityUpsertPreservesCustomAvatar(t *testing.T) {
+	body, err := os.ReadFile("accounts.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if strings.Contains(source, "avatar_url = excluded.avatar_url") {
+		t.Fatal("OAuth identity upsert must not overwrite users.avatar_url with the provider avatar")
+	}
+	if got := strings.Count(source, "from user_avatars custom_avatar"); got != 2 {
+		t.Fatalf("custom-avatar preservation guards = %d, want 2 (upsert + link)", got)
+	}
+}
+
 func TestCheatingBanRefundQueryUsesCompactRatingColumns(t *testing.T) {
 	body, err := os.ReadFile("moderation_enforcement.go")
 	if err != nil {
