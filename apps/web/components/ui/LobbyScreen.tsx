@@ -192,8 +192,16 @@ export default function LobbyScreen({
   const [openModal, setOpenModal] = useState<PartyModal>(null);
   const extensionStatus = useExtensionAvailability();
   const extensionAvailable = extensionStatus.state === "ready";
-  const { duel, setDuel, singleplayer, setSingleplayer } =
-    usePlayPreferences(extensionStatus.state === "checking" ? null : extensionAvailable);
+  const {
+    duel,
+    setDuel,
+    singleplayer,
+    setSingleplayer,
+    duelConfigured,
+    singleplayerConfigured,
+    markDuelConfigured,
+    markSingleplayerConfigured,
+  } = usePlayPreferences();
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
@@ -271,41 +279,73 @@ export default function LobbyScreen({
     nicknameSaving ||
     playPaused ||
     maintenanceIsActive;
-  const onDuelsPlay = () => {
-    if (!canUseRankedQueue) {
-      setOpenModal("signin");
-      return;
-    }
-    setOpenModal("duel");
+  const requireRankedQueue = () => {
+    if (canUseRankedQueue) return true;
+    setOpenModal("signin");
+    return false;
   };
 
+  const canLaunchDuel =
+    duel.modes.length > 0 &&
+    (extensionAvailable ||
+      (duel.streetNames === "shown" && !duel.modes.includes("no_move")));
+  const canLaunchSingleplayer =
+    extensionAvailable ||
+    (singleplayer.streetNames === "shown" && singleplayer.mode !== "no_move");
+
   const startDuelQueue = () => {
-    if (!extensionAvailable && (duel.streetNames !== "shown" || duel.modes.includes("no_move"))) {
-      return;
-    }
-    const queues: QueueVariant[] = [];
-    for (const mode of duel.modes) {
+    if (!requireRankedQueue()) return;
+    if (!canLaunchDuel) return;
+    const queues = duel.modes.flatMap((mode) => {
+      const variants: QueueVariant[] = [];
       if (duel.streetNames === "hidden" || duel.streetNames === "any") {
-        queues.push(`${mode}_hidden` as QueueVariant);
+        variants.push(`${mode}_hidden` as QueueVariant);
       }
       if (duel.streetNames === "shown" || duel.streetNames === "any") {
-        queues.push(mode);
+        variants.push(mode);
       }
-    }
+      return variants;
+    });
     setOpenModal(null);
     joinQueue(queues);
   };
 
-  const startSingleplayerFromModal = () => {
-    if (!extensionAvailable && (singleplayer.streetNames !== "shown" || singleplayer.mode === "no_move")) {
-      return;
-    }
+  const startSingleplayerGame = () => {
+    if (!canLaunchSingleplayer) return;
     setOpenModal(null);
     void startSingleplayer({
       ruleset: singleplayer.mode,
       streetNames: singleplayer.streetNames,
       endless: singleplayer.endless,
     });
+  };
+
+  const openDuelSettings = () => setOpenModal("duel");
+  const openSingleplayerSettings = () => setOpenModal("singleplayer");
+
+  const confirmDuelSettings = () => {
+    markDuelConfigured();
+    startDuelQueue();
+  };
+  const confirmSingleplayerSettings = () => {
+    markSingleplayerConfigured();
+    startSingleplayerGame();
+  };
+
+  const launchDuel = () => {
+    if (!requireRankedQueue()) return;
+    if (!duelConfigured || !canLaunchDuel) {
+      setOpenModal("duel");
+      return;
+    }
+    startDuelQueue();
+  };
+  const launchSingleplayer = () => {
+    if (!singleplayerConfigured || !canLaunchSingleplayer) {
+      setOpenModal("singleplayer");
+      return;
+    }
+    startSingleplayerGame();
   };
 
   const discordProviderButton = showDiscordButton ? (
@@ -462,7 +502,7 @@ export default function LobbyScreen({
             setDuel((current) => ({ ...current, streetNames }))
           }
           onClose={() => setOpenModal(null)}
-          onStart={startDuelQueue}
+          onStart={confirmDuelSettings}
         />
       );
     }
@@ -486,7 +526,7 @@ export default function LobbyScreen({
             setSingleplayer((current) => ({ ...current, streetNames }))
           }
           onClose={() => setOpenModal(null)}
-          onStart={startSingleplayerFromModal}
+          onStart={confirmSingleplayerSettings}
         />
       );
     }
@@ -567,9 +607,11 @@ export default function LobbyScreen({
                   isQueueing={isQueueing}
                   isSingleplayerLoading={isSingleplayerLoading}
                   queueError={queueError}
-                  onDuelsPlay={onDuelsPlay}
+                  onDuelsPlay={launchDuel}
+                  onDuelSettings={canUseRankedQueue ? openDuelSettings : undefined}
                   cancelQueue={cancelQueue}
-                  onSingleplayerPlay={() => setOpenModal("singleplayer")}
+                  onSingleplayerPlay={launchSingleplayer}
+                  onSingleplayerSettings={openSingleplayerSettings}
                   duelDisabled={duelDisabled}
                   singleplayerDisabled={singleplayerDisabled}
                   queuePaused={queuePaused}
