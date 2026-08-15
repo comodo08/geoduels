@@ -11,6 +11,7 @@ import type {
 type HomePageOverlaysProps = {
   auth: HomeAuthView;
   overlays: HomeOverlaysView;
+  maxHP?: number;
   actions: Pick<
     HomeActions,
     | "setNicknameInput"
@@ -28,6 +29,7 @@ type HomePageOverlaysProps = {
 export default function HomePageOverlays({
   auth,
   overlays,
+  maxHP,
   actions,
 }: HomePageOverlaysProps) {
   const activeNotification = overlays.notifications?.[0];
@@ -139,6 +141,7 @@ export default function HomePageOverlays({
               : undefined
           }
           asPage
+          maxHP={maxHP}
         />
       )}
     </>

@@ -26,7 +26,7 @@ export default function HomePageView({ model, lobbyRoute = 'play', mapId = '' }:
 
   return (
     <main className="relative min-h-screen overflow-hidden text-ink">
-      <HomePageOverlays auth={model.view.auth} overlays={model.view.overlays} actions={model.actions} />
+      <HomePageOverlays auth={model.view.auth} overlays={model.view.overlays} maxHP={model.view.meta.maxHP} actions={model.actions} />
       <HomePageLobby auth={model.view.auth} lobby={model.view.lobby} meta={model.view.meta} actions={model.actions} contentRoute={lobbyRoute} mapId={mapId} />
       <HomePageChatDock chat={model.view.chat} actions={model.actions} />
       {showGame ? (
