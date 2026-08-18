@@ -53,11 +53,12 @@ type LeaderboardEntry struct {
 }
 
 type LeaderboardOverview struct {
-	Mode         string             `json:"mode"`
-	SeasonID     string             `json:"season"`
-	SelfRank     int                `json:"selfRank"`
-	TotalPlayers int                `json:"totalPlayers"`
-	Entries      []LeaderboardEntry `json:"entries"`
+	Mode          string             `json:"mode"`
+	SeasonID      string             `json:"season"`
+	SelfRank      int                `json:"selfRank"`
+	TotalPlayers  int                `json:"totalPlayers"`
+	SeasonPlayers int                `json:"seasonPlayers"`
+	Entries       []LeaderboardEntry `json:"entries"`
 }
 
 type Identity struct {

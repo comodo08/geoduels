@@ -37,9 +37,10 @@ func (s *leaderboardTestStore) ListLeaderboard(mode, seasonID string, limit, off
 
 func (s *leaderboardTestStore) GetLeaderboardOverview(userID, mode, seasonID string, limit int) (persistence.LeaderboardOverview, error) {
 	return persistence.LeaderboardOverview{
-		Mode:         mode,
-		SeasonID:     seasonID,
-		TotalPlayers: 12,
+		Mode:           mode,
+		SeasonID:       seasonID,
+		TotalPlayers:   34,
+		SeasonPlayers:  12,
 	}, nil
 }
 
@@ -79,14 +80,15 @@ func TestLeaderboardIncludesActiveSeasonResetTime(t *testing.T) {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
 	}
 	var response struct {
-		Season       string     `json:"season"`
-		NextResetAt  *time.Time `json:"nextResetAt"`
-		TotalPlayers int        `json:"totalPlayers"`
+		Season         string     `json:"season"`
+		NextResetAt    *time.Time `json:"nextResetAt"`
+		TotalPlayers   int        `json:"totalPlayers"`
+		SeasonPlayers  int        `json:"seasonPlayers"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Season != "s3" || response.TotalPlayers != 12 {
+	if response.Season != "s3" || response.TotalPlayers != 34 || response.SeasonPlayers != 12 {
 		t.Fatalf("unexpected leaderboard metadata: %+v", response)
 	}
 	if response.NextResetAt == nil || !response.NextResetAt.Equal(nextResetAt) {

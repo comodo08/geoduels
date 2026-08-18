@@ -568,11 +568,12 @@ type LeaderboardEntrySummary struct {
 }
 
 type LeaderboardSummary struct {
-	Mode         string                    `json:"mode"`
-	Season       string                    `json:"season"`
-	SelfRank     int                       `json:"selfRank"`
-	TotalPlayers int                       `json:"totalPlayers"`
-	Entries      []LeaderboardEntrySummary `json:"entries"`
+	Mode          string                    `json:"mode"`
+	Season        string                    `json:"season"`
+	SelfRank      int                       `json:"selfRank"`
+	TotalPlayers  int                       `json:"totalPlayers"`
+	SeasonPlayers int                       `json:"seasonPlayers"`
+	Entries       []LeaderboardEntrySummary `json:"entries"`
 }
 
 type AuthSessionPayload struct {
