@@ -203,6 +203,7 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 
 	selfRank := 0
 	totalPlayers := 0
+	seasonPlayers := 0
 	if claims, ok := a.optionalAuthenticatedClaims(r); ok {
 		overview, err := a.store.GetLeaderboardOverview(claims.Sub, mode, season, 10)
 		if err != nil {
@@ -211,6 +212,7 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 		}
 		selfRank = overview.SelfRank
 		totalPlayers = overview.TotalPlayers
+		seasonPlayers = overview.SeasonPlayers
 	} else {
 		overview, err := a.store.GetLeaderboardOverview("", mode, season, 10)
 		if err != nil {
@@ -218,16 +220,18 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		totalPlayers = overview.TotalPlayers
+		seasonPlayers = overview.SeasonPlayers
 	}
 
 	response := map[string]any{
-		"season":       season,
-		"mode":         mode,
-		"limit":        limit,
-		"offset":       offset,
-		"entries":      entries,
-		"selfRank":     selfRank,
-		"totalPlayers": totalPlayers,
+		"season":         season,
+		"mode":           mode,
+		"limit":          limit,
+		"offset":         offset,
+		"entries":        entries,
+		"selfRank":       selfRank,
+		"totalPlayers":   totalPlayers,
+		"seasonPlayers":  seasonPlayers,
 	}
 	if season == settings.ActiveSeasonID && settings.NextResetAt != nil {
 		response["nextResetAt"] = settings.NextResetAt

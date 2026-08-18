@@ -141,6 +141,7 @@ export type LeaderboardSummary = {
   nextResetAt?: string;
   selfRank: number;
   totalPlayers: number;
+  seasonPlayers: number;
   entries: LeaderboardEntrySummary[];
 };
 
@@ -674,6 +675,8 @@ function normalizeLeaderboardSummary(
     selfRank: typeof raw.selfRank === "number" ? raw.selfRank : 0,
     totalPlayers:
       typeof raw.totalPlayers === "number" ? raw.totalPlayers : entries.length,
+    seasonPlayers:
+      typeof raw.seasonPlayers === "number" ? raw.seasonPlayers : 0,
     entries,
   };
 }

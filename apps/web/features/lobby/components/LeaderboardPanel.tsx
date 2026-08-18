@@ -27,7 +27,7 @@ export function LeaderboardPanel({
             leaderboardLoading
               ? "Loading ranked players..."
               : leaderboard
-                ? `${formatSeasonName(leaderboard.season)}, ${leaderboard.totalPlayers} players`
+                ? `${formatSeasonName(leaderboard.season)}, ${leaderboard.seasonPlayers} players · ${leaderboard.totalPlayers} all-time`
                 : "No ranked players yet."
           }
         />

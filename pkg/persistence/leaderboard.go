@@ -111,35 +111,56 @@ func (s *pgStore) GetLeaderboardOverview(userID, mode, seasonID string, limit in
 		}
 	}
 
-	var selfRank, totalPlayers int
+	var selfRank, seasonPlayers, totalPlayers int
 	if err := s.pool.QueryRow(ctx, `
 		with ranked as (
 			select
 				r.user_id,
 				row_number() over (
 					order by r.mmr desc, r.updated_at asc, r.user_id asc
-				) as rank,
-				count(*) over () as total_players
+				) as rank
 				from ranks r
 				left join users u on u.id = r.user_id
 				where r.mode = $1
 					and r.season_id = $2
 					and coalesce(u.account_type, 'registered') <> 'guest'
 					and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
+			),
+			played as (
+				select count(distinct rs.user_id) as season_players
+				from ranked_stats rs
+				left join users u on u.id = rs.user_id
+				where rs.mode = $1
+					and rs.season_id = $2
+					and rs.games_played > 0
+					and coalesce(u.account_type, 'registered') <> 'guest'
+					and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
 			)
 		select
 			coalesce(max(rank) filter (where user_id = nullif($3,'')::uuid), 0) as self_rank,
-			coalesce(max(total_players), 0) as total_players
+			coalesce((select season_players from played), 0) as season_players
 		from ranked
-	`, mode, seasonID, userID).Scan(&selfRank, &totalPlayers); err != nil {
+	`, mode, seasonID, userID).Scan(&selfRank, &seasonPlayers); err != nil {
+		return LeaderboardOverview{}, err
+	}
+
+	if err := s.pool.QueryRow(ctx, `
+		select count(distinct r.user_id)
+		from ranks r
+		left join users u on u.id = r.user_id
+		where r.mode = $1
+			and coalesce(u.account_type, 'registered') <> 'guest'
+			and not coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false)
+	`, mode).Scan(&totalPlayers); err != nil {
 		return LeaderboardOverview{}, err
 	}
 
 	return LeaderboardOverview{
-		Mode:         mode,
-		SeasonID:     seasonID,
-		SelfRank:     selfRank,
-		TotalPlayers: totalPlayers,
-		Entries:      entries,
+		Mode:          mode,
+		SeasonID:      seasonID,
+		SelfRank:      selfRank,
+		TotalPlayers:  totalPlayers,
+		SeasonPlayers: seasonPlayers,
+		Entries:       entries,
 	}, nil
 }
