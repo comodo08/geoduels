@@ -62,7 +62,7 @@ export default function MatchSideHPCard({
             participant={side.participant}
             size="lg"
             opponent={opponent}
-            className="h-full w-full border-0 shadow-lg"
+            className="h-[54px]! w-[54px]! border-0 shadow-lg shrink-0"
           />
         </div>
 

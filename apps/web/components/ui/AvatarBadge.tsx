@@ -40,7 +40,7 @@ export default function AvatarBadge({
 
   return (
     <div
-      className={`relative grid place-items-center overflow-hidden rounded-full border border-white/20 ${base} ${sizeClass[size]} ${className}`}
+      className={`relative grid aspect-square shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 ${base} ${sizeClass[size]} ${className}`}
       style={avatarColor ? { backgroundColor: avatarColor } : undefined}
     >
       {avatarUrl && !imgFailed ? (
