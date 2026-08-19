@@ -124,7 +124,9 @@ func advanceRankedSeasonTx(ctx context.Context, tx pgx.Tx, previousSeasonID, nex
 		select u.id, $1, $2, $3, $4
 		from users u
 		where coalesce(u.account_type, 'registered') <> 'guest'
-		on conflict (user_id, mode, season_id) do nothing
+		on conflict (user_id, mode, season_id) do update set
+			mmr = excluded.mmr,
+			rd = excluded.rd
 	`, modeDuel, nextSeasonID, initialMMR, initialRatingRD)
 	if err != nil {
 		return 0, err
@@ -134,7 +136,9 @@ func advanceRankedSeasonTx(ctx context.Context, tx pgx.Tx, previousSeasonID, nex
 		select u.id, $1, $2, 0, 0
 		from users u
 		where coalesce(u.account_type, 'registered') <> 'guest'
-		on conflict (user_id, mode, season_id) do nothing
+		on conflict (user_id, mode, season_id) do update set
+			games_played = excluded.games_played,
+			wins = excluded.wins
 	`, modeDuel, nextSeasonID); err != nil {
 		return 0, err
 	}
