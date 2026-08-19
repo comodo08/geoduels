@@ -9,6 +9,21 @@ import {
 import { useHomeModel } from "../model/useHomeModel";
 import HomePageView from "./HomePageView";
 import { scheduleLobbyPreloading } from "./lobby-preloading";
+import { SocialProvider, type ActiveParty } from "../../social/SocialProvider";
+import type { PartySnapshot } from "../../lobby/lib/party-client";
+
+function deriveActiveParty(
+  isOwner: boolean,
+  snapshot: PartySnapshot | null,
+): ActiveParty {
+  if (!isOwner || !snapshot || !snapshot.inviteCode) return null;
+  return {
+    id: snapshot.id,
+    inviteCode: snapshot.inviteCode,
+    isOwner: true,
+    memberIds: (snapshot.members || []).map((member) => member.userId),
+  };
+}
 
 function resolveLobbyRoute(pathname: string): LobbyContentRoute {
   if (pathname === "/friends") return "friends";
@@ -96,10 +111,20 @@ export function LobbyApplicationLayout({ children }: { children: ReactNode }) {
     );
   }, [model.view.meta.activeMatchId, router]);
 
+  const activeParty = deriveActiveParty(model.view.lobby.party.isOwner, model.view.lobby.party.snapshot);
+
   return (
     <>
       {children}
-      <HomePageView model={model} lobbyRoute={lobbyRoute} mapId={mapId} />
+      <SocialProvider
+        accessToken={model.view.auth.accessToken}
+        userId={model.view.auth.userId}
+        isGuest={model.view.auth.isGuest}
+        activeParty={activeParty}
+        joinParty={model.actions.joinParty}
+      >
+        <HomePageView model={model} lobbyRoute={lobbyRoute} mapId={mapId} />
+      </SocialProvider>
     </>
   );
 }

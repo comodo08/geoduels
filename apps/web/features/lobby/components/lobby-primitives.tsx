@@ -312,11 +312,13 @@ export function LobbySectionHeader({
   eyebrow,
   title,
   description,
+  titleClassName,
   className,
 }: {
   eyebrow?: React.ReactNode;
-  title: React.ReactNode;
+  title?: React.ReactNode;
   description?: React.ReactNode;
+  titleClassName?: string;
   className?: string;
 }) {
   return (
@@ -326,7 +328,7 @@ export function LobbySectionHeader({
           {eyebrow}
         </span>
       ) : null}
-      <h2 className="mt-1 text-[30px] font-black text-white">{title}</h2>
+      <h2 className={cn("mt-1 text-[30px] font-black text-white", titleClassName)}>{title}</h2>
       {description ? <p className="mt-2 text-sm text-[#a9bfd4]">{description}</p> : null}
     </div>
   );
