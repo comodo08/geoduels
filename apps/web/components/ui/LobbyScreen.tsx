@@ -32,6 +32,8 @@ import {
 import { MaintenanceBanner, MaintenanceOverlay } from "../../features/lobby/components/MaintenanceNotice";
 import { MapPickerController, MapRouteSurface } from "../../features/lobby/components/maps/MapRouteSurfaces";
 import { InviteModal } from "../../features/lobby/components/modals/InviteModal";
+import { FriendsTab } from "../../features/social/components/FriendsTab";
+import { FriendsLeftRail } from "../../features/social/components/FriendsLeftRail";
 import { SignInModal } from "../../features/lobby/components/modals/SignInModal";
 import { usePartyPanelState } from "../../features/lobby/hooks/usePartyPanelState";
 import { usePlayPreferences } from "../../features/lobby/hooks/usePlayPreferences";
@@ -649,6 +651,7 @@ export default function LobbyScreen({
                   className="flex w-full max-w-[520px] flex-col gap-5 pointer-events-auto"
                 >
                   {invitePartyCard}
+                  <FriendsTab />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -664,6 +667,7 @@ export default function LobbyScreen({
           ) : null}
         </AppContentRail>
       </AppShell>
+      <FriendsLeftRail />
     </>
   );
 }

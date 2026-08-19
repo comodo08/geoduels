@@ -41,6 +41,7 @@ type ProfileRepository interface {
 	UpdateSelectedBadge(userID, badgeID string) (Profile, error)
 	UpdateProfileFlag(userID, flagCode string) (Profile, error)
 	SetAbout(userID, about string) (Profile, error)
+	SearchPlayersForFriends(query, excludeUserID string, limit int) ([]PlayerSearchResult, error)
 }
 
 type BadgeRepository interface {
@@ -131,7 +132,10 @@ type GameplayMapRepository interface {
 
 type NotificationRepository interface {
 	ListUserNotifications(userID string, limit int) ([]UserNotification, error)
+	GetUserNotification(userID string, notificationID int64) (UserNotification, bool, error)
+	GetUserNotificationByDedupeKey(userID, dedupeKey string) (UserNotification, bool, error)
 	MarkUserNotificationRead(userID string, notificationID int64) error
+	InsertUserNotification(userID, notificationType, dedupeKey string, payload any) (int64, error)
 	ClaimPendingNotification(notificationType string, now time.Time) (NotificationOutboxItem, bool, error)
 	MarkNotificationSent(id int64) error
 	MarkNotificationFailed(id int64, nextAttemptAt time.Time, lastError string) error
@@ -211,5 +215,6 @@ type Store interface {
 	RuntimeRepository
 	ChatRepository
 	PartyRepository
+	FriendsRepository
 	Close()
 }

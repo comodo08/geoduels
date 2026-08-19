@@ -149,6 +149,16 @@ func (a *api) markUserNotificationRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to mark notification", http.StatusInternalServerError)
 		return
 	}
+	if notif, ok, nerr := a.store.GetUserNotification(claims.Sub, notificationID); nerr == nil && ok && notif.Type == "party_invite" {
+		var payload struct {
+			InviterID string `json:"inviterId"`
+		}
+		if json.Unmarshal(notif.Payload, &payload) == nil && payload.InviterID != "" {
+			a.publishSocialEvent(payload.InviterID, "party_invite_dismissed", map[string]any{
+				"friendUserId": claims.Sub,
+			})
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
