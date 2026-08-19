@@ -135,6 +135,37 @@ func enqueueNotificationOutbox(ctx context.Context, tx pgx.Tx, notificationType,
 	return err
 }
 
+func (s *pgStore) InsertUserNotification(userID, notificationType, dedupeKey string, payload any) (int64, error) {
+	userID = strings.TrimSpace(userID)
+	notificationType = strings.TrimSpace(notificationType)
+	dedupeKey = strings.TrimSpace(dedupeKey)
+	if userID == "" || notificationType == "" || dedupeKey == "" {
+		return 0, errors.New("userID, type, and dedupeKey are required")
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	var id int64
+	err = s.pool.QueryRow(ctx, `
+		insert into user_notifications(user_id, type, dedupe_key, payload_json)
+		values($1, $2, $3, $4::jsonb)
+		on conflict (dedupe_key) do update set
+			payload_json = excluded.payload_json,
+			read_at = null
+		returning id
+	`, userID, notificationType, dedupeKey, string(body)).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return id, nil
+}
+
 func (s *pgStore) ListUserNotifications(userID string, limit int) ([]UserNotification, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
@@ -149,7 +180,7 @@ func (s *pgStore) ListUserNotifications(userID string, limit int) ([]UserNotific
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	rows, err := s.pool.Query(ctx, `
-		select id, type, payload_json::text, created_at
+		select id, type, payload_json::text, created_at, read_at
 		from user_notifications
 		where user_id = $1
 			and read_at is null
@@ -164,13 +195,64 @@ func (s *pgStore) ListUserNotifications(userID string, limit int) ([]UserNotific
 	for rows.Next() {
 		var item UserNotification
 		var raw string
-		if err := rows.Scan(&item.ID, &item.Type, &raw, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Type, &raw, &item.CreatedAt, &item.ReadAt); err != nil {
 			return nil, err
 		}
 		item.Payload = json.RawMessage(raw)
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (s *pgStore) GetUserNotification(userID string, notificationID int64) (UserNotification, bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || notificationID <= 0 {
+		return UserNotification{}, false, errors.New("userID and notificationID required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	row := s.pool.QueryRow(ctx, `
+		select id, type, payload_json::text, created_at, read_at
+		from user_notifications
+		where id = $1 and user_id = $2
+	`, notificationID, userID)
+	var item UserNotification
+	var raw string
+	if err := row.Scan(&item.ID, &item.Type, &raw, &item.CreatedAt, &item.ReadAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return UserNotification{}, false, nil
+		}
+		return UserNotification{}, false, err
+	}
+	item.Payload = json.RawMessage(raw)
+	return item, true, nil
+}
+
+func (s *pgStore) GetUserNotificationByDedupeKey(userID, dedupeKey string) (UserNotification, bool, error) {
+	userID = strings.TrimSpace(userID)
+	dedupeKey = strings.TrimSpace(dedupeKey)
+	if userID == "" || dedupeKey == "" {
+		return UserNotification{}, false, errors.New("userID and dedupeKey required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	row := s.pool.QueryRow(ctx, `
+		select id, type, payload_json::text, created_at, read_at
+		from user_notifications
+		where user_id = $1 and dedupe_key = $2
+		order by created_at desc, id desc
+		limit 1
+	`, userID, dedupeKey)
+	var item UserNotification
+	var raw string
+	if err := row.Scan(&item.ID, &item.Type, &raw, &item.CreatedAt, &item.ReadAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return UserNotification{}, false, nil
+		}
+		return UserNotification{}, false, err
+	}
+	item.Payload = json.RawMessage(raw)
+	return item, true, nil
 }
 
 func (s *pgStore) MarkUserNotificationRead(userID string, notificationID int64) error {

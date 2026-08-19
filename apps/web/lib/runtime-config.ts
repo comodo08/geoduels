@@ -119,3 +119,8 @@ export function normalizeWSBase(value: string): string {
   if (value.startsWith('https://')) return `wss://${value.slice(8)}`;
   return value;
 }
+
+export function socialWSBase(config: Pick<RuntimeConfig, "apiURL">): string {
+  const base = normalizeWSBase(config.apiURL || '');
+  return base.replace(/\/$/, '');
+}

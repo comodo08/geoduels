@@ -240,6 +240,51 @@ func (s *Store) CountPresentUsers(ctx context.Context) (int, error) {
 	return int(total), err
 }
 
+// socialPresenceOnlineTTL and socialPresenceAwayTTL define the aging windows
+// for the friends presence rail. A user touched within the online window is
+// reported online; within the away window is reported away; anything older (or
+// absent) is reported offline.
+const (
+	socialPresenceOnlineTTL = 15 * time.Second
+	socialPresenceAwayTTL   = 60 * time.Second
+)
+
+// GetPresenceStatuses returns the online/away/offline status for the requested
+// user IDs, reusing the global `rt:presence:online` sorted set. It prunes stale
+// members first so a dropped socket ages out to offline.
+func (s *Store) GetPresenceStatuses(ctx context.Context, userIDs []string) (map[string]contracts.PartyPresenceStatus, error) {
+	out := make(map[string]contracts.PartyPresenceStatus, len(userIDs))
+	for _, id := range userIDs {
+		out[id] = contracts.PartyPresenceOffline
+	}
+	if len(userIDs) == 0 {
+		return out, nil
+	}
+	now := time.Now().UnixMilli()
+	if err := s.rdb.ZRemRangeByScore(ctx, presenceKey(), "-inf", strconv.FormatInt(now-presenceTTL.Milliseconds(), 10)).Err(); err != nil {
+		return nil, err
+	}
+	members, err := s.rdb.ZMScore(ctx, presenceKey(), userIDs...).Result()
+	if err != nil {
+		return nil, err
+	}
+	for i, id := range userIDs {
+		if i >= len(members) {
+			continue
+		}
+		age := now - int64(members[i])
+		switch {
+		case age <= socialPresenceOnlineTTL.Milliseconds():
+			out[id] = contracts.PartyPresenceOnline
+		case age <= socialPresenceAwayTTL.Milliseconds():
+			out[id] = contracts.PartyPresenceAway
+		default:
+			out[id] = contracts.PartyPresenceOffline
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) getAssignment(ctx context.Context, key string) (Assignment, bool, error) {
 	if key == "" {
 		return Assignment{}, false, nil
