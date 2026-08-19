@@ -16,8 +16,8 @@ import {
   type AppNavRoute,
 } from "../navigation";
 
-const backgroundImage = "/bg3.v2.webp";
-const backgroundPlaceholder = "/bg3.placeholder.v2.webp";
+const backgroundImage = "/bg4.jpg";
+const backgroundPlaceholder = "/bg4.jpg";
 const backgroundOverlay =
   "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
 
