@@ -396,7 +396,7 @@ export function MapDetailsPanel({
   onToggleCommentLike,
   onToggleCommentReplies,
   openCommentMenuId,
-  playMapSingleplayer,
+  onPlayMap,
   replyBody,
   replyToCommentId,
   selectMapForParty,
@@ -440,7 +440,7 @@ export function MapDetailsPanel({
   onToggleCommentLike: (commentId: string, liked: boolean) => void;
   onToggleCommentReplies: (commentId: string) => void;
   openCommentMenuId: string;
-  playMapSingleplayer: (item: CustomMap) => void;
+  onPlayMap: (item: CustomMap) => void;
   replyBody: string;
   replyToCommentId: string;
   selectMapForParty: (item: CustomMap) => void;
@@ -538,13 +538,9 @@ export function MapDetailsPanel({
           </LobbyPanel>
         </div>
 
-        <LobbyPanel variant="subtle" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Moving</span>
-            <span className="rounded-[12px] bg-white/[0.06] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#a9bfd4]">Infinite Clock</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {mapPickerFlow ? (
+          <LobbyPanel variant="subtle" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
+              {mapPickerFlow ? (
               <LobbyActionButton type="button" onClick={() => selectMapForParty(map)} size="lg" className="min-h-[46px] rounded-xl px-6">
                 <MapIcon className="mr-2" size={18} />
                 Use This Map
@@ -558,7 +554,7 @@ export function MapDetailsPanel({
                     {map.personalBest ? map.personalBest.score.toLocaleString() : "No PB yet"}
                   </span>
                 </LobbyMutedBox>
-                <LobbyActionButton type="button" onClick={() => playMapSingleplayer(map)} disabled={singleplayerDisabled} size="lg" className="min-h-[46px] rounded-xl px-6">
+                <LobbyActionButton type="button" onClick={() => onPlayMap(map)} disabled={singleplayerDisabled} size="lg" className="min-h-[46px] rounded-xl px-6">
                   <Play className="mr-2" size={18} fill="currentColor" />
                   Play
                 </LobbyActionButton>

@@ -4,6 +4,9 @@ import { motion } from "framer-motion";
 import Router from "next/router";
 import { getRuntimeConfig } from "../../../../lib/runtime-config";
 import type { MatchConfig } from "../../../matchmaking/lib/queue-client";
+import { useExtensionAvailability } from "../../../browser-extension/hooks/use-extension-availability";
+import { usePlayPreferences } from "../../hooks/usePlayPreferences";
+import { PlayLaunchModal } from "../PlayLaunchModal";
 import {
   createMap,
   validateMapFile,
@@ -134,6 +137,12 @@ export function MapRouteSurface({
   const queryClient = useQueryClient();
   const canInteractWithMaps = !!accessToken && canUploadCustomMaps;
   const browser = useMapBrowserState();
+  const extensionStatus = useExtensionAvailability();
+  const extensionAvailable = extensionStatus.state === "ready";
+  const { singleplayer, setSingleplayer } = usePlayPreferences(
+    extensionStatus.state === "checking" ? null : extensionAvailable,
+  );
+  const [playMap, setPlayMap] = useState<CustomMap | null>(null);
   const [mapName, setMapName] = useState("");
   const [mapDescription, setMapDescription] = useState("");
   const [mapDifficulty, setMapDifficulty] = useState<"easy" | "normal" | "hard">("normal");
@@ -226,11 +235,19 @@ export function MapRouteSurface({
       pressureTimeLimitMs: 15000,
     });
   };
-  const playMapSingleplayer = (item: CustomMap) => {
+  const openMapPlay = (item: CustomMap) => setPlayMap(item);
+  const startSingleplayerWithMap = () => {
+    if (!playMap) return;
+    if (!extensionAvailable && (singleplayer.streetNames !== "shown" || singleplayer.mode === "no_move")) {
+      return;
+    }
+    const map = playMap;
+    setPlayMap(null);
     void startSingleplayer({
-      mapId: item.id,
-      mapName: item.displayName,
-      ruleset: "moving",
+      mapId: map.id,
+      mapName: map.displayName,
+      ruleset: singleplayer.mode,
+      streetNames: singleplayer.streetNames,
       roundTimerMode: "none",
       pressureTimeLimitMs: 15000,
     });
@@ -369,7 +386,7 @@ export function MapRouteSurface({
           onToggleCommentLike={(commentId, liked) => likeCommentMutation.mutate({ commentId, liked })}
           onToggleCommentReplies={toggleCommentReplies}
           openCommentMenuId={openCommentMenuId}
-          playMapSingleplayer={playMapSingleplayer}
+          onPlayMap={openMapPlay}
           replyBody={replyBody}
           replyToCommentId={replyToCommentId}
           selectMapForParty={selectMapForParty}
@@ -382,6 +399,20 @@ export function MapRouteSurface({
           userEmail={userEmail}
           userId={userId}
         />
+        {playMap ? (
+          <PlayLaunchModal
+            kind="singleplayer"
+            extensionAvailable={extensionAvailable}
+            extensionStatus={extensionStatus}
+            mode={singleplayer.mode}
+            streetNames={singleplayer.streetNames}
+            disabled={singleplayerDisabled}
+            onModeChange={(mode) => setSingleplayer((current) => ({ ...current, mode }))}
+            onStreetNamesChange={(streetNames) => setSingleplayer((current) => ({ ...current, streetNames }))}
+            onClose={() => setPlayMap(null)}
+            onStart={startSingleplayerWithMap}
+          />
+        ) : null}
       </motion.div>
     );
   }
