@@ -1,6 +1,6 @@
 import type React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Github, Heart, Shield, Twitter, UserPlus, Youtube } from "lucide-react";
+import { ArrowUpRight, Github, Heart, Shield, Twitter, Users, Youtube } from "lucide-react";
 import MarkdownContent from "../../../components/ui/MarkdownContent";
 import { formatChangelogDate } from "../lib/lobby-ui";
 import {
@@ -173,7 +173,7 @@ export function InvitePartyCard({
       className="glass-panel glass-panel-interactive lobby-feature-card group flex w-full items-center gap-4 rounded-[20px] p-5 text-left transition disabled:cursor-not-allowed disabled:opacity-60"
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2ad18f]/14 text-[#77f0be]">
-        <UserPlus size={22} />
+        <Users size={22} />
       </div>
       <div className="min-w-0 flex-1">
         <span className="mb-1 block text-[12px] font-bold uppercase tracking-[0.16em] text-[#6b8b80]">CUSTOM</span>

@@ -78,6 +78,14 @@ type Identity struct {
 	BanReason             string
 }
 
+type PlayerSearchResult struct {
+	UserID       string                 `json:"userId"`
+	DisplayName  string                 `json:"displayName"`
+	AvatarURL    string                 `json:"avatarUrl,omitempty"`
+	IsGuest      bool                   `json:"isGuest"`
+	SelectedBadge *contracts.PlayerBadge `json:"selectedBadge,omitempty"`
+}
+
 type AdminPlayerSummary = contracts.AdminPlayerSummary
 
 type ModerationSignalSummary = contracts.ModerationSignalSummary
@@ -181,6 +189,7 @@ type UserNotification struct {
 	Type      string          `json:"type"`
 	Payload   json.RawMessage `json:"payload"`
 	CreatedAt time.Time       `json:"createdAt"`
+	ReadAt    *time.Time      `json:"readAt,omitempty"`
 }
 
 type SignupIPBan struct {
