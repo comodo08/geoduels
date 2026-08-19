@@ -34,27 +34,27 @@ function FriendRailItem({
 }) {
   const fallback = (friend.displayName || friend.userId || "?").slice(0, 2).toUpperCase();
   return (
-    <li className="group flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-white/[0.06]">
+    <li className="group flex items-center gap-3 rounded-xl px-2.5 py-2.5 hover:bg-white/[0.06]">
       <PlayerProfileLink
         userId={friend.userId}
         nickname={friend.displayName}
-        className="flex min-w-0 flex-1 items-center gap-2.5 hover:opacity-80"
+        className="flex min-w-0 flex-1 items-center gap-2.5"
         title={`View ${friend.displayName || "player"} profile`}
       >
-        <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center">
+        <span className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center">
           <AvatarBadge
           avatarUrl={friend.avatarUrl}
           fallback={fallback}
           alt={friend.displayName || "Player"}
-          size="sm"
+          size="md"
           className="bg-slate-800"
         />
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-900 ${statusDotClass(status)}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-slate-900 ${statusDotClass(status)}`}
         />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-bold text-white group-hover:text-emerald-100">
+        <span className="block truncate text-[14px] font-bold text-white">
           {friend.displayName || "Player"}
         </span>
         {friend.selectedBadge ? (
@@ -68,7 +68,7 @@ function FriendRailItem({
           title={invited ? "Invite sent" : "Invite to party"}
           disabled={invited}
           onClick={() => onInvite(friend.userId)}
-          className={`h-8 w-8 ${invited ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/20" : ""}`}
+          className={`h-9 w-9 ${invited ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/20" : ""}`}
         >
           {invited ? <Check size={15} aria-hidden="true" /> : <Users size={15} aria-hidden="true" />}
         </LobbyIconButton>
@@ -80,17 +80,17 @@ function FriendRailItem({
 export function FriendsLeftRail() {
   const social = useSocial();
 
-  if (!social.enabled) return null;
+  if (!social.enabled || !social.activeParty?.isOwner || social.friends.length === 0) return null;
 
   const presenceOf = (id: string): SocialPresenceStatus => social.presence[id] ?? "offline";
   const canInvite = !!social.activeParty && social.activeParty.isOwner;
   const partyMemberIds = new Set(social.activeParty?.memberIds ?? []);
 
   return (
-    <aside className="fixed left-3 top-1/4 z-40 hidden max-h-[70vh] w-64 flex-col overflow-hidden rounded-2xl xl:flex">
+    <aside className="fixed left-6 top-1/4 z-40 hidden max-h-[70vh] w-64 flex-col overflow-hidden rounded-2xl xl:flex">
       <div className="flex items-center gap-2 px-4 py-3">
         <UserCheck size={16} aria-hidden="true" />
-        <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[#9fc7b8]">
+        <span className="text-[11px] font-black uppercase tracking-[0.14em] text-white">
           Friends
         </span>
       </div>
@@ -117,7 +117,7 @@ export function FriendsLeftRail() {
                         key={friend.userId}
                         friend={friend}
                         status={presenceOf(friend.userId)}
-                        canInvite={canInvite && !partyMemberIds.has(friend.userId)}
+                        canInvite={canInvite && !partyMemberIds.has(friend.userId) && presenceOf(friend.userId) === "online"}
                         invited={social.invitedFriends.has(friend.userId)}
                         onInvite={(userId) => {
                           void social.sendPartyInvite(userId);

@@ -90,6 +90,37 @@ export function useSocial() {
   return useContext(SocialContext);
 }
 
+const DISMISSED_INVITES_MAX = 50;
+
+function dismissedInvitesStorageKey(userId: string): string {
+  return `geoduels.dismissedPartyInvites.${userId || "anon"}`;
+}
+
+function loadDismissedInvites(userId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(dismissedInvitesStorageKey(userId));
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissedInvites(userId: string, ids: Set<string>) {
+  try {
+    const trimmed = [...ids].slice(-DISMISSED_INVITES_MAX);
+    localStorage.setItem(dismissedInvitesStorageKey(userId), JSON.stringify(trimmed));
+  } catch {
+    // Ignore persistence failures; the in-memory set still protects this session.
+  }
+}
+
+function inviteIdentity(inviteCode?: string, inviterId?: string): string {
+  return `${String(inviteCode ?? "").toLowerCase()}|${String(inviterId ?? "")}`;
+}
+
 type SocialProviderProps = {
   accessToken: string;
   userId: string;
@@ -118,6 +149,7 @@ export function SocialProvider({
   const [invitedFriends, setInvitedFriends] = useState<Set<string>>(new Set());
   const prevPartyMembersRef = useRef<Set<string>>(new Set());
   const shownInviteIdRef = useRef<number | undefined>(undefined);
+  const dismissedInvitesRef = useRef<Set<string>>(loadDismissedInvites(userId));
 
   const showPartyInvite = useCallback(
     (notificationId: number | undefined, payload: Record<string, unknown>) => {
@@ -131,6 +163,25 @@ export function SocialProvider({
       });
     },
     [],
+  );
+
+  // Shows an incoming party invite only if it hasn't already been dismissed
+  // (by invite code + inviter) and isn't already on screen. Keeping the
+  // dismissed set in localStorage prevents a dismissed invite from reappearing
+  // after a page refresh or a re-invite to the same party.
+  const presentPartyInvite = useCallback(
+    (notificationId: number | undefined, payload: Record<string, unknown>) => {
+      const inviteCode = payload.inviteCode ? String(payload.inviteCode) : undefined;
+      const inviterId = payload.inviterId ? String(payload.inviterId) : undefined;
+      if (dismissedInvitesRef.current.has(inviteIdentity(inviteCode, inviterId))) {
+        return;
+      }
+      if (notificationId !== undefined && shownInviteIdRef.current === notificationId) {
+        return;
+      }
+      showPartyInvite(notificationId, payload);
+    },
+    [showPartyInvite],
   );
 
   const clearPartyInvite = useCallback(() => {
@@ -178,8 +229,8 @@ export function SocialProvider({
       setIncoming(requests.incoming);
       setOutgoing(requests.outgoing);
       const pendingInvite = notifResp.notifications.find((n) => n.type === "party_invite");
-      if (pendingInvite && shownInviteIdRef.current !== pendingInvite.id) {
-        showPartyInvite(
+      if (pendingInvite) {
+        presentPartyInvite(
           pendingInvite.id,
           (pendingInvite.payload ?? {}) as Record<string, unknown>,
         );
@@ -187,7 +238,7 @@ export function SocialProvider({
     } catch {
       // Presence and lists recover on the next refresh tick.
     }
-  }, [config, accessToken, enabled, showPartyInvite]);
+  }, [config, accessToken, enabled, presentPartyInvite]);
 
   const socketRef = useRef<SocialSocket | null>(null);
 
@@ -205,9 +256,7 @@ export function SocialProvider({
         const payload = event.payload as Record<string, unknown>;
         const notificationId =
           typeof payload.notificationId === "number" ? payload.notificationId : undefined;
-        if (shownInviteIdRef.current !== notificationId) {
-          showPartyInvite(notificationId, payload);
-        }
+        presentPartyInvite(notificationId, payload);
         void refresh();
       } else if (event.type === "party_invite_dismissed") {
         const friendUserId = String(event.payload.friendUserId ?? "");
@@ -293,8 +342,15 @@ export function SocialProvider({
         () => {},
       );
     }
+    const identity = inviteIdentity(partyInvite?.inviteCode, partyInvite?.inviterId);
+    if (identity && !dismissedInvitesRef.current.has(identity)) {
+      const next = new Set(dismissedInvitesRef.current);
+      next.add(identity);
+      dismissedInvitesRef.current = next;
+      saveDismissedInvites(userId, next);
+    }
     clearPartyInvite();
-  }, [clearPartyInvite, config, accessToken, partyInvite?.notificationId]);
+  }, [clearPartyInvite, config, accessToken, userId, partyInvite?.notificationId, partyInvite?.inviteCode, partyInvite?.inviterId]);
 
   const value: SocialContextValue = {
     enabled,
