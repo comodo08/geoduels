@@ -328,29 +328,42 @@ export function SocialProvider({
     [config, accessToken, activeParty],
   );
 
-  const acceptPartyInvite = useCallback(
-    (inviteCode: string) => {
-      clearPartyInvite();
-      void joinParty?.(inviteCode);
+  // Marks a party invite as consumed so it can't resurface on the next
+  // notification refresh. Accepting an invite must do this too, otherwise the
+  // still-unread notification is re-fetched by refresh() and shown again (and
+  // again) — producing several invites for what is really a single invite.
+  const consumePartyInvite = useCallback(
+    (invite: PartyInviteEvent | null) => {
+      if (!invite) return;
+      if (invite.notificationId) {
+        void markUserNotificationRead(config, accessToken, invite.notificationId).catch(
+          () => {},
+        );
+      }
+      const identity = inviteIdentity(invite.inviteCode, invite.inviterId);
+      if (identity && !dismissedInvitesRef.current.has(identity)) {
+        const next = new Set(dismissedInvitesRef.current);
+        next.add(identity);
+        dismissedInvitesRef.current = next;
+        saveDismissedInvites(userId, next);
+      }
     },
-    [clearPartyInvite, joinParty],
+    [config, accessToken, userId],
   );
 
   const dismissPartyInvite = useCallback(() => {
-    if (partyInvite?.notificationId) {
-      void markUserNotificationRead(config, accessToken, partyInvite.notificationId).catch(
-        () => {},
-      );
-    }
-    const identity = inviteIdentity(partyInvite?.inviteCode, partyInvite?.inviterId);
-    if (identity && !dismissedInvitesRef.current.has(identity)) {
-      const next = new Set(dismissedInvitesRef.current);
-      next.add(identity);
-      dismissedInvitesRef.current = next;
-      saveDismissedInvites(userId, next);
-    }
+    consumePartyInvite(partyInvite);
     clearPartyInvite();
-  }, [clearPartyInvite, config, accessToken, userId, partyInvite?.notificationId, partyInvite?.inviteCode, partyInvite?.inviterId]);
+  }, [clearPartyInvite, consumePartyInvite, partyInvite]);
+
+  const acceptPartyInvite = useCallback(
+    (inviteCode: string) => {
+      consumePartyInvite(partyInvite);
+      clearPartyInvite();
+      void joinParty?.(inviteCode);
+    },
+    [clearPartyInvite, consumePartyInvite, joinParty, partyInvite],
+  );
 
   const value: SocialContextValue = {
     enabled,

@@ -168,7 +168,7 @@ function FriendSearch() {
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search nickname..."
             aria-label="Search players by nickname"
-            className="pl-9 !border-white/5 !bg-black/20"
+            className="pl-9 !border-white/5 !bg-black/30"
           />
         </div>
         {(loading || trimmedQuery.length >= 2 || results.length > 0) && (
@@ -192,7 +192,7 @@ function FriendSearch() {
               return (
                 <div
                   key={player.userId}
-                  className="relative flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2 hover:bg-white/[0.03]"
+                className="relative flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 hover:bg-white/5"
                 >
                   <PlayerProfileLink
                     userId={player.userId}
@@ -302,9 +302,9 @@ function FriendsList() {
               status === "online" ? "success" : status === "away" ? "warning" : "muted";
             const canInviteFriend = canInvite && status === "online";
             return (
-              <li
-                key={friend.userId}
-                className="relative flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2 hover:bg-white/[0.03]"
+                <li
+                  key={friend.userId}
+                  className="relative flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 hover:bg-white/5"
               >
                 <PlayerProfileLink
                   userId={friend.userId}
