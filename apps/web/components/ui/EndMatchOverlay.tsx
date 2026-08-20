@@ -223,7 +223,11 @@ export default function EndMatchOverlay({
     );
   }
 
-  function renderSideCard(side: MatchSideView, opponent = false) {
+  function renderSideCard(
+    side: MatchSideView,
+    tone: "win" | "lose" | "draw" = "draw",
+    opponent = false,
+  ) {
     const reportUserId =
       opponent && side.participant.kind === "player"
         ? side.participant.id
@@ -245,8 +249,14 @@ export default function EndMatchOverlay({
         <Flag size={13} />
       </button>
     ) : null;
+    const toneClasses =
+      tone === "win"
+        ? "bg-[#2ad18f]/10 border-[#2ad18f]/20 [background-image:none]"
+        : tone === "lose"
+          ? "bg-red-500/10 border-red-500/20 [background-image:none]"
+          : "bg-white/[0.03] border-white/10";
     return (
-      <div className={`glass-panel flex flex-col items-center gap-3 rounded-[24px] p-6 text-center ${opponent ? 'bg-red-500/5 border-red-500/10' : 'bg-blue-500/5 border-blue-500/10'}`}>
+      <div className={`glass-panel flex flex-col items-center gap-3 rounded-[24px] p-6 text-center ${toneClasses}`}>
         <div className="flex flex-col items-center">
           <ParticipantIdentityCard
             participant={side.participant}
@@ -402,7 +412,7 @@ export default function EndMatchOverlay({
               {isDuelsMode ? (
                 <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12">
                   <div className="flex-1 max-w-[320px] w-full">
-                    {renderSideCard(sides.self)}
+                    {renderSideCard(sides.self, outcome ?? "draw")}
                   </div>
                   <div className="flex flex-col items-center gap-4">
                     <p className={`text-[12px] font-black uppercase tracking-[0.2em] ${
@@ -429,7 +439,11 @@ export default function EndMatchOverlay({
                     </button>
                   </div>
                   <div className="flex-1 max-w-[320px] w-full">
-                    {renderSideCard(sides.opponent, true)}
+                    {renderSideCard(
+                      sides.opponent,
+                      outcome === "win" ? "lose" : outcome === "lose" ? "win" : "draw",
+                      true,
+                    )}
                   </div>
                 </div>
               ) : (
