@@ -60,3 +60,4 @@ apps/web/assets/source-map-thumbnails/continents/*
 apps/web/assets/source-map-thumbnails/countries/*
 !apps/web/assets/source-map-thumbnails/countries/.gitkeep
 apps/web/next-env.d.ts
+scripts/dev-start.ps1
