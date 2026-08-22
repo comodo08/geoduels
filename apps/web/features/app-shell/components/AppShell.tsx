@@ -19,7 +19,7 @@ import {
 const backgroundImage = "/bg4.jpg";
 const backgroundPlaceholder = "/bg4.jpg";
 const backgroundOverlay =
-  "linear-gradient(rgba(18, 56, 41, 0.4), rgba(0, 0, 0, 0.9))";
+  "linear-gradient(rgba(18, 56, 41, 0.28), rgba(0, 0, 0, 0.77))";
 
 let backgroundLoaded = false;
 let backgroundLoadPromise: Promise<void> | null = null;
