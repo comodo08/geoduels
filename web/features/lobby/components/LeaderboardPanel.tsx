@@ -40,13 +40,13 @@ export function LeaderboardPanel({
       </div>
 
       <div className="overflow-hidden rounded-xl">
-        <div className="grid grid-cols-[72px_minmax(0,1fr)_90px] gap-3 border-b border-border-default px-4 py-3 text-label font-strong text-content-secondary sm:grid-cols-[72px_minmax(0,1fr)_110px_110px]">
+        <div className="grid grid-cols-[72px_minmax(0,1fr)_90px] gap-3 border-b border-surface-fill px-4 py-3 text-label font-strong text-content-secondary sm:grid-cols-[72px_minmax(0,1fr)_110px_110px]">
           <span>Rank</span>
           <span>Player</span>
           <span className="text-right">MMR</span>
           <span className="hidden text-right sm:block">Win Rate</span>
         </div>
-        <div className="divide-y divide-border-default">
+        <div className="divide-y divide-surface-fill">
           {(leaderboard?.entries || []).map((entry) => {
             const isSelf = entry.userId === userId;
             const winsValue =
