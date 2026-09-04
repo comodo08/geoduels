@@ -2,7 +2,7 @@ import type React from "react";
 import Link from "next/link";
 import { ArrowUpRight, Github, Heart, Shield, Twitter, UserPlus, Youtube } from "lucide-react";
 import MarkdownContent from "../../../components/ui/MarkdownContent";
-import { CardTitle, Eyebrow, HelperText, MutedText } from "../../../components/ui/typography";
+import { CardTitle, Eyebrow, HelperText, MutedText, Text } from "../../../components/ui/typography";
 import { formatChangelogDate } from "../lib/lobby-ui";
 import {
   LobbyNotice,
@@ -42,21 +42,23 @@ export function NewsPanel({
           </div>
         </div>
         {/* Artwork mask: the exact fade is part of this lobby-specific visual contract. */}
-        <div className="mt-4 max-h-[8rem] flex-1 overflow-hidden [mask-image:linear-gradient(180deg,black_48%,rgba(0,0,0,0.76)_70%,transparent_100%)] [-webkit-mask-image:linear-gradient(180deg,black_48%,rgba(0,0,0,0.76)_70%,transparent_100%)]">
-          <MarkdownContent
-            markdown={changelogBody}
-            compact
-            className="text-body-sm text-content-secondary"
-          />
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Link
-            href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border-default bg-surface-fill px-3 py-2 text-label font-strong text-status-success transition hover:border-border-strong hover:bg-surface-grouped hover:text-content-primary"
-          >
-            Read
-            <ArrowUpRight size={13} />
-          </Link>
+        <div className="relative mt-4 max-h-24 flex-1 overflow-hidden">
+          <div className="h-full [mask-image:linear-gradient(180deg,black_48%,rgba(0,0,0,0.76)_70%,transparent_100%)] [-webkit-mask-image:linear-gradient(180deg,black_48%,rgba(0,0,0,0.76)_70%,transparent_100%)]">
+            <MarkdownContent
+              markdown={changelogBody}
+              compact
+              className="text-body-sm text-content-secondary"
+            />
+          </div>
+          <div className="absolute bottom-0 right-0 rounded-full bg-surface-panel">
+            <Link
+              href={changelogSlug ? `/changelog/${encodeURIComponent(changelogSlug)}` : "/changelog"}
+              className="relative inline-flex shrink-0 items-center gap-1 rounded-full border border-border-default bg-surface-fill px-3 py-2 text-label font-strong text-status-success transition hover:border-border-strong hover:bg-surface-grouped hover:text-content-primary"
+            >
+              Read
+              <ArrowUpRight size={13} />
+            </Link>
+          </div>
         </div>
       </div>
     </AppPanel>
@@ -65,12 +67,12 @@ export function NewsPanel({
 
 export function DonateCard({ onSupportDonation }: { onSupportDonation: () => Promise<void> }) {
   return (
-    <AppCardButton onClick={() => void onSupportDonation()} className="group flex h-full min-h-44 w-full flex-1 items-center gap-4 p-5" style={{ animationDelay: "-0.75s" }}>
+    <AppCardButton onClick={() => void onSupportDonation()} className="group flex h-full min-h-36 w-full flex-1 items-center gap-4 p-5 hover:translate-y-0" style={{ animationDelay: "-0.75s" }}>
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-pink/15 text-brand-pink-soft">
         <Heart size={22} />
       </div>
       <div className="min-w-0 flex-1">
-        <Eyebrow className="mb-1 text-brand-pink-soft">Donate</Eyebrow>
+        <Text as="p" variant="body-sm" className="mb-1 font-strong uppercase tracking-label text-brand-pink-soft">Donate</Text>
         <CardTitle>Support GeoDuels</CardTitle>
         <MutedText className="mt-1 leading-heading">Help GeoDuels stay ad-free!</MutedText>
       </div>
@@ -91,8 +93,8 @@ export function SocialLinksCard() {
     { href: "https://youtube.com/@sourcelocation", label: "YouTube", icon: <Youtube size={20} /> },
   ];
   return (
-    <AppPanel className="flex h-full min-h-44 w-full flex-1 flex-col justify-center gap-4 rounded-2xl p-5" style={{ animationDelay: "-1s" }}>
-      <Eyebrow className="text-content-secondary">Community</Eyebrow>
+    <AppPanel className="flex h-full min-h-36 w-full flex-1 flex-col justify-center gap-4 rounded-2xl p-5" style={{ animationDelay: "-1s" }}>
+      <Text as="p" variant="body-sm" className="font-strong uppercase tracking-label text-content-secondary">Community</Text>
       <div className="flex flex-wrap gap-3">
         {links.map((social) => (
           <AppChromeIconLink key={social.label} href={social.href} target="_blank" rel="noreferrer" aria-label={social.label}>

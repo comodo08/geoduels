@@ -348,6 +348,14 @@ body {
     will-change: auto;
   }
 
+  .lobby-flat-cards .translucent-surface {
+    box-shadow: none;
+  }
+
+  .lobby-flat-cards .translucent-surface-interactive:hover {
+    box-shadow: none;
+  }
+
   .status-dot-wrap {
     contain: paint;
     isolation: isolate;
@@ -547,4 +555,37 @@ img {
 .minimap-interactive.leaflet-drag-target,
 .minimap-interactive .leaflet-interactive {
   cursor: crosshair !important;
+}
+
+.play-cta-glow-duel {
+  box-shadow:
+    var(--gd-shadow-1),
+    0 0 18px rgb(var(--gd-action-primary) / 0.14),
+    0 0 42px rgb(var(--gd-action-primary) / 0.06);
+}
+
+.play-cta-glow-duel:hover {
+  box-shadow:
+    var(--gd-shadow-1),
+    0 0 22px rgb(var(--gd-action-primary) / 0.2),
+    0 0 52px rgb(var(--gd-action-primary) / 0.09);
+}
+
+.play-cta-glow-singleplayer {
+  box-shadow:
+    var(--gd-shadow-1),
+    0 0 18px rgb(var(--gd-accent-blue) / 0.14),
+    0 0 42px rgb(var(--gd-accent-blue) / 0.06);
+}
+
+.play-cta-glow-singleplayer:hover {
+  box-shadow:
+    var(--gd-shadow-1),
+    0 0 22px rgb(var(--gd-accent-blue) / 0.2),
+    0 0 52px rgb(var(--gd-accent-blue) / 0.09);
+}
+
+.play-cta-glow-duel:disabled,
+.play-cta-glow-singleplayer:disabled {
+  box-shadow: none;
 }
