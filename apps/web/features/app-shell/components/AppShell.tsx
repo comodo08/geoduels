@@ -153,7 +153,7 @@ function AppShellHeader({
             </Tooltip>
             <Link
               href={`/players/${encodeURIComponent(auth.displayName || auth.userId)}`}
-              className="group flex min-w-0 cursor-pointer items-center justify-self-end gap-2.5 sm:gap-3"
+              className="group ml-3 flex min-w-0 cursor-pointer items-center justify-self-end gap-2.5 sm:ml-5 sm:gap-3"
             >
               <div className="hidden min-w-0 max-w-[7.5rem] flex-col items-end justify-center sm:flex sm:max-w-none">
                 <PlayerNameWithBadge

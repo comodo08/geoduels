@@ -6,7 +6,7 @@ import { Button } from "../../../components/ui/button";
 import { AppPanel } from "../../../components/ui/compositions";
 import { HorizontalScroller } from "../../../components/ui/HorizontalScroller";
 import { CenteredSpinner } from "../../../components/ui/Spinner";
-import { Eyebrow, Heading, SectionTitle } from "../../../components/ui/typography";
+import { Eyebrow, Heading } from "../../../components/ui/typography";
 import type { CustomMap } from "../../maps/lib/maps-client";
 import { mapThumbnailURL } from "../../maps/lib/map-thumbnails";
 import { MapCard } from "./maps/MapPanels";
@@ -42,7 +42,7 @@ type PlayModeActionButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 };
 
 const playModeActionButtonClass =
-  "w-full min-h-[54px] rounded-2xl px-4 py-0 text-body leading-collapsed transition-transform hover:scale-[1.01] active:scale-[0.98]";
+  "w-full min-h-[54px] rounded-xl px-4 py-0 text-body leading-collapsed transition-transform hover:scale-[1.01] active:scale-[0.98]";
 
 export function PlayModeActionButton({
   tone,
@@ -51,11 +51,13 @@ export function PlayModeActionButton({
   className = "",
   ...props
 }: PlayModeActionButtonProps) {
+  const glowClass =
+    tone === "duel" ? "play-cta-glow-duel" : "play-cta-glow-singleplayer";
   return (
     <Button
       {...props}
       variant={tone === "duel" ? "primary" : "blue"}
-      className={`${playModeActionButtonClass} ${className}`}
+      className={`${playModeActionButtonClass} ${glowClass} tracking-wide ${className}`}
       loading={loading}
       icon={<Play fill="currentColor" size={20} />}
     >
@@ -111,7 +113,7 @@ export const PlayPanel = forwardRef<HTMLDivElement, PlayPanelProps>(function Pla
         </div>
       </section>
 
-      <HorizontalScroller label="Trending Maps" itemClassName="w-80" viewAllHref="/maps">
+      <HorizontalScroller label="Trending Maps" className="lobby-flat-cards" itemClassName="w-80" viewAllHref="/maps" draggable>
         {trendingMapsLoading ? (
           <AppPanel className="flex h-44 w-80 items-center justify-center rounded-2xl">
             <CenteredSpinner label="Loading trending maps" />
@@ -127,7 +129,7 @@ export const PlayPanel = forwardRef<HTMLDivElement, PlayPanelProps>(function Pla
         )}
       </HorizontalScroller>
 
-      <HorizontalScroller label="GeoDuels" itemClassName="w-80 sm:w-96">
+      <HorizontalScroller label="GeoDuels" className="lobby-flat-cards" itemClassName="w-80 snap-start sm:w-[calc((72rem-2rem)/3)]">
         {changelogCard}
         {socialCard}
         {donateCard}
@@ -146,12 +148,12 @@ function QueueModeCard(props: {
   primaryButtonLabel: string;
 }) {
   return (
-    <AppPanel className="lobby-feature-card relative flex min-h-[180px] w-full flex-col gap-4 rounded-2xl p-4 transition-colors duration-emphasis sm:p-5">
+    <AppPanel className="lobby-feature-card group relative flex min-h-[180px] w-full flex-col gap-4 overflow-hidden rounded-2xl p-4 pt-8 transition-colors duration-emphasis sm:p-5">
       <div className="pointer-events-none absolute inset-0 bg-status-success/20 opacity-80 transition-opacity duration-emphasis" />
       <ModeMountains active={false} />
-        <ModeHeading eyebrow="Ranked" title="Duel" eyebrowClassName="text-status-success" />
+        <ModeHeading eyebrow="Ranked" title="Duel" eyebrowClassName="text-status-success" className="mt-2" />
 
-      <div className="relative z-content flex w-full flex-col">
+      <div className="relative z-content mt-auto flex w-full flex-col">
         {props.queueError ? <p className="mb-3 text-center text-body-sm font-semibold text-status-danger">{props.queueError}</p> : null}
         <PlayModeActionButton tone="duel" onClick={props.onDuelsPlay} disabled={props.duelDisabled}>
           {props.queuePaused || props.playPaused || props.maintenanceIsActive ? "Paused" : props.primaryButtonLabel}
@@ -169,12 +171,12 @@ function SingleplayerModeCard(props: {
   onSingleplayerPlay: () => void;
 }) {
   return (
-    <AppPanel className="lobby-feature-card relative flex min-h-[180px] w-full flex-col gap-4 rounded-2xl p-4 transition-colors duration-emphasis sm:p-5" style={{ animationDelay: "-2s" }}>
+    <AppPanel className="lobby-feature-card group relative flex min-h-[180px] w-full flex-col gap-4 overflow-hidden rounded-2xl p-4 pt-8 transition-colors duration-emphasis sm:p-5" style={{ animationDelay: "-2s" }}>
       <div className="pointer-events-none absolute inset-0 bg-status-info/20 opacity-80 transition-opacity duration-emphasis" />
       <ModeMountains hueRotate active={false} />
-      <ModeHeading eyebrow="Casual" title="Singleplayer" eyebrowClassName="text-status-info" />
+      <ModeHeading eyebrow="Casual" title="Singleplayer" eyebrowClassName="text-status-info" className="mt-2" />
 
-      <div className="relative z-content w-full">
+      <div className="relative z-content mt-auto w-full">
         <PlayModeActionButton
           tone="singleplayer"
           loading={props.isSingleplayerLoading}
@@ -190,13 +192,13 @@ function SingleplayerModeCard(props: {
 
 function DailyQuizModeCard() {
   return (
-    <AppPanel className="lobby-feature-card relative flex min-h-[180px] w-full flex-col gap-4 rounded-2xl p-4 sm:p-5">
+    <AppPanel className="lobby-feature-card relative flex min-h-[180px] w-full flex-col gap-4 rounded-2xl p-4 pt-8 sm:p-5">
       <div className="pointer-events-none absolute inset-0 bg-status-warning/20 opacity-80" />
-      <div className="relative z-content flex flex-1 flex-col justify-between gap-4">
-        <div>
-          <Eyebrow className="mb-1 text-status-warning">Daily</Eyebrow>
-          <SectionTitle className="text-content-primary drop-shadow-md">Quiz</SectionTitle>
-        </div>
+      <div className="relative z-content mt-2 flex flex-col">
+        <Eyebrow className="mb-1 text-status-warning">Daily</Eyebrow>
+        <Heading as="h1" variant="heading-lg" className="text-content-primary drop-shadow-md sm:text-display-md">Quiz</Heading>
+      </div>
+      <div className="relative z-content mt-auto flex w-full flex-col">
         <Button type="button" variant="secondary" className={playModeActionButtonClass} icon={<CalendarDays size={20} />} disabled>
           Very Soon
         </Button>
@@ -212,7 +214,7 @@ function ModeMountains({ active, hueRotate = false }: { active: boolean; hueRota
         src="/mountains.v1.svg"
         alt=""
         aria-hidden="true"
-        className={`absolute inset-0 h-full w-full object-cover object-center ${hueRotate ? "opacity-50" : ""}`}
+        className={`absolute inset-0 h-full w-full object-cover object-center transition-transform duration-emphasis ease-emphasized group-hover:scale-105 ${hueRotate ? "opacity-50" : ""}`}
         style={{ objectPosition: "center bottom", filter: hueRotate ? "hue-rotate(190deg)" : undefined }}
       />
     </div>
@@ -224,20 +226,22 @@ function ModeHeading({
   title,
   subtitle,
   eyebrowClassName,
+  className = "",
 }: {
   eyebrow: string;
   title: string;
   subtitle?: string;
   eyebrowClassName: string;
+  className?: string;
 }) {
   return (
-    <div className="relative z-content flex flex-col">
+    <div className={`relative z-content flex flex-col ${className}`}>
       <Eyebrow className={`mb-1 drop-shadow-sm ${eyebrowClassName}`}>
         {eyebrow}
       </Eyebrow>
-      <SectionTitle className="text-content-primary drop-shadow-md">
+      <Heading as="h1" variant="heading-lg" className="text-content-primary drop-shadow-md sm:text-display-md">
         {title}
-      </SectionTitle>
+      </Heading>
       {subtitle ? <span className="text-body font-medium text-content-primary drop-shadow-sm">{subtitle}</span> : null}
     </div>
   );

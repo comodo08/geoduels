@@ -66,6 +66,13 @@ Exceptions are narrow and owned, never a whole feature or directory:
 - A one-off arbitrary Tailwind value requires a documented reason, an owner,
   and a migration/removal issue. It may not be used for a color, font, radius,
   shadow, opacity, or z-index when an approved token exists.
+  - `features/lobby/components/PlayPanel.tsx`: `w-[calc((72rem-2rem)/3)]` —
+    the lobby news/community/donate cards split the `max-w-6xl` row into three
+    equal columns (card width = row minus the two 1rem scroller gaps, divided
+    by three) so the row width aligns exactly with the Play grid and Trending
+    Maps scroller above it. Owned by the `geometryExceptions` entry with
+    focused self-test coverage; remove if the row stops being a three-card
+    full-width scroller.
 - Legacy aliases are compatibility-only. New code must use the kebab-case
   semantic taxonomy, and each alias must have a tracked removal path.
 

@@ -17,7 +17,7 @@
   --gd-border-strong: rgb(255 255 255 / 20%);
   --gd-border-focus: #77f0be;
   --gd-action-primary: var(--gd-color-brand-green);
-  --gd-action-primary-hover: 14 165 104;
+  --gd-action-primary-hover: 66 224 165;
   --gd-action-secondary: var(--gd-surface-raised);
   --gd-action-danger: var(--gd-color-brand-orange);
   --gd-status-success: var(--gd-color-brand-green);
@@ -34,7 +34,7 @@
   --gd-accent-orange: var(--gd-color-brand-orange);
   --gd-map-marker-stroke: var(--gd-color-neutral-800);
   --gd-map-marker-opacity: 0.96;
-  --gd-background-overlay: linear-gradient(rgb(18 56 41 / 40%), rgb(0 0 0 / 90%));
+  --gd-background-overlay: linear-gradient(180deg, rgb(24 44 32 / 25%) 0%, rgb(15 27 17 / 40%) 35%, rgb(9 14 9 / 70%) 68%, rgb(6 10 7 / 88%) 100%);
   --gd-background-filter: blur(14px);
   --gd-background-filter-focus: blur(22px);
   --gd-forfeit-glow: inset 0 0 120px rgb(239 68 68 / 20%), inset 0 0 100px rgb(239 68 68 / 35%), inset 0 0 0 2px rgb(248 113 113 / 35%);
