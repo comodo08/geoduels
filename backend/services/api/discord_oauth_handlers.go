@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
 
 	"geoduels/pkg/auth"
@@ -27,35 +28,31 @@ type discordUser struct {
 	Verified      bool   `json:"verified"`
 }
 
-func (a *api) discordOAuthStart(w http.ResponseWriter, r *http.Request) {
+func (a *api) discordOAuthStart(c echo.Context) error {
+	r := c.Request()
 	if !a.discordOAuthEnabled() {
-		http.Error(w, "discord sign-in unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "discord sign-in unavailable")
 	}
 	var req struct {
 		ReturnTo string `json:"returnTo"`
 		Intent   string `json:"intent"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
-		http.Error(w, "missing origin", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "missing origin")
 	}
 	allowedOrigins := allowedOriginsSet()
 	if !allowedOrigins[origin] && !allowedOrigins["*"] {
-		http.Error(w, "origin not allowed", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "origin not allowed")
 	}
 
 	intent := normalizeOAuthIntent(req.Intent)
 	linkSub, err := a.oauthLinkSubject(r, intent)
 	if err != nil {
-		http.Error(w, oauthStartError(intent), http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, oauthStartError(intent))
 	}
 
 	state := oauthStateClaims{
@@ -72,41 +69,40 @@ func (a *api) discordOAuthStart(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, state)
 	stateToken, err := token.SignedString(a.appAuthSecret)
 	if err != nil {
-		http.Error(w, "failed to create oauth state", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to create oauth state")
 	}
 	authURL := a.discordOAuthConfig(a.discordRedirectURI(r)).AuthCodeURL(
 		stateToken,
 		oauth2.SetAuthURLParam("prompt", "consent"),
 	)
-	_ = json.NewEncoder(w).Encode(map[string]string{"authURL": authURL})
+	return writeJSON(c, map[string]string{"authURL": authURL})
 }
 
-func (a *api) discordOAuthCallback(w http.ResponseWriter, r *http.Request) {
+func (a *api) discordOAuthCallback(c echo.Context) error {
+	r := c.Request()
 	if !a.discordOAuthEnabled() {
-		http.Error(w, "discord sign-in unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "discord sign-in unavailable")
 	}
 	payload := map[string]any{"ok": false, "error": "Sign-in failed", "provider": "discord"}
 	targetOrigin := ""
 	defer func() {
-		renderOAuthPopup(w, targetOrigin, payload)
+		renderOAuthPopup(c, targetOrigin, payload)
 	}()
 
-	if errParam := strings.TrimSpace(r.URL.Query().Get("error")); errParam != "" {
+	if errParam := strings.TrimSpace(c.QueryParam("error")); errParam != "" {
 		payload["error"] = errParam
-		return
+		return nil
 	}
-	code := strings.TrimSpace(r.URL.Query().Get("code"))
-	stateToken := strings.TrimSpace(r.URL.Query().Get("state"))
+	code := strings.TrimSpace(c.QueryParam("code"))
+	stateToken := strings.TrimSpace(c.QueryParam("state"))
 	if code == "" || stateToken == "" {
 		payload["error"] = "missing oauth response"
-		return
+		return nil
 	}
 	state, err := a.parseOAuthState(stateToken)
 	if err != nil {
 		payload["error"] = "invalid oauth state"
-		return
+		return nil
 	}
 	targetOrigin = state.Origin
 	payload["returnTo"] = state.ReturnTo
@@ -115,7 +111,7 @@ func (a *api) discordOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("discord oauth callback: profile failed: %v", err)
 		payload["error"] = "discord exchange failed"
-		return
+		return nil
 	}
 	displayName := strings.TrimSpace(profile.GlobalName)
 	if displayName == "" {
@@ -140,22 +136,23 @@ func (a *api) discordOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("discord oauth callback: persist identity failed: %v", err)
 		payload["error"] = oauthUserError(err)
-		return
+		return nil
 	}
 	refreshToken, sessionRecord, err := a.createSession(identity.Sub, r)
 	if err != nil {
 		log.Printf("discord oauth callback: create session failed for user %s: %v", identity.Sub, err)
 		payload["error"] = "issue session failed"
-		return
+		return nil
 	}
 	accessToken, err := auth.IssueAppAccessToken(a.appAuthSecret, identity.Sub, sessionRecord.ID, a.accessTokenTTL)
 	if err != nil {
 		log.Printf("discord oauth callback: issue access token failed for user %s session %s: %v", identity.Sub, sessionRecord.ID, err)
 		payload["error"] = "issue session failed"
-		return
+		return nil
 	}
-	a.setRefreshCookie(w, r, refreshToken)
+	a.setRefreshCookie(c, r, refreshToken)
 	payload = a.oauthSessionPayload("discord", accessToken, identity, displayName, state.ReturnTo)
+	return nil
 }
 
 func (a *api) discordOAuthEnabled() bool {

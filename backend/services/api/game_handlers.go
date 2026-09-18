@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
@@ -23,39 +23,35 @@ import (
 	"geoduels/pkg/sessionpolicy"
 )
 
-func (a *api) updateSelectedBadge(w http.ResponseWriter, r *http.Request) {
-	claims, err := a.authenticatedClaims(r)
+func (a *api) updateSelectedBadge(c echo.Context) error {
+	claims, err := a.authenticatedClaims(c.Request())
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	var req struct {
 		BadgeID string `json:"badgeId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
-		return
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return plainTextError(c, http.StatusBadRequest, "invalid request")
 	}
 	profile, err := a.profiles.UpdateSelectedBadge(claims.Sub, req.BadgeID)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unavailable") {
-			http.Error(w, "badge unavailable", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "badge unavailable")
 		}
-		http.Error(w, "profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "profile unavailable")
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	return json.NewEncoder(c.Response()).Encode(map[string]any{
 		"badges":        profile.Badges,
 		"selectedBadge": profile.SelectedBadge,
 	})
 }
 
-func (a *api) userNotifications(w http.ResponseWriter, r *http.Request) {
+func (a *api) userNotifications(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	if strings.EqualFold(r.URL.Query().Get("filter"), "all") {
 		if a.notificationService != nil {
@@ -63,67 +59,57 @@ func (a *api) userNotifications(w http.ResponseWriter, r *http.Request) {
 			beforeID, _ := strconv.ParseInt(r.URL.Query().Get("beforeId"), 10, 64)
 			notifications, err := a.notificationService.Inbox(r.Context(), claims.Sub, limit, beforeID)
 			if err != nil {
-				http.Error(w, "notifications unavailable", http.StatusInternalServerError)
-				return
+				return plainTextError(c, http.StatusInternalServerError, "notifications unavailable")
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"notifications": notifications})
-			return
+			return writeJSON(c, map[string]any{"notifications": notifications})
 		}
 	}
 	notifications, err := a.notificationService.List(r.Context(), claims.Sub, 10)
 	if err != nil {
-		http.Error(w, "notifications unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "notifications unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"notifications": notifications})
+	return writeJSON(c, map[string]any{"notifications": notifications})
 }
 
-func (a *api) markAllUserNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	claims, err := a.authenticatedClaims(r)
+func (a *api) markAllUserNotificationsRead(c echo.Context) error {
+	claims, err := a.authenticatedClaims(c.Request())
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	if a.notificationService == nil {
-		http.Error(w, "notifications unavailable", http.StatusNotImplemented)
-		return
+		return plainTextError(c, http.StatusNotImplemented, "notifications unavailable")
 	}
-	if err := a.notificationService.MarkAllRead(r.Context(), claims.Sub); err != nil {
-		http.Error(w, "failed to mark notifications", http.StatusInternalServerError)
-		return
+	if err := a.notificationService.MarkAllRead(c.Request().Context(), claims.Sub); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to mark notifications")
 	}
 	if a.live != nil {
 		a.live.publish(claims.Sub, contracts.LiveEvent{Type: contracts.LiveNotificationReadAll})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) markUserNotificationRead(w http.ResponseWriter, r *http.Request) {
-	claims, err := a.authenticatedClaims(r)
+func (a *api) markUserNotificationRead(c echo.Context) error {
+	claims, err := a.authenticatedClaims(c.Request())
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	notificationID, err := strconv.ParseInt(strings.TrimSpace(mux.Vars(r)["id"]), 10, 64)
+	notificationID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid notification id", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid notification id")
 	}
-	if err := a.notificationService.MarkRead(r.Context(), claims.Sub, notificationID); err != nil {
-		http.Error(w, "failed to mark notification", http.StatusInternalServerError)
-		return
+	if err := a.notificationService.MarkRead(c.Request().Context(), claims.Sub, notificationID); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to mark notification")
 	}
 	if a.live != nil {
 		a.live.publish(claims.Sub, contracts.LiveEvent{Type: contracts.LiveNotificationRead, NotificationID: notificationID})
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
-	mode := strings.TrimSpace(r.URL.Query().Get("mode"))
-	season := strings.TrimSpace(r.URL.Query().Get("season"))
+func (a *api) leaderboard(c echo.Context) error {
+	r := c.Request()
+	mode := strings.TrimSpace(c.QueryParam("mode"))
+	season := strings.TrimSpace(c.QueryParam("season"))
 	limit := 100
 	offset := 0
 	if mode == "" {
@@ -131,26 +117,23 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, err := a.seasons.GetRankedSeasonSettings()
 	if err != nil {
-		http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "leaderboard unavailable")
 	}
 	if season == "" {
 		season = settings.ActiveSeasonID
 	}
 
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+	if raw := strings.TrimSpace(c.QueryParam("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			http.Error(w, "invalid limit", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid limit")
 		}
 		limit = parsed
 	}
-	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+	if raw := strings.TrimSpace(c.QueryParam("offset")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			http.Error(w, "invalid offset", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid offset")
 		}
 		offset = parsed
 	}
@@ -166,8 +149,7 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := a.leaderboardService.List(r.Context(), mode, season, limit, offset)
 	if err != nil {
-		http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "leaderboard unavailable")
 	}
 
 	selfRank := 0
@@ -175,16 +157,14 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 	if claims, ok := a.optionalAuthenticatedClaims(r); ok {
 		overview, err := a.leaderboardService.Overview(r.Context(), claims.Sub, mode, season, 10)
 		if err != nil {
-			http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
-			return
+			return plainTextError(c, http.StatusInternalServerError, "leaderboard unavailable")
 		}
 		selfRank = overview.SelfRank
 		totalPlayers = overview.TotalPlayers
 	} else {
 		overview, err := a.leaderboardService.Overview(r.Context(), "", mode, season, 10)
 		if err != nil {
-			http.Error(w, "leaderboard unavailable", http.StatusInternalServerError)
-			return
+			return plainTextError(c, http.StatusInternalServerError, "leaderboard unavailable")
 		}
 		totalPlayers = overview.TotalPlayers
 	}
@@ -202,8 +182,7 @@ func (a *api) leaderboard(w http.ResponseWriter, r *http.Request) {
 		response["nextResetAt"] = settings.NextResetAt
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return writeJSON(c, response)
 }
 
 func (a *api) optionalAuthenticatedClaims(r *http.Request) (auth.AppClaims, bool) {
@@ -218,98 +197,80 @@ func (a *api) optionalAuthenticatedClaims(r *http.Request) (auth.AppClaims, bool
 	return claims, true
 }
 
-func (a *api) match(w http.ResponseWriter, r *http.Request) {
-	if _, err := a.authenticatedClaims(r); err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+func (a *api) match(c echo.Context) error {
+	if _, err := a.authenticatedClaims(c.Request()); err != nil {
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	id := a.resolveEntityID("match", mux.Vars(r)["id"])
+	id := a.resolveEntityID("match", c.Param("id"))
 	snapshot, found, err := a.getPublicFinalMatchSnapshot(id)
 	if err != nil || !found {
-		http.Error(w, "match not found", http.StatusNotFound)
-		return
+		return plainTextError(c, http.StatusNotFound, "match not found")
 	}
-	_ = json.NewEncoder(w).Encode(snapshot)
+	return json.NewEncoder(c.Response()).Encode(snapshot)
 }
 
-func (a *api) matchSession(w http.ResponseWriter, r *http.Request) {
-	claims, _, err := a.authenticatedAccount(r)
+func (a *api) matchSession(c echo.Context) error {
+	claims, _, err := a.authenticatedAccount(c.Request())
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
-	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", c.Param("id"))
 	if matchID == "" {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid match")
 	}
-	resp, err := a.resolveMatchSession(r.Context(), claims.Sub, matchID)
+	resp, err := a.resolveMatchSession(c.Request().Context(), claims.Sub, matchID)
 	if err != nil {
-		http.Error(w, "match unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "match unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	return writeJSON(c, resp)
 }
 
-func (a *api) matchRoute(w http.ResponseWriter, r *http.Request) {
-	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
+func (a *api) matchRoute(c echo.Context) error {
+	matchID := a.resolveEntityID("match", c.Param("id"))
 	if matchID == "" {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid match")
 	}
-	claims, authenticated := a.optionalAuthenticatedClaims(r)
+	claims, authenticated := a.optionalAuthenticatedClaims(c.Request())
 	userID := ""
 	if authenticated {
 		userID = claims.Sub
 		if banned, err := a.accountBanned(userID); err == nil && banned {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(contracts.MatchSessionResponse{Status: "forbidden", MatchID: matchID})
-			return
+			return writeJSON(c, contracts.MatchSessionResponse{Status: "forbidden", MatchID: matchID})
 		}
 	}
-	resp, err := a.resolveMatchRoute(r.Context(), userID, authenticated, matchID)
+	resp, err := a.resolveMatchRoute(c.Request().Context(), userID, authenticated, matchID)
 	if err != nil {
-		http.Error(w, "match unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "match unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	return writeJSON(c, resp)
 }
 
-func (a *api) matchBootstrap(w http.ResponseWriter, r *http.Request) {
-	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
+func (a *api) matchBootstrap(c echo.Context) error {
+	matchID := a.resolveEntityID("match", c.Param("id"))
 	if matchID == "" {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid match")
 	}
-	authPayload, nextRefreshToken, err := a.rotateSessionFromCookie(r)
+	authPayload, nextRefreshToken, err := a.rotateSessionFromCookie(c.Request())
 	if err != nil {
-		a.clearRefreshCookie(w, r)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		a.clearRefreshCookie(c, c.Request())
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	a.setRefreshCookie(w, r, nextRefreshToken)
+	a.setRefreshCookie(c, c.Request(), nextRefreshToken)
 	banned, err := a.accountBanned(authPayload.User.ID)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	if banned {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(contracts.MatchBootstrapResponse{
+		return writeJSON(c, contracts.MatchBootstrapResponse{
 			Auth:  authPayload,
 			Match: contracts.MatchSessionResponse{Status: "forbidden", MatchID: matchID},
 		})
-		return
 	}
-	matchPayload, err := a.resolveMatchSession(r.Context(), authPayload.User.ID, matchID)
+	matchPayload, err := a.resolveMatchSession(c.Request().Context(), authPayload.User.ID, matchID)
 	if err != nil {
-		http.Error(w, "match unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "match unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(contracts.MatchBootstrapResponse{
+	return writeJSON(c, contracts.MatchBootstrapResponse{
 		Auth:  authPayload,
 		Match: matchPayload,
 	})
@@ -411,7 +372,7 @@ func (a *api) attachReturnTarget(ctx context.Context, resp *contracts.MatchSessi
 	}
 	var target *contracts.MatchReturnTarget
 	if a.db != nil {
-		if persisted, found, err := a.db.MatchSessionReturnTarget(ctx, matchID); err == nil && found {
+		if persisted, found, err := a.matchStore.MatchSessionReturnTarget(ctx, matchID); err == nil && found {
 			target = persisted
 		}
 	}
@@ -492,21 +453,19 @@ func sanitizeFinalMatchSnapshot(snapshot contracts.MatchSnapshot) contracts.Matc
 	return snapshot
 }
 
-func (a *api) createMatchReport(w http.ResponseWriter, r *http.Request) {
-	claims, err := a.authenticatedClaims(r)
+func (a *api) createMatchReport(c echo.Context) error {
+	claims, err := a.authenticatedClaims(c.Request())
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", c.Param("id"))
 	var req struct {
 		ReportedUserID string `json:"reportedUserId"`
 		Category       string `json:"category"`
 		Reason         string `json:"reason"`
 	}
-	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+	if err := decodeJSONBody(c.Request(), &req); err != nil {
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	reportedUserID := strings.TrimSpace(req.ReportedUserID)
 	created, err := a.moderation.CreatePlayerReportSignal(CreatePlayerReportSignalParams{
@@ -517,79 +476,66 @@ func (a *api) createMatchReport(w http.ResponseWriter, r *http.Request) {
 		Reason:         req.Reason,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(created)
+	return writeJSONStatus(c, http.StatusCreated, created)
 }
 
-func (a *api) startSession(w http.ResponseWriter, r *http.Request) {
-	status, err := a.maintenanceStatus(r.Context())
+func (a *api) startSession(c echo.Context) error {
+	status, err := a.maintenanceStatus(c.Request().Context())
 	if err != nil {
-		http.Error(w, "singleplayer unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "singleplayer unavailable")
 	}
 	if status.PlayBlocked() {
-		http.Error(w, maintenancePlayMessage(status), http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, maintenancePlayMessage(status))
 	}
 	var req contracts.SessionStartRequest
-	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+	if err := decodeJSONBody(c.Request(), &req); err != nil {
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	mode := sessionpolicy.NormalizeMode(req.Mode, "")
 	switch mode {
 	case contracts.ModeSingleplayer:
-		a.startSingleplayerSession(w, r)
+		return a.startSingleplayerSession(c)
 	default:
-		http.Error(w, "unsupported mode", http.StatusBadRequest)
+		return plainTextError(c, http.StatusBadRequest, "unsupported mode")
 	}
 }
 
-func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
+func (a *api) startSingleplayerSession(c echo.Context) error {
+	r := c.Request()
 	status, err := a.maintenanceStatus(r.Context())
 	if err != nil {
-		http.Error(w, "singleplayer unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "singleplayer unavailable")
 	}
 	if status.PlayBlocked() {
-		http.Error(w, maintenancePlayMessage(status), http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, maintenancePlayMessage(status))
 	}
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	identity, err := a.authenticatedIdentity(r)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	if identity.NicknameRequired {
-		http.Error(w, "nickname required", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "nickname required")
 	}
 	if identity.AuthMigrationRequired {
-		http.Error(w, "connect discord to continue", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "connect discord to continue")
 	}
 	var requestedConfig contracts.MatchConfig
 	requestedReturnTarget := &contracts.MatchReturnTarget{Kind: contracts.MatchReturnHome}
 	if r.Body != nil {
 		raw, readErr := io.ReadAll(io.LimitReader(r.Body, 16<<10))
 		if readErr != nil {
-			http.Error(w, "invalid singleplayer config", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid singleplayer config")
 		}
 		var keys map[string]json.RawMessage
 		if len(raw) > 0 {
 			if err := json.Unmarshal(raw, &keys); err != nil {
-				http.Error(w, "invalid singleplayer config", http.StatusBadRequest)
-				return
+				return plainTextError(c, http.StatusBadRequest, "invalid singleplayer config")
 			}
 		}
 		if _, wrapped := keys["config"]; wrapped {
@@ -598,15 +544,13 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 				ReturnTarget *contracts.MatchReturnTarget `json:"returnTarget,omitempty"`
 			}
 			if err := json.Unmarshal(raw, &request); err != nil {
-				http.Error(w, "invalid singleplayer config", http.StatusBadRequest)
-				return
+				return plainTextError(c, http.StatusBadRequest, "invalid singleplayer config")
 			}
 			requestedConfig = request.Config
 			requestedReturnTarget = contracts.NormalizeMatchReturnTarget(request.ReturnTarget)
 		} else if len(raw) > 0 {
 			if err := json.Unmarshal(raw, &requestedConfig); err != nil {
-				http.Error(w, "invalid singleplayer config", http.StatusBadRequest)
-				return
+				return plainTextError(c, http.StatusBadRequest, "invalid singleplayer config")
 			}
 		}
 	}
@@ -616,17 +560,14 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 		switch a.launcher().ValidateAssignment(r.Context(), assigned) {
 		case matchlaunch.AssignmentValid:
 			if mode == contracts.ModeDuel {
-				a.writeSessionConflict(w, "ACTIVE_DUEL_MATCH", "Finish or forfeit your active duel before starting singleplayer.")
-				return
+				return a.writeSessionConflict(c, "ACTIVE_DUEL_MATCH", "Finish or forfeit your active duel before starting singleplayer.")
 			}
 			if err := a.replaceActiveSingleplayer(r.Context(), userID, assigned); err != nil {
-				http.Error(w, "singleplayer unavailable", http.StatusBadGateway)
-				return
+				return plainTextError(c, http.StatusBadGateway, "singleplayer unavailable")
 			}
 		case matchlaunch.AssignmentPending:
 			if mode == contracts.ModeDuel {
-				a.writeSessionConflict(w, "ACTIVE_DUEL_MATCH", "Finish or forfeit your active duel before starting singleplayer.")
-				return
+				return a.writeSessionConflict(c, "ACTIVE_DUEL_MATCH", "Finish or forfeit your active duel before starting singleplayer.")
 			}
 			_ = a.coord.ClearAssignment(context.Background(), assigned)
 			_ = a.runtimeStore.RecordRuntimeMatch(r.Context(), assigned.MatchID, string(contracts.MatchEnded), assigned.NodeEpoch, true)
@@ -636,8 +577,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 	}
 	profile, err := a.profiles.GetProfile(userID)
 	if err != nil {
-		http.Error(w, "profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "profile unavailable")
 	}
 	if profile.DisplayName == "" {
 		profile.DisplayName = userID
@@ -649,8 +589,7 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 	if requestedMapID == "" {
 		resolvedMapID, err := a.gameplayMaps.ResolveGameplayMapID(contracts.ModeSingleplayer, requestedConfig.Ruleset, "")
 		if err != nil {
-			http.Error(w, "singleplayer unavailable", http.StatusInternalServerError)
-			return
+			return plainTextError(c, http.StatusInternalServerError, "singleplayer unavailable")
 		}
 		requestedConfig.MapID = resolvedMapID
 	}
@@ -692,16 +631,13 @@ func (a *api) startSingleplayerSession(w http.ResponseWriter, r *http.Request) {
 	}
 	assigned, err := a.launcher().EnsureAssignment(r.Context(), found)
 	if err != nil {
-		http.Error(w, "singleplayer unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "singleplayer unavailable")
 	}
 	payload, healthy, err := a.launcher().AssignedPayload(userID, assigned)
 	if err != nil || !healthy {
-		http.Error(w, "singleplayer unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "singleplayer unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(payload)
+	return writeJSON(c, payload)
 }
 
 func soloSessionID() string {
@@ -740,10 +676,8 @@ func (a *api) replaceActiveSingleplayer(ctx context.Context, userID string, assi
 	return a.coord.ClearAssignment(context.Background(), assigned)
 }
 
-func (a *api) writeSessionConflict(w http.ResponseWriter, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusConflict)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+func (a *api) writeSessionConflict(c echo.Context, code, message string) error {
+	return writeJSONStatus(c, http.StatusConflict, map[string]string{
 		"code":    code,
 		"message": message,
 	})

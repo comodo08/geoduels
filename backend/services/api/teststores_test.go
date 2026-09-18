@@ -1,40 +1,43 @@
 package main
 
-import "geoduels/pkg/persistence"
-import socialdomain "geoduels/pkg/social"
+import (
+	"geoduels/internal/accounts"
+	"geoduels/internal/admin"
+	"geoduels/internal/authsession"
+	"geoduels/internal/badges"
+	"geoduels/internal/chat"
+	"geoduels/internal/content"
+	"geoduels/internal/maps"
+	"geoduels/internal/matches"
+	"geoduels/internal/moderation"
+	"geoduels/internal/parties"
+	"geoduels/internal/profiles"
+	"geoduels/internal/seasons"
+	socialdomain "geoduels/internal/social"
+)
 
-// testRepositories is the aggregate narrow-repository surface used by API test
-// doubles. Fakes embed it so any subset of fields can be populated; calls to
-// unimplemented methods panic at the interface boundary, matching the previous
-// embedded aggregate behavior.
 type testRepositories interface {
-	persistence.AccountRepository
-	persistence.SessionRepository
-	persistence.ProfileRepository
-	persistence.PreferenceRepository
-	persistence.BadgeRepository
-	persistence.LeaderboardRepository
-	persistence.MatchRepository
-	persistence.ModerationRepository
-	persistence.AdminRepository
-	persistence.ContentRepository
-	persistence.SeasonRepository
-	persistence.GameplayMapRepository
-	persistence.RuntimeRepository
-	persistence.ChatRepository
-	persistence.PartyRepository
+	accounts.Store
+	authsession.Store
+	profiles.Store
+	badges.Store
+	matches.Store
+	moderation.Store
+	admin.Store
+	content.Store
+	seasons.Store
+	maps.Store
+	chat.Store
+	parties.Store
 	socialdomain.Store
 }
 
-// withTestRepositories populates every repository field of an api under test.
 func withTestRepositories(store testRepositories) func(*api) {
 	return func(a *api) {
 		a.accounts = store
 		a.sessions = store
 		a.profiles = store
-		a.preferenceStore = store
 		a.badges = store
-		a.leaderboardStore = store
 		a.matchStore = store
 		a.moderation = store
 		a.admin = store

@@ -1,23 +1,25 @@
 package main
 
 import (
+	"geoduels/internal/profiles"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
+
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type mapUserTestStore struct {
 	testRepositories
-	profile persistence.Profile
+	profile profiles.Profile
 }
 
-func (s *mapUserTestStore) GetProfile(userID string) (persistence.Profile, error) {
+func (s *mapUserTestStore) GetProfile(userID string) (profiles.Profile, error) {
 	p := s.profile
 	p.UserID = userID
 	return p, nil
@@ -30,14 +32,15 @@ func TestMapUserRejectsGuestWhenRegisteredAccountRequired(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	a := &api{
-		accounts: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, sessions: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, profiles: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, preferenceStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, badges: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, leaderboardStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, matchStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, moderation: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, admin: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, content: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, seasons: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, gameplayMaps: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, runtimeStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, chatStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, parties: &mapUserTestStore{profile: persistence.Profile{IsGuest: true}}, social: socialdomain.NewService(&mapUserTestStore{profile: persistence.Profile{IsGuest: true}}),
+		accounts: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, sessions: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, profiles: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, badges: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, matchStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, moderation: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, admin: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, content: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, seasons: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, gameplayMaps: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, runtimeStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, chatStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, parties: &mapUserTestStore{profile: profiles.Profile{IsGuest: true}}, social: socialdomain.NewService(&mapUserTestStore{profile: profiles.Profile{IsGuest: true}}),
 		appAuthSecret: secret,
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/maps/map-1/favorite", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
 
-	userID, ok := a.mapUser(rec, req, true)
+	userID, ok := a.mapUser(c, true)
 
 	if ok || userID != "" {
 		t.Fatalf("guest map user unexpectedly allowed: ok=%v userID=%q", ok, userID)
@@ -57,14 +60,15 @@ func TestMapUserAllowsRegisteredAccountForMapInteractions(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	a := &api{
-		accounts: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, sessions: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, profiles: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, preferenceStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, badges: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, leaderboardStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, matchStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, moderation: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, admin: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, content: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, seasons: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, gameplayMaps: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, runtimeStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, chatStore: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, parties: &mapUserTestStore{profile: persistence.Profile{IsGuest: false}}, social: socialdomain.NewService(&mapUserTestStore{profile: persistence.Profile{IsGuest: false}}),
+		accounts: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, sessions: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, profiles: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, badges: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, matchStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, moderation: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, admin: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, content: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, seasons: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, gameplayMaps: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, runtimeStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, chatStore: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, parties: &mapUserTestStore{profile: profiles.Profile{IsGuest: false}}, social: socialdomain.NewService(&mapUserTestStore{profile: profiles.Profile{IsGuest: false}}),
 		appAuthSecret: secret,
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/maps/map-1/favorite", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
 
-	userID, ok := a.mapUser(rec, req, true)
+	userID, ok := a.mapUser(c, true)
 
 	if !ok || userID != "user-1" {
 		t.Fatalf("registered map user rejected: ok=%v userID=%q", ok, userID)

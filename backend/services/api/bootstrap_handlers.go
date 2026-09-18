@@ -4,13 +4,16 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/labstack/echo/v4"
+
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/sessionpolicy"
 )
 
-func (a *api) bootstrap(w http.ResponseWriter, r *http.Request) {
+func (a *api) bootstrap(c echo.Context) error {
+	r := c.Request()
 	global := a.statusHub().current()
 	response := contracts.BootstrapResponse{
 		Version:  1,
@@ -23,26 +26,21 @@ func (a *api) bootstrap(w http.ResponseWriter, r *http.Request) {
 	record, err := a.authSessionFromCookies(r)
 	if err != nil {
 		if errors.Is(err, errMissingRefreshToken) || errors.Is(err, errUnavailableRefreshSession) {
-			writeJSON(w, response)
-			return
+			return writeJSON(c, response)
 		}
-		http.Error(w, "session restoration failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "session restoration failed")
 	}
 	identity, err := a.accounts.GetIdentity(record.UserID)
 	if err != nil {
-		http.Error(w, "identity unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "identity unavailable")
 	}
 	authPayload, err := a.issueReadOnlyAuthSessionPayload(identity, record.ID)
 	if err != nil {
-		http.Error(w, "session restoration failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "session restoration failed")
 	}
 	profile, err := a.profiles.GetProfile(record.UserID)
 	if err != nil {
-		http.Error(w, "profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "profile unavailable")
 	}
 	response.Auth = &authPayload
 	accountType := "registered"
@@ -72,7 +70,7 @@ func (a *api) bootstrap(w http.ResponseWriter, r *http.Request) {
 			response.Activity.Notifications = notifications
 		}
 	}
-	writeJSON(w, response)
+	return writeJSON(c, response)
 }
 
 func (a *api) activeMatch(r *http.Request, userID string) *contracts.ResumableSessionResponse {

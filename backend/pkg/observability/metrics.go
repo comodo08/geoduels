@@ -1,13 +1,10 @@
 package observability
 
 import (
-	"bufio"
-	"io"
-	"net"
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -105,75 +102,21 @@ func Handler(reg *prometheus.Registry) http.Handler {
 	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 }
 
-func (m *APIMetrics) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// EchoMiddleware records request metrics keyed by the Echo route template
+// (for example /v1/matches/:id) rather than the concrete request path.
+// Register it after httpx.CORS, mirroring the previous cors(metrics(...)) ordering.
+func (m *APIMetrics) EchoMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		start := time.Now()
-		rw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(rw, r)
-		path := requestMetricPath(next, r)
-		m.Requests.WithLabelValues(path, r.Method, statusCode(rw.status)).Inc()
-		m.Latency.WithLabelValues(path, r.Method).Observe(time.Since(start).Seconds())
-	})
-}
-
-func requestMetricPath(next http.Handler, r *http.Request) string {
-	if route := mux.CurrentRoute(r); route != nil {
-		if template, err := route.GetPathTemplate(); err == nil && template != "" {
-			return template
+		err := next(c)
+		path := c.Path()
+		if path == "" {
+			path = "unmatched"
 		}
+		m.Requests.WithLabelValues(path, c.Request().Method, statusCode(c.Response().Status)).Inc()
+		m.Latency.WithLabelValues(path, c.Request().Method).Observe(time.Since(start).Seconds())
+		return err
 	}
-	if router, ok := next.(*mux.Router); ok {
-		var match mux.RouteMatch
-		if router.Match(r, &match) && match.Route != nil {
-			if template, err := match.Route.GetPathTemplate(); err == nil && template != "" {
-				return template
-			}
-		}
-	}
-	if r.URL != nil && r.URL.Path != "" {
-		return r.URL.Path
-	}
-	return "unmatched"
-}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (s *statusRecorder) WriteHeader(statusCode int) {
-	s.status = statusCode
-	s.ResponseWriter.WriteHeader(statusCode)
-}
-
-func (s *statusRecorder) Flush() {
-	if f, ok := s.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := s.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, http.ErrNotSupported
-	}
-	return h.Hijack()
-}
-
-func (s *statusRecorder) Push(target string, opts *http.PushOptions) error {
-	p, ok := s.ResponseWriter.(http.Pusher)
-	if !ok {
-		return http.ErrNotSupported
-	}
-	return p.Push(target, opts)
-}
-
-func (s *statusRecorder) ReadFrom(r io.Reader) (int64, error) {
-	rf, ok := s.ResponseWriter.(io.ReaderFrom)
-	if !ok {
-		return io.Copy(s.ResponseWriter, r)
-	}
-	return rf.ReadFrom(r)
 }
 
 func statusCode(code int) string {

@@ -28,7 +28,7 @@ func main() {
 	addr := getenv("API_ADDR", ":8080")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           cors(a.metrics.Middleware(r)),
+		Handler:           r,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       20 * time.Second,
 		WriteTimeout:      30 * time.Second,

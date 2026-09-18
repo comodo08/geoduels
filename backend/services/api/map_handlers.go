@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
-	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
 )
 
@@ -86,24 +85,20 @@ func (a *api) allowMapComment(userID, mapID string) (bool, time.Duration, error)
 	)
 }
 
-func (a *api) mapCatalog(w http.ResponseWriter) (MapCatalog, bool) {
-	return a.db, a.db != nil
-}
-
-func (a *api) mapUser(w http.ResponseWriter, r *http.Request, registeredRequired bool) (string, bool) {
-	claims, err := a.authenticatedClaims(r)
+func (a *api) mapUser(c echo.Context, registeredRequired bool) (string, bool) {
+	claims, err := a.authenticatedClaims(c.Request())
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		_ = plainTextError(c, http.StatusUnauthorized, "unauthorized")
 		return "", false
 	}
 	if registeredRequired {
 		profile, err := a.profiles.GetProfile(claims.Sub)
 		if err != nil {
-			http.Error(w, "profile unavailable", http.StatusInternalServerError)
+			_ = plainTextError(c, http.StatusInternalServerError, "profile unavailable")
 			return "", false
 		}
 		if profile.IsGuest {
-			http.Error(w, "guest accounts cannot interact with maps", http.StatusForbidden)
+			_ = plainTextError(c, http.StatusForbidden, "guest accounts cannot interact with maps")
 			return "", false
 		}
 	}
@@ -118,440 +113,320 @@ func (a *api) optionalMapUser(r *http.Request) string {
 	return claims.Sub
 }
 
-func (a *api) listMaps(w http.ResponseWriter, r *http.Request) {
+func (a *api) listMaps(c echo.Context) error {
+	r := c.Request()
 	userID := a.optionalMapUser(r)
-	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
+	scope := strings.TrimSpace(c.QueryParam("scope"))
 	if scope == "mine" || scope == "favorites" {
 		var ok bool
-		userID, ok = a.mapUser(w, r, false)
+		userID, ok = a.mapUser(c, false)
 		if !ok {
-			return
+			return nil
 		}
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	items, err := catalog.ListMaps(userID, contracts.MapListOptions{Scope: scope, Sort: r.URL.Query().Get("sort"), Search: r.URL.Query().Get("search")})
+	items, err := a.maps.ListMaps(userID, contracts.MapListOptions{Scope: scope, Sort: c.QueryParam("sort"), Search: c.QueryParam("search")})
 	if err != nil {
-		http.Error(w, "maps unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "maps unavailable")
 	}
-	writeJSONResponse(w, items)
+	return writeJSONResponse(c, items)
 }
 
-func (a *api) mapUploadQuota(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) mapUploadQuota(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	quota, err := catalog.GetMapUploadQuota(userID)
+	quota, err := a.maps.GetMapUploadQuota(userID)
 	if err != nil {
-		http.Error(w, "map quota unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "map quota unavailable")
 	}
-	writeJSONResponse(w, quota)
+	return writeJSONResponse(c, quota)
 }
 
-func (a *api) getMap(w http.ResponseWriter, r *http.Request) {
+func (a *api) getMap(c echo.Context) error {
+	r := c.Request()
 	userID := a.optionalMapUser(r)
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, found, err := catalog.GetMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
+	item, found, err := a.maps.GetMap(userID, resolveCompactEntityID(c.Param("id")))
 	if err != nil {
-		http.Error(w, "map unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "map unavailable")
 	}
 	if !found {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) createMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) createMap(c echo.Context) error {
+	r := c.Request()
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
 	if allowed, retryAfter, err := a.allowMapUploadAttempt(userID); err != nil {
-		http.Error(w, "map uploads temporarily unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "map uploads temporarily unavailable")
 	} else if !allowed {
 		if retryAfter > 0 {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
+			c.Response().Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
 		}
-		http.Error(w, "map upload rate limit exceeded", http.StatusTooManyRequests)
-		return
+		return plainTextError(c, http.StatusTooManyRequests, "map upload rate limit exceeded")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	file, closeFile, err := mapUploadFile(w, r)
+	file, closeFile, err := mapUploadFile(c)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	defer closeFile()
-	if err := contentfilter.RejectAbusiveText(r.FormValue("displayName"), r.FormValue("description")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	item, err := catalog.CreateCustomMap(userID, r.FormValue("displayName"), r.FormValue("description"), r.FormValue("visibility"), r.FormValue("difficulty"), r.FormValue("thumbnailKey"), atoiDefault(r.FormValue("thumbnailVariant"), 1), file)
+	item, err := a.maps.CreateCustomMap(userID, r.FormValue("displayName"), r.FormValue("description"), r.FormValue("visibility"), r.FormValue("difficulty"), r.FormValue("thumbnailKey"), atoiDefault(r.FormValue("thumbnailVariant"), 1), file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	writeJSONResponse(w, item)
+	c.Response().Header().Set("Content-Type", "application/json")
+	c.Response().WriteHeader(http.StatusCreated)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) replaceMapLocations(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) replaceMapLocations(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
 	if allowed, retryAfter, err := a.allowMapUploadAttempt(userID); err != nil {
-		http.Error(w, "map uploads temporarily unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "map uploads temporarily unavailable")
 	} else if !allowed {
 		if retryAfter > 0 {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
+			c.Response().Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
 		}
-		http.Error(w, "map upload rate limit exceeded", http.StatusTooManyRequests)
-		return
+		return plainTextError(c, http.StatusTooManyRequests, "map upload rate limit exceeded")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	file, closeFile, err := mapUploadFile(w, r)
+	file, closeFile, err := mapUploadFile(c)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	defer closeFile()
-	item, err := catalog.ReplaceCustomMapLocations(userID, resolveCompactEntityID(mux.Vars(r)["id"]), file)
+	item, err := a.maps.ReplaceCustomMapLocations(userID, resolveCompactEntityID(c.Param("id")), file)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) updateMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) updateMap(c echo.Context) error {
+	r := c.Request()
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
-	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
+		return nil
 	}
 	var update contracts.CustomMapUpdate
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&update); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	if err := contentfilter.RejectAbusiveText(update.DisplayName, update.Description); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	item, err := catalog.UpdateCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]), update)
+	item, err := a.maps.UpdateCustomMap(userID, resolveCompactEntityID(c.Param("id")), update)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) archiveMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) archiveMap(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
-	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
+		return nil
 	}
 	identity, err := a.accounts.GetIdentity(userID)
 	if err != nil {
-		http.Error(w, "identity unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "identity unavailable")
 	}
-	err = catalog.ArchiveCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]), identity.IsAdmin)
+	err = a.maps.ArchiveCustomMap(userID, resolveCompactEntityID(c.Param("id")), identity.IsAdmin)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "could not archive map", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "could not archive map")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) publishMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) publishMap(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.PublishCustomMap(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
+	item, err := a.maps.PublishCustomMap(userID, resolveCompactEntityID(c.Param("id")))
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) setMapOfficial(w http.ResponseWriter, r *http.Request) {
-	admin, err := a.adminIdentity(r)
+func (a *api) setMapOfficial(c echo.Context) error {
+	admin, err := a.adminIdentity(c.Request())
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetMapOfficial(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), true)
+	item, err := a.maps.SetMapOfficial(admin.Sub, resolveCompactEntityID(c.Param("id")), true)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) unsetMapOfficial(w http.ResponseWriter, r *http.Request) {
-	admin, err := a.adminIdentity(r)
+func (a *api) unsetMapOfficial(c echo.Context) error {
+	admin, err := a.adminIdentity(c.Request())
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetMapOfficial(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), false)
+	item, err := a.maps.SetMapOfficial(admin.Sub, resolveCompactEntityID(c.Param("id")), false)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) setGameplayMapRole(w http.ResponseWriter, r *http.Request) {
-	admin, err := a.adminIdentity(r)
+func (a *api) setGameplayMapRole(c echo.Context) error {
+	admin, err := a.adminIdentity(c.Request())
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetGameplayMapRole(admin.Sub, resolveCompactEntityID(mux.Vars(r)["id"]), mux.Vars(r)["role"])
+	item, err := a.maps.SetGameplayMapRole(admin.Sub, resolveCompactEntityID(c.Param("id")), c.Param("role"))
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) favoriteMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) favoriteMap(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetMapFavorite(userID, resolveCompactEntityID(mux.Vars(r)["id"]), true)
+	item, err := a.maps.SetMapFavorite(userID, resolveCompactEntityID(c.Param("id")), true)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "could not favorite map", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "could not favorite map")
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) unfavoriteMap(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) unfavoriteMap(c echo.Context) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetMapFavorite(userID, resolveCompactEntityID(mux.Vars(r)["id"]), false)
+	item, err := a.maps.SetMapFavorite(userID, resolveCompactEntityID(c.Param("id")), false)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "could not unfavorite map", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "could not unfavorite map")
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) listMapComments(w http.ResponseWriter, r *http.Request) {
-	userID := a.optionalMapUser(r)
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	items, err := catalog.ListMapComments(userID, resolveCompactEntityID(mux.Vars(r)["id"]))
+func (a *api) listMapComments(c echo.Context) error {
+	userID := a.optionalMapUser(c.Request())
+	items, err := a.maps.ListMapComments(userID, resolveCompactEntityID(c.Param("id")))
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "comments unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "comments unavailable")
 	}
-	writeJSONResponse(w, items)
+	return writeJSONResponse(c, items)
 }
 
-func (a *api) createMapComment(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) createMapComment(c echo.Context) error {
+	r := c.Request()
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	if allowed, retryAfter, err := a.allowMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"])); err != nil {
-		http.Error(w, "comments temporarily unavailable", http.StatusServiceUnavailable)
-		return
+	if allowed, retryAfter, err := a.allowMapComment(userID, resolveCompactEntityID(c.Param("id"))); err != nil {
+		return plainTextError(c, http.StatusServiceUnavailable, "comments temporarily unavailable")
 	} else if !allowed {
 		if retryAfter > 0 {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
+			c.Response().Header().Set("Retry-After", fmt.Sprintf("%d", max(1, int(retryAfter.Seconds()))))
 		}
-		http.Error(w, "comment rate limit exceeded", http.StatusTooManyRequests)
-		return
-	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
+		return plainTextError(c, http.StatusTooManyRequests, "comment rate limit exceeded")
 	}
 	var input contracts.MapCommentCreate
 	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&input); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	if err := contentfilter.RejectAbusiveText(input.Body); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	item, err := catalog.CreateMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"]), input)
+	item, err := a.maps.CreateMapComment(userID, resolveCompactEntityID(c.Param("id")), input)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	w.WriteHeader(http.StatusCreated)
-	writeJSONResponse(w, item)
+	c.Response().WriteHeader(http.StatusCreated)
+	return writeJSONResponse(c, item)
 }
 
-func (a *api) deleteMapComment(w http.ResponseWriter, r *http.Request) {
-	userID, ok := a.mapUser(w, r, false)
+func (a *api) deleteMapComment(c echo.Context) error {
+	userID, ok := a.mapUser(c, false)
 	if !ok {
-		return
+		return nil
 	}
 	profile, err := a.profiles.GetProfile(userID)
 	if err != nil {
-		http.Error(w, "profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "profile unavailable")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	err = catalog.DeleteMapComment(userID, resolveCompactEntityID(mux.Vars(r)["id"]), a.resolveEntityID("comment", mux.Vars(r)["commentId"]), profile.IsAdmin || profile.IsModerator)
+	err = a.maps.DeleteMapComment(userID, resolveCompactEntityID(c.Param("id")), a.resolveEntityID("comment", c.Param("commentId")), profile.IsAdmin || profile.IsModerator)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "could not delete comment", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "could not delete comment")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) likeMapComment(w http.ResponseWriter, r *http.Request) {
-	a.setMapCommentLike(w, r, true)
+func (a *api) likeMapComment(c echo.Context) error {
+	return a.setMapCommentLike(c, true)
 }
 
-func (a *api) unlikeMapComment(w http.ResponseWriter, r *http.Request) {
-	a.setMapCommentLike(w, r, false)
+func (a *api) unlikeMapComment(c echo.Context) error {
+	return a.setMapCommentLike(c, false)
 }
 
-func (a *api) setMapCommentLike(w http.ResponseWriter, r *http.Request, liked bool) {
-	userID, ok := a.mapUser(w, r, true)
+func (a *api) setMapCommentLike(c echo.Context, liked bool) error {
+	userID, ok := a.mapUser(c, true)
 	if !ok {
-		return
+		return nil
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	item, err := catalog.SetMapCommentLike(userID, resolveCompactEntityID(mux.Vars(r)["id"]), a.resolveEntityID("comment", mux.Vars(r)["commentId"]), liked)
+	item, err := a.maps.SetMapCommentLike(userID, resolveCompactEntityID(c.Param("id")), a.resolveEntityID("comment", c.Param("commentId")), liked)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "could not update comment like", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "could not update comment like")
 	}
-	writeJSONResponse(w, item)
+	return writeJSONResponse(c, item)
 }
 
-func mapUploadFile(w http.ResponseWriter, r *http.Request) (io.Reader, func(), error) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxMapUploadBytes)
+func mapUploadFile(c echo.Context) (io.Reader, func(), error) {
+	r := c.Request()
+	r.Body = http.MaxBytesReader(c.Response(), r.Body, maxMapUploadBytes)
 	if err := r.ParseMultipartForm(maxMapUploadBytes); err != nil {
 		return nil, func() {}, errors.New("map upload must be multipart JSON under 128 MiB")
 	}
@@ -575,9 +450,9 @@ func mapUploadFile(w http.ResponseWriter, r *http.Request) (io.Reader, func(), e
 	}, nil
 }
 
-func writeJSONResponse(w http.ResponseWriter, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(value)
+func writeJSONResponse(c echo.Context, value any) error {
+	c.Response().Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(c.Response()).Encode(value)
 }
 
 func atoiDefault(raw string, fallback int) int {

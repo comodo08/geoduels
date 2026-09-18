@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"geoduels/internal/rating"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/gameplay"
-	"geoduels/pkg/rating"
 )
 
 const (

@@ -6,14 +6,16 @@ import (
 	"errors"
 	"net/http"
 
-	preferencesdomain "geoduels/pkg/preferences"
+	"github.com/labstack/echo/v4"
+
+	preferencesdomain "geoduels/internal/preferences"
 )
 
 const maxPreferencesBytes = 32 * 1024
 
-func writePreferences(w http.ResponseWriter, preferences preferencesdomain.UserPreferences) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
+func writePreferences(c echo.Context, preferences preferencesdomain.UserPreferences) error {
+	c.Response().Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(c.Response()).Encode(struct {
 		Preferences json.RawMessage `json:"preferences"`
 		Revision    int64           `json:"revision"`
 	}{
@@ -22,49 +24,42 @@ func writePreferences(w http.ResponseWriter, preferences preferencesdomain.UserP
 	})
 }
 
-func (a *api) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
+func (a *api) updateUserPreferences(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	var req struct {
 		Preferences json.RawMessage `json:"preferences"`
 		Revision    int64           `json:"revision"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxPreferencesBytes)
+	r.Body = http.MaxBytesReader(c.Response(), r.Body, maxPreferencesBytes)
 	if err := decodeJSONBody(r, &req); err != nil || len(req.Preferences) == 0 || !json.Valid(req.Preferences) {
-		http.Error(w, "invalid preferences", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid preferences")
 	}
 	trimmed := bytes.TrimSpace(req.Preferences)
 	if len(trimmed) < 2 || trimmed[0] != '{' || trimmed[len(trimmed)-1] != '}' || req.Revision < 0 {
-		http.Error(w, "invalid preferences", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid preferences")
 	}
 	var header struct {
 		Version int `json:"version"`
 	}
 	if a.preferences == nil {
-		http.Error(w, "preferences unavailable", http.StatusNotImplemented)
-		return
+		return plainTextError(c, http.StatusNotImplemented, "preferences unavailable")
 	}
 	if json.Unmarshal(req.Preferences, &header) != nil {
-		http.Error(w, "unsupported preference version", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "unsupported preference version")
 	}
 	preferences, err := a.preferences.Update(r.Context(), claims.Sub, header.Version, req.Preferences, req.Revision)
 	if errors.Is(err, preferencesdomain.ErrUnsupportedVersion) {
-		http.Error(w, "unsupported preference version", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "unsupported preference version")
 	}
 	if errors.Is(err, preferencesdomain.ErrRevisionConflict) {
-		http.Error(w, "preferences changed in another session", http.StatusConflict)
-		return
+		return plainTextError(c, http.StatusConflict, "preferences changed in another session")
 	}
 	if err != nil {
-		http.Error(w, "failed to save preferences", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to save preferences")
 	}
-	writePreferences(w, preferences)
+	return writePreferences(c, preferences)
 }

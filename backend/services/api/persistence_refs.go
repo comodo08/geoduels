@@ -3,45 +3,43 @@ package main
 import (
 	"github.com/jackc/pgx/v5"
 
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
+	"geoduels/internal/accounts"
+	"geoduels/internal/badges"
+	"geoduels/internal/content"
+	"geoduels/internal/maps"
+	"geoduels/internal/moderation"
+	socialdomain "geoduels/internal/social"
+	"geoduels/pkg/contracts"
 )
 
-// Handler files depend on these persistence DTOs, errors, and narrow
-// repository interfaces through the aliases below so the transport layer
-// stays free of direct persistence package references.
-
 type (
-	Identity                       = persistence.Identity
-	RefreshTokenRecord             = persistence.RefreshTokenRecord
-	AuthSessionParams              = persistence.AuthSessionParams
-	ChangelogPostInput             = persistence.ChangelogPostInput
-	LobbyChangelogContent          = persistence.LobbyChangelogContent
-	ModerationSettings             = persistence.ModerationSettings
-	DiscordIntegrationSettings     = persistence.DiscordIntegrationSettings
-	AdminPlayerSummary             = persistence.AdminPlayerSummary
-	UserNotification               = persistence.UserNotification
-	MapCatalog                     = persistence.MapCatalog
-	MapCreatorAdminRepository      = persistence.MapCreatorAdminRepository
-	OfficialMapImportInput         = persistence.OfficialMapImportInput
-	CreatePlayerReportSignalParams = persistence.CreatePlayerReportSignalParams
+	Identity                       = accounts.Identity
+	RefreshTokenRecord             = contracts.RefreshTokenRecord
+	AuthSessionParams              = contracts.AuthSessionParams
+	ChangelogPostInput             = content.ChangelogPostInput
+	LobbyChangelogContent          = content.LobbyChangelogContent
+	ModerationSettings             = content.ModerationSettings
+	DiscordIntegrationSettings     = content.DiscordIntegrationSettings
+	AdminPlayerSummary             = contracts.AdminPlayerSummary
+	UserNotification               = contracts.UserNotification
+	MapCreatorAdminRepository      = maps.MapCreatorAdminRepository
+	OfficialMapImportInput         = maps.OfficialMapImportInput
+	CreatePlayerReportSignalParams = moderation.CreatePlayerReportSignalParams
 )
 
 const (
-	IdentityProviderGoogle  = persistence.IdentityProviderGoogle
-	IdentityProviderDiscord = persistence.IdentityProviderDiscord
+	IdentityProviderGoogle  = accounts.IdentityProviderGoogle
+	IdentityProviderDiscord = accounts.IdentityProviderDiscord
 )
 
 var (
-	// ErrNoRows is re-exported so handler files never import pgx directly.
-	ErrNoRows                     = pgx.ErrNoRows
-	ErrNicknameTaken              = persistence.ErrNicknameTaken
-	ErrOAuthEmailConflict         = persistence.ErrOAuthEmailConflict
-	ErrBadgeNicknameRequired      = persistence.ErrBadgeNicknameRequired
-	ErrBadgeUnavailable           = persistence.ErrBadgeUnavailable
-	ErrBadgeUserNotFound          = persistence.ErrBadgeUserNotFound
-	ErrSocialNotFound             = socialdomain.ErrNotFound
-	ErrSocialLimit                = socialdomain.ErrLimit
-	ErrSocialBlocked              = socialdomain.ErrBlocked
-	ErrPreferenceRevisionConflict = persistence.ErrPreferenceRevisionConflict
+	ErrNoRows                = pgx.ErrNoRows
+	ErrNicknameTaken         = accounts.ErrNicknameTaken
+	ErrOAuthEmailConflict    = accounts.ErrOAuthEmailConflict
+	ErrBadgeNicknameRequired = badges.ErrBadgeNicknameRequired
+	ErrBadgeUnavailable      = badges.ErrBadgeUnavailable
+	ErrBadgeUserNotFound     = badges.ErrBadgeUserNotFound
+	ErrSocialNotFound        = socialdomain.ErrNotFound
+	ErrSocialLimit           = socialdomain.ErrLimit
+	ErrSocialBlocked         = socialdomain.ErrBlocked
 )

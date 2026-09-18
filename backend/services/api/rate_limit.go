@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -93,15 +94,15 @@ func (a *api) checkGuestSignupRateLimit(r *http.Request) (bool, time.Duration, e
 	return false, retryAfter, nil
 }
 
-func writeRateLimited(w http.ResponseWriter, retryAfter time.Duration) {
+func writeRateLimited(c echo.Context, retryAfter time.Duration) error {
 	if retryAfter > 0 {
 		seconds := int(retryAfter.Round(time.Second).Seconds())
 		if seconds < 1 {
 			seconds = 1
 		}
-		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		c.Response().Header().Set("Retry-After", strconv.Itoa(seconds))
 	}
-	http.Error(w, "too many guest signups", http.StatusTooManyRequests)
+	return plainTextError(c, http.StatusTooManyRequests, "too many guest signups")
 }
 
 func redisInt64(v any) (int64, error) {

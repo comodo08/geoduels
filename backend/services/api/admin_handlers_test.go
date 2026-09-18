@@ -1,18 +1,17 @@
 package main
 
 import (
+	"geoduels/internal/badges"
+	"geoduels/internal/moderation"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
-
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type adminModerationTestStore struct {
@@ -22,7 +21,7 @@ type adminModerationTestStore struct {
 	bannedReason     string
 	banned           bool
 	refundsRequested bool
-	grantableBadges  []persistence.AdminBadgeDefinition
+	grantableBadges  []badges.AdminBadgeDefinition
 	grantedNickname  string
 	grantedBadgeID   string
 }
@@ -33,7 +32,7 @@ func (s *adminModerationTestStore) GetIdentity(sub string) (Identity, error) {
 	return s.identity, nil
 }
 
-func (s *adminModerationTestStore) ListAdminGrantableBadges() []persistence.AdminBadgeDefinition {
+func (s *adminModerationTestStore) ListAdminGrantableBadges() []badges.AdminBadgeDefinition {
 	return s.grantableBadges
 }
 
@@ -51,14 +50,14 @@ func TestAdminCanListAndGrantBadges(t *testing.T) {
 	}
 	store := &adminModerationTestStore{
 		identity:        Identity{Sub: "admin-1", IsAdmin: true},
-		grantableBadges: []persistence.AdminBadgeDefinition{{ID: "event-winner-2026", Label: "2026 Event Winner", MaxLevel: 1}},
+		grantableBadges: []badges.AdminBadgeDefinition{{ID: "event-winner-2026", Label: "2026 Event Winner", MaxLevel: 1}},
 	}
-	a := &api{accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret, adminBootstrapEmails: map[string]struct{}{}}
+	a := &api{accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret, adminBootstrapEmails: map[string]struct{}{}}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/admin/badges", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listRec := httptest.NewRecorder()
-	a.adminBadgeDefinitions(listRec, listReq)
+	dispatch(a, listRec, listReq)
 	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), "event-winner-2026") {
 		t.Fatalf("badge catalog status=%d body=%q", listRec.Code, listRec.Body.String())
 	}
@@ -66,7 +65,7 @@ func TestAdminCanListAndGrantBadges(t *testing.T) {
 	grantReq := httptest.NewRequest(http.MethodPost, "/v1/admin/badges/grant", strings.NewReader(`{"nickname":"MapMaster","badgeId":"event-winner-2026"}`))
 	grantReq.Header.Set("Authorization", "Bearer "+token)
 	grantRec := httptest.NewRecorder()
-	a.adminGrantBadge(grantRec, grantReq)
+	dispatch(a, grantRec, grantReq)
 	if grantRec.Code != http.StatusOK {
 		t.Fatalf("grant status=%d body=%q", grantRec.Code, grantRec.Body.String())
 	}
@@ -82,11 +81,11 @@ func TestNonAdminCannotGrantBadges(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	store := &adminModerationTestStore{identity: Identity{Sub: "player-1"}}
-	a := &api{accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret, adminBootstrapEmails: map[string]struct{}{}}
+	a := &api{accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret, adminBootstrapEmails: map[string]struct{}{}}
 	req := httptest.NewRequest(http.MethodPost, "/v1/admin/badges/grant", strings.NewReader(`{"nickname":"MapMaster","badgeId":"event-winner-2026"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	a.adminGrantBadge(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -106,12 +105,12 @@ func (s *adminModerationTestStore) SetPlayerMute(userID, kind, reason, actorUser
 	return nil
 }
 
-func (s *adminModerationTestStore) BanPlayerForCheating(userID, reason, actorUserID string) (persistence.CheatingBanSummary, error) {
+func (s *adminModerationTestStore) BanPlayerForCheating(userID, reason, actorUserID string) (moderation.CheatingBanSummary, error) {
 	s.refundsRequested = true
 	s.bannedUserID = userID
 	s.bannedReason = reason
 	s.banned = true
-	return persistence.CheatingBanSummary{UserID: userID, Reason: reason, Refunds: persistence.EloRefundSummary{RefundsIssued: 2, TotalRefunded: 30}}, nil
+	return moderation.CheatingBanSummary{UserID: userID, Reason: reason, Refunds: moderation.EloRefundSummary{RefundsIssued: 2, TotalRefunded: 30}}, nil
 }
 
 func TestModeratorCanBanPlayer(t *testing.T) {
@@ -127,17 +126,16 @@ func TestModeratorCanBanPlayer(t *testing.T) {
 		},
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:        secret,
 		adminBootstrapEmails: map[string]struct{}{},
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/admin/players/"+moderationTargetUserID+"/ban", strings.NewReader(`{"reason":"reported cheating"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
-	req = mux.SetURLVars(req, map[string]string{"id": moderationTargetUserID})
 	rec := httptest.NewRecorder()
 
-	a.adminBanPlayer(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
@@ -166,17 +164,16 @@ func TestModeratorCanCheatingBanFromModeratorRoute(t *testing.T) {
 		},
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:        secret,
 		adminBootstrapEmails: map[string]struct{}{},
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/moderator/subjects/"+moderationTargetUserID+"/cheating-ban", strings.NewReader(`{"reason":"cheating_confirmed: reviewed incident 123"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
-	req = mux.SetURLVars(req, map[string]string{"userId": moderationTargetUserID})
 	rec := httptest.NewRecorder()
 
-	a.moderatorSubjectCheatingBan(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
@@ -202,17 +199,16 @@ func TestModeratorCanUnbanFromModeratorRoute(t *testing.T) {
 		},
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:        secret,
 		adminBootstrapEmails: map[string]struct{}{},
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/moderator/subjects/"+moderationTargetUserID+"/unban", strings.NewReader(`{"reason":"appeal accepted"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
-	req = mux.SetURLVars(req, map[string]string{"userId": moderationTargetUserID})
 	rec := httptest.NewRecorder()
 
-	a.moderatorSubjectUnban(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
@@ -235,17 +231,16 @@ func TestNonModeratorCannotBanPlayer(t *testing.T) {
 		identity: Identity{Sub: "player-1"},
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:        secret,
 		adminBootstrapEmails: map[string]struct{}{},
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/admin/players/user-2/ban", strings.NewReader(`{"reason":"reported cheating"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
-	req = mux.SetURLVars(req, map[string]string{"id": "user-2"})
 	rec := httptest.NewRecorder()
 
-	a.adminBanPlayer(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())

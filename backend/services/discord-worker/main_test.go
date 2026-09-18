@@ -3,20 +3,21 @@ package main
 import (
 	"testing"
 
-	"geoduels/pkg/persistence"
+	"geoduels/internal/accounts"
+	"geoduels/internal/content"
 )
 
 func TestDiscordSyncActionForLinkStatePreventsStaleCleanup(t *testing.T) {
-	if got := discordSyncActionForLinkState(persistence.DiscordSyncActionCleanupRoles, true); got != persistence.DiscordSyncActionSync {
+	if got := discordSyncActionForLinkState(accounts.DiscordSyncActionCleanupRoles, true); got != accounts.DiscordSyncActionSync {
 		t.Fatalf("linked cleanup action = %q, want sync", got)
 	}
-	if got := discordSyncActionForLinkState(persistence.DiscordSyncActionCleanupRoles, false); got != persistence.DiscordSyncActionCleanupRoles {
+	if got := discordSyncActionForLinkState(accounts.DiscordSyncActionCleanupRoles, false); got != accounts.DiscordSyncActionCleanupRoles {
 		t.Fatalf("unlinked cleanup action = %q, want cleanup", got)
 	}
 }
 
 func TestRankRoleForMMR(t *testing.T) {
-	settings := persistence.DiscordIntegrationSettings{
+	settings := content.DiscordIntegrationSettings{
 		Elo1000RoleID: "role-1000",
 		Elo1500RoleID: "role-1500",
 		Elo2000RoleID: "role-2000",

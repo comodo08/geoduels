@@ -81,7 +81,7 @@ func (w *worker) processOneReportNotification(ctx context.Context) (bool, error)
 	if err := json.Unmarshal(item.PayloadJSON, &payload); err != nil {
 		return true, w.notificationService.Failed(ctx, item.ID, time.Now().Add(24*time.Hour), "invalid notification payload: "+err.Error())
 	}
-	settings, err := w.store.GetModerationSettings()
+	settings, err := w.content.GetModerationSettings()
 	if err != nil {
 		return true, w.notificationService.Failed(ctx, item.ID, nextReportNotificationAttempt(item.Attempts), "load moderation settings: "+err.Error())
 	}

@@ -38,11 +38,15 @@ func (a *api) close() {
 }
 
 func (a *api) launcher() matchlaunch.Launcher {
-	return matchlaunch.Launcher{
+	l := matchlaunch.Launcher{
 		Coord:          a.coord,
 		Persist:        a.runtimeStore,
 		HTTPClient:     a.httpClient,
 		TicketSecret:   a.ticketAuth,
 		InternalSecret: a.internalSecret,
 	}
+	if a.mapsStore != nil {
+		l.Planner = a.mapsStore
+	}
+	return l
 }

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v4"
 )
 
 const defaultStripePaymentLinkURL = "https://donate.stripe.com/bJe28jfIN0BP1ps3D20oM02"
@@ -55,11 +57,11 @@ func (a *api) stripeRuntimeConfig() stripeRuntimeConfig {
 	}
 }
 
-func (a *api) createSupportDonation(w http.ResponseWriter, r *http.Request) {
+func (a *api) createSupportDonation(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	stripeConfig := a.stripeRuntimeConfig()
 	paymentLink := strings.TrimSpace(stripeConfig.PaymentLinkURL)
@@ -67,20 +69,17 @@ func (a *api) createSupportDonation(w http.ResponseWriter, r *http.Request) {
 		paymentLink = defaultStripePaymentLinkURL
 	}
 	if paymentLink == "" {
-		http.Error(w, "donation unavailable: stripe "+stripeConfig.Mode+" payment link is not configured", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "donation unavailable: stripe "+stripeConfig.Mode+" payment link is not configured")
 	}
 	ref, err := a.badges.CreateDonationRef(claims.Sub)
 	if err != nil {
-		http.Error(w, "donation unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "donation unavailable")
 	}
 	donationURL, err := donationURLWithRef(paymentLink, ref)
 	if err != nil {
-		http.Error(w, "donation unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "donation unavailable")
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	return json.NewEncoder(c.Response()).Encode(map[string]string{
 		"donationUrl": donationURL,
 	})
 }
@@ -99,21 +98,19 @@ func donationURLWithRef(rawURL, ref string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (a *api) stripeWebhook(w http.ResponseWriter, r *http.Request) {
+func (a *api) stripeWebhook(c echo.Context) error {
+	r := c.Request()
 	stripeConfig := a.stripeRuntimeConfig()
 	webhookSecret := strings.TrimSpace(stripeConfig.WebhookSecret)
 	if webhookSecret == "" {
-		http.Error(w, "stripe webhook unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "stripe webhook unavailable")
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), r.Body, 1<<20))
 	if err != nil {
-		http.Error(w, "invalid webhook", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid webhook")
 	}
 	if err := verifyStripeSignature(body, r.Header.Get("Stripe-Signature"), webhookSecret, time.Now()); err != nil {
-		http.Error(w, "invalid signature", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid signature")
 	}
 	var event struct {
 		Type string `json:"type"`
@@ -124,20 +121,17 @@ func (a *api) stripeWebhook(w http.ResponseWriter, r *http.Request) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &event); err != nil {
-		http.Error(w, "invalid webhook", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid webhook")
 	}
 	if event.Type == "checkout.session.completed" {
 		if strings.TrimSpace(event.Data.Object.ClientReferenceID) == "" {
-			w.WriteHeader(http.StatusNoContent)
-			return
+			return c.NoContent(http.StatusNoContent)
 		}
 		if _, err := a.badges.AwardSupporterByDonationRef(event.Data.Object.ClientReferenceID); err != nil {
-			http.Error(w, "failed to award supporter", http.StatusInternalServerError)
-			return
+			return plainTextError(c, http.StatusInternalServerError, "failed to award supporter")
 		}
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
 func verifyStripeSignature(body []byte, header, secret string, now time.Time) error {

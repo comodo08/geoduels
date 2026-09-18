@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"geoduels/pkg/social"
+	"geoduels/internal/social"
 )
 
 const lastSeenWriteInterval = 5 * time.Minute
@@ -29,9 +29,6 @@ func (a *api) touchViewerPresence(ctx context.Context, userID string) {
 
 func (a *api) scheduleLastSeenWrite(ctx context.Context, userID string, seenAt time.Time) {
 	writer := a.lastSeen
-	if writer == nil {
-		writer = a.db
-	}
 	if writer == nil {
 		return
 	}

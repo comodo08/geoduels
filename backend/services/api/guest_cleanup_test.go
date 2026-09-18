@@ -1,7 +1,7 @@
 package main
 
 import (
-	socialdomain "geoduels/pkg/social"
+	socialdomain "geoduels/internal/social"
 	"testing"
 	"time"
 
@@ -36,7 +36,7 @@ func TestCleanupGuestAccountsDeletesUntilBatchNotFull(t *testing.T) {
 
 	store := &guestCleanupTestStore{deleted: []int{1000, 25}}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                 rdb,
 		guestAccountTTL:       24 * time.Hour,
 		guestCleanupInterval:  time.Hour,

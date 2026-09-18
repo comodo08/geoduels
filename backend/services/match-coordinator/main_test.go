@@ -3,6 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"geoduels/internal/accounts"
+	"geoduels/internal/admin"
+	"geoduels/internal/badges"
+	"geoduels/internal/chat"
+	"geoduels/internal/content"
+	"geoduels/internal/leaderboard"
+	"geoduels/internal/matches"
+	"geoduels/internal/moderation"
+	"geoduels/internal/profiles"
+	"geoduels/internal/seasons"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -11,8 +21,8 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
 	"geoduels/pkg/auth"
@@ -20,25 +30,16 @@ import (
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/matchstore"
 	"geoduels/pkg/observability"
-	"geoduels/pkg/persistence"
 )
 
 type recoverTestStore struct {
-	runtimeMatches map[string]persistence.RuntimeMatch
-	profiles       map[string]persistence.Profile
+	runtimeMatches map[string]matches.RuntimeMatch
+	profiles       map[string]profiles.Profile
 	parties        map[string]contracts.PartySnapshot
 	accountTypes   map[string]string
 }
 
-func (s *recoverTestStore) GetUserPreferences(context.Context, string) (persistence.UserPreferences, error) {
-	panic("unexpected call")
-}
-
-func (s *recoverTestStore) UpdateUserPreferences(context.Context, string, int, json.RawMessage, int64) (persistence.UserPreferences, error) {
-	panic("unexpected call")
-}
-
-func (s *recoverTestStore) ListAdminGrantableBadges() []persistence.AdminBadgeDefinition {
+func (s *recoverTestStore) ListAdminGrantableBadges() []badges.AdminBadgeDefinition {
 	panic("unexpected call")
 }
 
@@ -50,15 +51,15 @@ func (s *recoverTestStore) UpsertIdentity(sub, email, googleName, avatarURL stri
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UpsertGoogleIdentity(googleSub, email, googleName, avatarURL, linkUserID string) (persistence.Identity, error) {
+func (s *recoverTestStore) UpsertGoogleIdentity(googleSub, email, googleName, avatarURL, linkUserID string) (accounts.Identity, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UpsertProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (persistence.Identity, error) {
+func (s *recoverTestStore) UpsertProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (accounts.Identity, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) LinkProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (persistence.Identity, error) {
+func (s *recoverTestStore) LinkProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (accounts.Identity, error) {
 	panic("unexpected call")
 }
 
@@ -74,20 +75,20 @@ func (s *recoverTestStore) IsProviderIdentityBanned(provider, providerUserID str
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UnlinkProviderIdentity(userID, provider string) (persistence.Identity, error) {
+func (s *recoverTestStore) UnlinkProviderIdentity(userID, provider string) (accounts.Identity, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) CreateGuestIdentity() (persistence.Identity, error) {
+func (s *recoverTestStore) CreateGuestIdentity() (accounts.Identity, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetIdentity(sub string) (persistence.Identity, error) {
+func (s *recoverTestStore) GetIdentity(sub string) (accounts.Identity, error) {
 	accountType := "registered"
 	if s.accountTypes != nil && s.accountTypes[sub] != "" {
 		accountType = s.accountTypes[sub]
 	}
-	return persistence.Identity{
+	return accounts.Identity{
 		Sub:              sub,
 		NicknameRequired: false,
 		AccountType:      accountType,
@@ -110,7 +111,7 @@ func (s *recoverTestStore) SetUserModerator(userID string, isModerator bool) err
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SearchPlayers(query string, limit int) ([]persistence.AdminPlayerSummary, error) {
+func (s *recoverTestStore) SearchPlayers(query string, limit int) ([]admin.AdminPlayerSummary, error) {
 	panic("unexpected call")
 }
 
@@ -122,15 +123,15 @@ func (s *recoverTestStore) SetPlayerMute(userID, kind, reason, actorUserID strin
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) BanPlayerForCheating(userID, reason, actorUserID string) (persistence.CheatingBanSummary, error) {
+func (s *recoverTestStore) BanPlayerForCheating(userID, reason, actorUserID string) (moderation.CheatingBanSummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) PreviewCommunityPardon(olderThan time.Duration) (persistence.CommunityPardonSummary, error) {
+func (s *recoverTestStore) PreviewCommunityPardon(olderThan time.Duration) (moderation.CommunityPardonSummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) PardonBannedPlayers(olderThan time.Duration, actorUserID string) (persistence.CommunityPardonSummary, error) {
+func (s *recoverTestStore) PardonBannedPlayers(olderThan time.Duration, actorUserID string) (moderation.CommunityPardonSummary, error) {
 	panic("unexpected call")
 }
 
@@ -138,59 +139,59 @@ func (s *recoverTestStore) ClearReporterMute(userID string) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetLobbyChangelog(defaultContent persistence.LobbyChangelogContent) (persistence.LobbyChangelogContent, error) {
+func (s *recoverTestStore) GetLobbyChangelog(defaultContent content.LobbyChangelogContent) (content.LobbyChangelogContent, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetLobbyChangelog(content persistence.LobbyChangelogContent) error {
+func (s *recoverTestStore) SetLobbyChangelog(content content.LobbyChangelogContent) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListChangelogPosts(includeUnpublished bool) ([]persistence.ChangelogPost, error) {
+func (s *recoverTestStore) ListChangelogPosts(includeUnpublished bool) ([]content.ChangelogPost, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetChangelogPostBySlug(slug string, publishedOnly bool) (persistence.ChangelogPost, bool, error) {
+func (s *recoverTestStore) GetChangelogPostBySlug(slug string, publishedOnly bool) (content.ChangelogPost, bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) CreateChangelogPost(input persistence.ChangelogPostInput) (persistence.ChangelogPost, error) {
+func (s *recoverTestStore) CreateChangelogPost(input content.ChangelogPostInput) (content.ChangelogPost, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UpdateChangelogPost(id int64, input persistence.ChangelogPostInput) (persistence.ChangelogPost, bool, error) {
+func (s *recoverTestStore) UpdateChangelogPost(id int64, input content.ChangelogPostInput) (content.ChangelogPost, bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetModerationSettings() (persistence.ModerationSettings, error) {
+func (s *recoverTestStore) GetModerationSettings() (content.ModerationSettings, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetModerationSettings(settings persistence.ModerationSettings) error {
+func (s *recoverTestStore) SetModerationSettings(settings content.ModerationSettings) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetDiscordIntegrationSettings() (persistence.DiscordIntegrationSettings, error) {
+func (s *recoverTestStore) GetDiscordIntegrationSettings() (content.DiscordIntegrationSettings, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetDiscordIntegrationSettings(settings persistence.DiscordIntegrationSettings) error {
+func (s *recoverTestStore) SetDiscordIntegrationSettings(settings content.DiscordIntegrationSettings) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetRankedSeasonSettings() (persistence.RankedSeasonSettings, error) {
+func (s *recoverTestStore) GetRankedSeasonSettings() (seasons.RankedSeasonSettings, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) SetRankedSeasonResetRule(monthlyResetDay int) (persistence.RankedSeasonSettings, error) {
+func (s *recoverTestStore) SetRankedSeasonResetRule(monthlyResetDay int) (seasons.RankedSeasonSettings, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) RunDueRankedSeasonReset(now time.Time) (persistence.RankedSeasonResetResult, bool, error) {
+func (s *recoverTestStore) RunDueRankedSeasonReset(now time.Time) (seasons.RankedSeasonResetResult, bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ReplaceMapLocations(mapKey, displayName string, dataset []byte) (persistence.MapImportSummary, error) {
+func (s *recoverTestStore) ReplaceMapLocations(mapKey, displayName string, dataset []byte) (contracts.MapImportSummary, error) {
 	panic("unexpected call")
 }
 
@@ -214,15 +215,15 @@ func (s *recoverTestStore) ResolveGameplayMapID(mode contracts.MatchMode, rulese
 	}
 }
 
-func (s *recoverTestStore) CreateAuthSession(userID, refreshTokenHash string, expiresAt time.Time, params persistence.AuthSessionParams) (persistence.RefreshTokenRecord, error) {
+func (s *recoverTestStore) CreateAuthSession(userID, refreshTokenHash string, expiresAt time.Time, params contracts.AuthSessionParams) (contracts.RefreshTokenRecord, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetAuthSessionByRefreshToken(hash string) (persistence.RefreshTokenRecord, bool, error) {
+func (s *recoverTestStore) GetAuthSessionByRefreshToken(hash string) (contracts.RefreshTokenRecord, bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) RotateAuthSession(sessionID, currentHash, nextHash string, expiresAt time.Time, usedAt time.Time) (persistence.RefreshTokenRecord, bool, error) {
+func (s *recoverTestStore) RotateAuthSession(sessionID, currentHash, nextHash string, expiresAt time.Time, usedAt time.Time) (contracts.RefreshTokenRecord, bool, error) {
 	panic("unexpected call")
 }
 
@@ -246,18 +247,18 @@ func (s *recoverTestStore) UpsertUser(userID, email, displayName string) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetProfile(userID string) (persistence.Profile, error) {
+func (s *recoverTestStore) GetProfile(userID string) (profiles.Profile, error) {
 	if profile, ok := s.profiles[userID]; ok {
 		return profile, nil
 	}
-	return persistence.Profile{UserID: userID, DisplayName: userID, MMR: 1000}, nil
+	return profiles.Profile{UserID: userID, DisplayName: userID, MMR: 1000}, nil
 }
 
-func (s *recoverTestStore) GetPublicPlayerProfileByNickname(nickname string) (persistence.PublicPlayerProfile, error) {
+func (s *recoverTestStore) GetPublicPlayerProfileByNickname(nickname string) (profiles.PublicPlayerProfile, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) UpdateSelectedBadge(userID, badgeID string) (persistence.Profile, error) {
+func (s *recoverTestStore) UpdateSelectedBadge(userID, badgeID string) (profiles.Profile, error) {
 	panic("unexpected call")
 }
 
@@ -269,7 +270,7 @@ func (s *recoverTestStore) AwardDiscordServerMemberByDiscordID(discordUserID str
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ClaimPendingDiscordSync(now time.Time) (persistence.DiscordSyncOutboxItem, bool, error) {
+func (s *recoverTestStore) ClaimPendingDiscordSync(now time.Time) (badges.DiscordSyncOutboxItem, bool, error) {
 	panic("unexpected call")
 }
 
@@ -281,7 +282,7 @@ func (s *recoverTestStore) MarkDiscordSyncFailed(id int64, nextAttemptAt time.Ti
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetDiscordLinkedUser(discordUserID string) (persistence.DiscordLinkedUser, bool, error) {
+func (s *recoverTestStore) GetDiscordLinkedUser(discordUserID string) (badges.DiscordLinkedUser, bool, error) {
 	panic("unexpected call")
 }
 
@@ -293,11 +294,11 @@ func (s *recoverTestStore) AwardSupporterByDonationRef(ref string) (bool, error)
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListLeaderboard(context.Context, string, string, int, int) ([]persistence.LeaderboardEntry, error) {
+func (s *recoverTestStore) ListLeaderboard(context.Context, string, string, int, int) ([]leaderboard.Entry, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetLeaderboardOverview(context.Context, string, string, string, int) (persistence.LeaderboardOverview, error) {
+func (s *recoverTestStore) GetLeaderboardOverview(context.Context, string, string, string, int) (leaderboard.Overview, error) {
 	panic("unexpected call")
 }
 
@@ -313,11 +314,11 @@ func (s *recoverTestStore) GetFinalMatchSnapshot(matchID string) ([]byte, bool, 
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListPlayerMatchHistory(userID string, limit int) ([]persistence.MatchHistorySummary, error) {
+func (s *recoverTestStore) ListPlayerMatchHistory(userID string, limit int) ([]matches.MatchHistorySummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (persistence.MatchHistoryPage, error) {
+func (s *recoverTestStore) ListPlayerMatchHistoryPage(userID string, limit int, beforeEndedAt time.Time, beforeMatchID string, rankedOnly bool) (matches.MatchHistoryPage, error) {
 	panic("unexpected call")
 }
 
@@ -325,27 +326,27 @@ func (s *recoverTestStore) PlayerParticipatedInMatch(userID, matchID string) (bo
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetAdminPlayerDetail(userID string) (persistence.AdminPlayerDetail, error) {
+func (s *recoverTestStore) GetAdminPlayerDetail(userID string) (admin.AdminPlayerDetail, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) CreatePlayerReportSignal(params persistence.CreatePlayerReportSignalParams) (persistence.ModerationSignalCreated, error) {
+func (s *recoverTestStore) CreatePlayerReportSignal(params moderation.CreatePlayerReportSignalParams) (moderation.ModerationSignalCreated, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListSubjectModerationProfile(userID string) (persistence.ModerationSubjectProfile, error) {
+func (s *recoverTestStore) ListSubjectModerationProfile(userID string) (moderation.ModerationSubjectProfile, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListModerationSignals(limit int) ([]persistence.ModerationSignalSummary, error) {
+func (s *recoverTestStore) ListModerationSignals(limit int) ([]moderation.ModerationSignalSummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListModerationLog(limit int) ([]persistence.ModerationAuditLogEntry, error) {
+func (s *recoverTestStore) ListModerationLog(limit int) ([]moderation.ModerationAuditLogEntry, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListUserRoles() ([]persistence.UserRoleGrant, error) {
+func (s *recoverTestStore) ListUserRoles() ([]admin.UserRoleGrant, error) {
 	panic("unexpected call")
 }
 
@@ -357,15 +358,15 @@ func (s *recoverTestStore) RevokeUserRole(userID, role, revokedBy, reason string
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) IssueEloRefundsForCheater(userID string, lookback time.Duration) (persistence.EloRefundSummary, error) {
+func (s *recoverTestStore) IssueEloRefundsForCheater(userID string, lookback time.Duration) (moderation.EloRefundSummary, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListUserNotifications(userID string, limit int) ([]persistence.UserNotification, error) {
+func (s *recoverTestStore) ListUserNotifications(userID string, limit int) ([]contracts.UserNotification, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListNotificationInbox(string, int, int64) ([]persistence.UserNotification, error) {
+func (s *recoverTestStore) ListNotificationInbox(string, int, int64) ([]contracts.UserNotification, error) {
 	panic("unexpected call")
 }
 func (s *recoverTestStore) MarkAllUserNotificationsRead(string) error { panic("unexpected call") }
@@ -374,7 +375,7 @@ func (s *recoverTestStore) MarkUserNotificationRead(userID string, notificationI
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ClaimPendingNotification(notificationType string, now time.Time) (persistence.NotificationOutboxItem, bool, error) {
+func (s *recoverTestStore) ClaimPendingNotification(notificationType string, now time.Time) (contracts.NotificationOutboxItem, bool, error) {
 	panic("unexpected call")
 }
 
@@ -394,7 +395,7 @@ func (s *recoverTestStore) RemoveSignupIPBan(ipAddress string) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListSignupIPBans(limit int) ([]persistence.SignupIPBan, error) {
+func (s *recoverTestStore) ListSignupIPBans(limit int) ([]moderation.SignupIPBan, error) {
 	panic("unexpected call")
 }
 
@@ -402,14 +403,14 @@ func (s *recoverTestStore) IsSignupIPBanned(ipAddress string) (bool, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) GetRuntimeMatch(_ context.Context, matchID string) (persistence.RuntimeMatch, bool, error) {
+func (s *recoverTestStore) GetRuntimeMatch(_ context.Context, matchID string) (matches.RuntimeMatch, bool, error) {
 	rec, ok := s.runtimeMatches[matchID]
 	return rec, ok, nil
 }
 
 func (s *recoverTestStore) RecordRuntimeMatch(_ context.Context, matchID, state string, ownerEpoch int64, terminal bool) error {
 	if s.runtimeMatches == nil {
-		s.runtimeMatches = map[string]persistence.RuntimeMatch{}
+		s.runtimeMatches = map[string]matches.RuntimeMatch{}
 	}
 	rec := s.runtimeMatches[matchID]
 	rec.MatchID = matchID
@@ -425,15 +426,15 @@ func (s *recoverTestStore) RecordRuntimeMatch(_ context.Context, matchID, state 
 	return nil
 }
 
-func (s *recoverTestStore) RecordChatMessage(conversationID, scopeKind, scopeID string, message persistence.ChatMessage) error {
+func (s *recoverTestStore) RecordChatMessage(conversationID, scopeKind, scopeID string, message chat.ChatMessage) error {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListChatMessages(conversationID string, limit int) ([]persistence.ChatMessage, error) {
+func (s *recoverTestStore) ListChatMessages(conversationID string, limit int) ([]chat.ChatMessage, error) {
 	panic("unexpected call")
 }
 
-func (s *recoverTestStore) ListChatMessagesForUser(conversationID, userID string, limit int) ([]persistence.ChatMessage, error) {
+func (s *recoverTestStore) ListChatMessagesForUser(conversationID, userID string, limit int) ([]chat.ChatMessage, error) {
 	panic("unexpected call")
 }
 
@@ -445,8 +446,8 @@ func (s *recoverTestStore) ChatTeamForMatch(matchID, userID string) (string, boo
 	return "", false, nil
 }
 
-func (s *recoverTestStore) GetActiveChatRestriction(userID string) (persistence.ChatRestriction, bool, error) {
-	return persistence.ChatRestriction{}, false, nil
+func (s *recoverTestStore) GetActiveChatRestriction(userID string) (chat.ChatRestriction, bool, error) {
+	return chat.ChatRestriction{}, false, nil
 }
 
 func (s *recoverTestStore) ExpireStaleRuntimeMatches(_ context.Context, prefix string, olderThan time.Duration) error {
@@ -457,8 +458,23 @@ func (s *recoverTestStore) ExpireOpenParties() error {
 	return nil
 }
 
-func (s *recoverTestStore) UpsertMatchSession(_ context.Context, params persistence.MatchSessionUpsert) error {
+func (s *recoverTestStore) UpsertMatchSession(_ context.Context, params matches.MatchSessionUpsert) error {
 	return nil
+}
+
+func (s *recoverTestStore) MatchSessionReturnTarget(_ context.Context, matchID string) (*contracts.MatchReturnTarget, bool, error) {
+	return nil, false, nil
+}
+
+func (s *recoverTestStore) SetPartyConfig(id string, cfg contracts.MatchConfig) (contracts.PartySnapshot, error) {
+	if s.parties != nil {
+		if snap, ok := s.parties[id]; ok {
+			snap.Config = cfg
+			s.parties[id] = snap
+			return snap, nil
+		}
+	}
+	return contracts.PartySnapshot{}, nil
 }
 
 func (s *recoverTestStore) ListOpenPartyIDs() ([]string, error) {
@@ -703,7 +719,21 @@ func (s *heartbeatTestStore) RunMatchmaking(pool matchstore.QueuePool, ruleset c
 	return 0, nil
 }
 
-var _ persistentStore = (*recoverTestStore)(nil)
+func attachRecoverStore(q *matchCoordinator, store *recoverTestStore) {
+	q.accounts = store
+	q.profiles = store
+	q.matches = store
+	q.parties = store
+	q.chat = store
+}
+
+func readyCoordinator(q *matchCoordinator) *matchCoordinator {
+	if s, ok := q.matches.(*recoverTestStore); ok {
+		attachRecoverStore(q, s)
+	}
+	return q
+}
+
 var _ matchstore.Store = (*recoverTestMatchStore)(nil)
 var _ matchstore.Store = (*queueTestMatchStore)(nil)
 var _ matchstore.Store = (*staleQueuePollStore)(nil)
@@ -782,7 +812,7 @@ func TestApplyPartyPresenceComputesStatuses(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	q := &matchCoordinator{redis: rdb}
+	q := readyCoordinator(&matchCoordinator{redis: rdb})
 	now := time.Now().UnixMilli()
 	if err := rdb.HSet(context.Background(), partyPresenceKey("lob-1"), map[string]any{
 		"u1":        now,
@@ -818,7 +848,7 @@ func TestTouchPartyPresencePublishesOnlyOnVisibleStatusChange(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	q := &matchCoordinator{redis: rdb}
+	q := readyCoordinator(&matchCoordinator{redis: rdb})
 	if !q.touchPartyPresence("lob-1", "u1", "conn-1") {
 		t.Fatal("first touch should publish because the user becomes online")
 	}
@@ -837,6 +867,15 @@ var _ matchstore.Store = (*heartbeatTestStore)(nil)
 
 func queueWSURL(serverURL string) string {
 	return "ws" + strings.TrimPrefix(serverURL, "http")
+}
+
+// dispatch runs req through an Echo router with the routes registered the same
+// way main.go registers them, replacing direct handler calls.
+func dispatch(_ *matchCoordinator, register func(*echo.Echo), rec *httptest.ResponseRecorder, req *http.Request) {
+	e := echo.New()
+	e.HideBanner = true
+	register(e)
+	e.ServeHTTP(rec, req)
 }
 
 func TestParseQueueVariantsSupportsRankedQueuesAndMigratesLegacyRulesets(t *testing.T) {
@@ -918,25 +957,28 @@ func TestQueueIgnoresEndedAssignment(t *testing.T) {
 		t.Fatalf("register node: %v", err)
 	}
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store: &queueTestMatchStore{},
 		state: state,
-		persist: &recoverTestStore{
-			runtimeMatches: map[string]persistence.RuntimeMatch{"m-ended": {MatchID: "m-ended", State: string(contracts.MatchEnded)}},
-			profiles:       map[string]persistence.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
+		matches: &recoverTestStore{
+			runtimeMatches: map[string]matches.RuntimeMatch{"m-ended": {MatchID: "m-ended", State: string(contracts.MatchEnded)}},
+			profiles:       map[string]profiles.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
 		},
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(q.queue))
+	queueEcho := echo.New()
+	queueEcho.HideBanner = true
+	queueEcho.GET("/queue", q.queue)
+	srv := httptest.NewServer(queueEcho)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(queueWSURL(srv.URL)+"/queue", http.Header{
@@ -986,25 +1028,28 @@ func TestQueueAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 		t.Fatalf("register node: %v", err)
 	}
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store: &queueTestMatchStore{},
 		state: state,
-		persist: &recoverTestStore{
-			profiles: map[string]persistence.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
+		matches: &recoverTestStore{
+			profiles: map[string]profiles.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
 		},
 		httpClient: &http.Client{Timeout: time.Second},
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(q.queue))
+	queueEcho := echo.New()
+	queueEcho.HideBanner = true
+	queueEcho.GET("/queue", q.queue)
+	srv := httptest.NewServer(queueEcho)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(queueWSURL(srv.URL)+"/queue", http.Header{
@@ -1030,24 +1075,27 @@ func TestQueueRejectsGuestAccount(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store: &recoverTestMatchStore{},
 		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
-		persist: &recoverTestStore{
+		matches: &recoverTestStore{
 			accountTypes: map[string]string{"guest-1": "guest"},
 		},
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "guest-1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(q.queue))
+	queueEcho := echo.New()
+	queueEcho.HideBanner = true
+	queueEcho.GET("/queue", q.queue)
+	srv := httptest.NewServer(queueEcho)
 	t.Cleanup(srv.Close)
 
 	conn, resp, err := websocket.DefaultDialer.Dial(queueWSURL(srv.URL)+"/queue", http.Header{
@@ -1100,7 +1148,7 @@ func TestStartPartyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 	}
 
 	store := &recoverTestStore{
-		profiles: map[string]persistence.Profile{
+		profiles: map[string]profiles.Profile{
 			"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 			"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 		},
@@ -1108,25 +1156,24 @@ func TestStartPartyAllowsDuelWhenSingleplayerIsActive(t *testing.T) {
 			"lob-1": testParty("lob-1", "u1", "u1", "u2"),
 		},
 	}
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		state:      state,
-		persist:    store,
+		matches:    store,
 		httpClient: gameplay.Client(),
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startParty(rr, req)
+	dispatch(q, func(e *echo.Echo) { e.POST("/parties/:id/start", q.startParty) }, rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
@@ -1147,10 +1194,10 @@ func TestStartPartyRequiresPlayersInParty(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
-		persist: &recoverTestStore{
-			profiles: map[string]persistence.Profile{
+		matches: &recoverTestStore{
+			profiles: map[string]profiles.Profile{
 				"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 				"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 			},
@@ -1163,7 +1210,7 @@ func TestStartPartyRequiresPlayersInParty(t *testing.T) {
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 	q.touchPartyPresence("lob-1", "u1", "conn-1")
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
@@ -1171,11 +1218,10 @@ func TestStartPartyRequiresPlayersInParty(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startParty(rr, req)
+	dispatch(q, func(e *echo.Echo) { e.POST("/parties/:id/start", q.startParty) }, rr, req)
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
@@ -1212,10 +1258,10 @@ func TestStartPartyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
 		t.Fatalf("save assignment: %v", err)
 	}
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		state: state,
-		persist: &recoverTestStore{
-			profiles: map[string]persistence.Profile{
+		matches: &recoverTestStore{
+			profiles: map[string]profiles.Profile{
 				"u1": {UserID: "u1", DisplayName: "Player One", MMR: 1000},
 				"u2": {UserID: "u2", DisplayName: "Player Two", MMR: 1000},
 			},
@@ -1228,17 +1274,16 @@ func TestStartPartyActiveDuelConflictNamesPlayerAndMatch(t *testing.T) {
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/parties/lob-1/start", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "lob-1"})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.startParty(rr, req)
+	dispatch(q, func(e *echo.Echo) { e.POST("/parties/:id/start", q.startParty) }, rr, req)
 
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
@@ -1283,23 +1328,26 @@ func TestQueueClearsEndedQueuedMatch(t *testing.T) {
 		t.Fatalf("set queue match u2: %v", err)
 	}
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store:      &staleQueuePollStore{match: &match},
 		state:      state,
-		persist:    &recoverTestStore{runtimeMatches: map[string]persistence.RuntimeMatch{"m-ended": {MatchID: "m-ended", State: string(contracts.MatchEnded)}}},
+		matches:    &recoverTestStore{runtimeMatches: map[string]matches.RuntimeMatch{"m-ended": {MatchID: "m-ended", State: string(contracts.MatchEnded)}}},
 		redis:      rdb,
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(q.queue))
+	queueEcho := echo.New()
+	queueEcho.HideBanner = true
+	queueEcho.GET("/queue", q.queue)
+	srv := httptest.NewServer(queueEcho)
 	t.Cleanup(srv.Close)
 
 	conn, _, err := websocket.DefaultDialer.Dial(queueWSURL(srv.URL)+"/queue", http.Header{
@@ -1337,17 +1385,17 @@ func TestHeartbeatReturnsQueueStatus(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	heartbeatStore := &heartbeatTestStore{status: matchstore.QueuePresenceMissing}
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store: heartbeatStore,
 		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
-		persist: &recoverTestStore{
-			profiles: map[string]persistence.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
+		matches: &recoverTestStore{
+			profiles: map[string]profiles.Profile{"u1": {UserID: "u1", DisplayName: "u1", MMR: 1000}},
 		},
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "u1", "sess-1", 15*time.Minute)
 	if err != nil {
@@ -1358,7 +1406,7 @@ func TestHeartbeatReturnsQueueStatus(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.heartbeat(rr, req)
+	dispatch(q, func(e *echo.Echo) { e.POST("/queue/heartbeat", q.heartbeat) }, rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
@@ -1380,17 +1428,17 @@ func TestHeartbeatRejectsGuestAccount(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	q := &matchCoordinator{
+	q := readyCoordinator(&matchCoordinator{
 		store: &heartbeatTestStore{status: matchstore.QueuePresenceMissing},
 		state: coordinator.NewStore(rdb, 10*time.Second, 2*time.Hour, 24*time.Hour, 5*time.Second),
-		persist: &recoverTestStore{
+		matches: &recoverTestStore{
 			accountTypes: map[string]string{"guest-1": "guest"},
 		},
 		appSecret:  []byte("0123456789abcdef0123456789abcdef"),
 		ticketAuth: []byte("abcdef0123456789abcdef0123456789"),
 		internal:   "secret",
 		metrics:    observability.NewAPIMetrics(),
-	}
+	})
 
 	token, err := auth.IssueAppAccessToken(q.appSecret, "guest-1", "sess-1", 15*time.Minute)
 	if err != nil {
@@ -1401,7 +1449,7 @@ func TestHeartbeatRejectsGuestAccount(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 
-	q.heartbeat(rr, req)
+	dispatch(q, func(e *echo.Echo) { e.POST("/queue/heartbeat", q.heartbeat) }, rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())

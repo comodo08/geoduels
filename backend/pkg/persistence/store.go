@@ -3,18 +3,18 @@ package persistence
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	db "geoduels/pkg/persistence/sqlc/db"
+	"geoduels/internal/envcfg"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// NewFromEnv returns the concrete store; consumers depend on the narrow
-// repository interfaces in this package, which *DB satisfies.
+// NewFromEnv opens the shared PostgreSQL pool. Feature packages own queries.
 func NewFromEnv() (*DB, error) {
 	url := os.Getenv("POSTGRES_URL")
 	if url == "" {
@@ -27,7 +27,7 @@ func NewFromEnv() (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if maxConns := getenvInt("POSTGRES_MAX_CONNS", 0); maxConns > 0 {
+	if maxConns := envcfg.Int("POSTGRES_MAX_CONNS", 0); maxConns > 0 {
 		cfg.MaxConns = int32(maxConns)
 	}
 	if strings.EqualFold(os.Getenv("POSTGRES_PGBOUNCER"), "true") {
@@ -45,30 +45,37 @@ func NewFromEnv() (*DB, error) {
 		pool.Close()
 		return nil, err
 	}
-	return &DB{pool: pool, db: db.New(pool)}, nil
+	return &DB{pool: pool}, nil
 }
 
 type DB struct {
 	pool *pgxpool.Pool
-	db   *db.Queries
 }
 
-// withTx keeps transaction ownership inside persistence; callers only provide
-// work against the transaction-bound adapters and never receive pgx.Tx.
-func (s *DB) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err := fn(tx); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
+// Pool exposes the underlying connection pool for feature stores.
+func (s *DB) Pool() *pgxpool.Pool { return s.pool }
 
 func (s *DB) Close() {
 	if s.pool != nil {
 		s.pool.Close()
 	}
+}
+
+func normalizeDBURLForContainer(dsn string) string {
+	if _, err := os.Stat("/.dockerenv"); err != nil {
+		return dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return dsn
+	}
+	if u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" {
+		port := u.Port()
+		if port == "" {
+			port = "5432"
+		}
+		u.Host = "host.docker.internal:" + port
+		return u.String()
+	}
+	return dsn
 }

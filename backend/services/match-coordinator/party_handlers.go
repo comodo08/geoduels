@@ -13,10 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/internal/httpx"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/entityid"
@@ -26,7 +27,7 @@ import (
 	"geoduels/pkg/sessionpolicy"
 )
 
-var partyUpgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
+var partyUpgrader = websocket.Upgrader{CheckOrigin: httpx.WSOriginAllowed}
 
 const (
 	defaultPartyTTL        = 2 * time.Hour
@@ -35,69 +36,57 @@ const (
 	partyPresenceTTL       = 90 * time.Second
 )
 
-func (q *matchCoordinator) createParty(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
+func (q *matchCoordinator) createParty(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
+	if err != nil {
+		return err
 	}
 	var req contracts.PartyCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	mode := req.Mode
 	if mode == "" {
 		mode = contracts.ModeDuel
 	}
 	if !contracts.IsPrivatePartyMode(mode) {
-		http.Error(w, "unsupported party mode", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "unsupported party mode")
 	}
-	snap, err := q.persist.CreateParty(userID, mode, req.MapScope, defaultPartyTTL)
+	snap, err := q.parties.CreateParty(userID, mode, req.MapScope, defaultPartyTTL)
 	if err != nil {
 		observability.Log("error", "create party failed", map[string]any{"userId": userID, "mode": string(mode), "error": err.Error()})
-		http.Error(w, "party unavailable", http.StatusInternalServerError)
-		return
+		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
 	}
 	if req.Config.Ruleset != "" || req.Config.MapID != "" || req.Config.MapKey != "" || req.Config.RoundTimerMode != "" || req.Config.RoundTimeLimitMS > 0 || req.Config.PressureTimeLimitMS > 0 || req.Config.MultiplierMode != "" {
 		if req.Config.MapID == "" && req.Config.MapKey == "" {
 			req.Config.MapID = snap.Config.MapID
 		}
-		configStore, ok := q.persist.(interface {
-			SetPartyConfig(string, contracts.MatchConfig) (contracts.PartySnapshot, error)
-		})
-		if !ok {
-			http.Error(w, "party unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		snap, err = configStore.SetPartyConfig(snap.ID, req.Config)
+		snap, err = q.parties.SetPartyConfig(snap.ID, req.Config)
 		if err != nil {
 			observability.Log("error", "create party settings save failed", map[string]any{"userId": userID, "partyId": snap.ID, "error": err.Error()})
-			http.Error(w, "party unavailable", http.StatusInternalServerError)
-			return
+			return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
 		}
 	}
 	if q.touchPartyPresence(snap.ID, userID, "") {
 		q.publishPartyChanged(r.Context(), snap.ID)
 	}
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) getParty(w http.ResponseWriter, r *http.Request) {
-	userID, authenticated := q.requirePlayableUser(w, r)
-	if !authenticated {
-		return
-	}
-	code := strings.TrimSpace(mux.Vars(r)["code"])
-	snap, ok, err := q.persist.GetPartyByInviteCode(code)
+func (q *matchCoordinator) getParty(c echo.Context) error {
+	userID, err := q.requirePlayableUser(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusInternalServerError)
-		return
+		return err
+	}
+	code := strings.TrimSpace(c.Param("code"))
+	snap, ok, err := q.parties.GetPartyByInviteCode(code)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
 	}
 	if !ok {
-		http.Error(w, "party not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
 	}
 	isMember := false
 	for _, member := range snap.Members {
@@ -107,222 +96,198 @@ func (q *matchCoordinator) getParty(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !isMember {
-		http.Error(w, "party membership required", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "party membership required")
 	}
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) joinParty(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
-	}
-	code := strings.TrimSpace(mux.Vars(r)["code"])
-	snap, found, err := q.persist.GetPartyByInviteCode(code)
+func (q *matchCoordinator) joinParty(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusInternalServerError)
-		return
+		return err
+	}
+	code := strings.TrimSpace(c.Param("code"))
+	snap, found, err := q.parties.GetPartyByInviteCode(code)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
 	}
 	if !found {
-		http.Error(w, "party not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
 	}
-	snap, err = q.persist.JoinParty(snap.ID, userID)
+	snap, err = q.parties.JoinParty(snap.ID, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
+		return httpx.PlainTextError(c, http.StatusConflict, err.Error())
 	}
 	q.touchPartyPresence(snap.ID, userID, "")
 	q.applyPartyPresence(&snap)
 	q.publishPartyChanged(r.Context(), snap.ID)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) leaveParty(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
-	}
-	id := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, err := q.persist.LeaveParty(id, userID)
+func (q *matchCoordinator) leaveParty(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadRequest)
-		return
+		return err
+	}
+	id := strings.TrimSpace(c.Param("id"))
+	snap, err := q.parties.LeaveParty(id, userID)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) kickPartyMember(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
+func (q *matchCoordinator) kickPartyMember(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
+	if err != nil {
+		return err
 	}
 	var req contracts.PartyMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	id := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, err := q.persist.KickPartyMember(id, userID, strings.TrimSpace(req.UserID))
+	id := strings.TrimSpace(c.Param("id"))
+	snap, err := q.parties.KickPartyMember(id, userID, strings.TrimSpace(req.UserID))
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) transferPartyOwner(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
+func (q *matchCoordinator) transferPartyOwner(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
+	if err != nil {
+		return err
 	}
 	var req contracts.PartyMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	id := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, err := q.persist.TransferPartyOwner(id, userID, strings.TrimSpace(req.UserID))
+	id := strings.TrimSpace(c.Param("id"))
+	snap, err := q.parties.TransferPartyOwner(id, userID, strings.TrimSpace(req.UserID))
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) updatePartyTeam(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
+func (q *matchCoordinator) updatePartyTeam(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
+	if err != nil {
+		return err
 	}
 	var req contracts.PartyTeamRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	id := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, err := q.persist.SetPartyMemberTeam(id, userID, strings.TrimSpace(req.TeamID))
+	id := strings.TrimSpace(c.Param("id"))
+	snap, err := q.parties.SetPartyMemberTeam(id, userID, strings.TrimSpace(req.TeamID))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) updatePartySettings(w http.ResponseWriter, r *http.Request) {
-	userID, ok := q.requirePlayableUser(w, r)
-	if !ok {
-		return
-	}
-	id := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, found, err := q.persist.GetPartyByID(id)
+func (q *matchCoordinator) updatePartySettings(c echo.Context) error {
+	r := c.Request()
+	userID, err := q.requirePlayableUser(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusInternalServerError)
-		return
+		return err
+	}
+	id := strings.TrimSpace(c.Param("id"))
+	snap, found, err := q.parties.GetPartyByID(id)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
 	}
 	if !found {
-		http.Error(w, "party not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
 	}
 	if snap.OwnerUserID != userID {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if snap.State != contracts.PartyOpen {
-		http.Error(w, "party settings are locked", http.StatusConflict)
-		return
+		return httpx.PlainTextError(c, http.StatusConflict, "party settings are locked")
 	}
 	var req struct {
 		Mode   contracts.MatchMode   `json:"mode"`
 		Config contracts.MatchConfig `json:"config"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if req.Mode != "" && !contracts.IsPrivatePartyMode(req.Mode) {
-		http.Error(w, "unsupported party mode", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "unsupported party mode")
 	}
 	if req.Mode != "" && req.Mode != snap.Mode {
-		if err := q.persist.SetPartyMode(snap.ID, req.Mode); err != nil {
-			http.Error(w, "party settings unavailable", http.StatusBadGateway)
-			return
+		if err := q.parties.SetPartyMode(snap.ID, req.Mode); err != nil {
+			return httpx.PlainTextError(c, http.StatusBadGateway, "party settings unavailable")
 		}
 		snap.Mode = req.Mode
 	}
-	configStore, ok := q.persist.(interface {
-		SetPartyConfig(string, contracts.MatchConfig) (contracts.PartySnapshot, error)
-	})
-	if !ok {
-		http.Error(w, "party settings unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	snap, err = configStore.SetPartyConfig(snap.ID, req.Config)
+	snap, err = q.parties.SetPartyConfig(snap.ID, req.Config)
 	if err != nil {
 		if errors.Is(err, errPartyMapUnavailable) {
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
+			return httpx.PlainTextError(c, http.StatusUnprocessableEntity, err.Error())
 		}
 		observability.Log("error", "update party settings save failed", map[string]any{"userId": userID, "partyId": snap.ID, "mapId": req.Config.MapID, "error": err.Error()})
-		http.Error(w, "party settings unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "party settings unavailable")
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	q.applyPartyPresence(&snap)
-	q.writeJSON(w, snap)
+	return httpx.JSON(c, http.StatusOK, snap)
 }
 
-func (q *matchCoordinator) partyPresence(w http.ResponseWriter, r *http.Request) {
-	claims, _, active := q.requireActiveAccount(w, r)
-	if !active {
-		return
-	}
-	partyID := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, ok, err := q.persist.GetPartyByID(partyID)
+func (q *matchCoordinator) partyPresence(c echo.Context) error {
+	r := c.Request()
+	claims, _, err := q.requireActiveAccount(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadGateway)
-		return
+		return err
+	}
+	partyID := strings.TrimSpace(c.Param("id"))
+	snap, ok, err := q.parties.GetPartyByID(partyID)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
 	}
 	if !ok || !partyHasMember(snap, claims.Sub) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if q.touchPartyPresence(partyID, claims.Sub, "") {
 		q.publishPartyChanged(r.Context(), partyID)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	return httpx.JSON(c, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (q *matchCoordinator) partyWS(w http.ResponseWriter, r *http.Request) {
-	claims, _, active := q.requireActiveAccount(w, r)
-	if !active {
-		return
-	}
-	partyID := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, ok, err := q.persist.GetPartyByID(partyID)
+func (q *matchCoordinator) partyWS(c echo.Context) error {
+	r := c.Request()
+	claims, _, err := q.requireActiveAccount(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadGateway)
-		return
+		return err
+	}
+	partyID := strings.TrimSpace(c.Param("id"))
+	snap, ok, err := q.parties.GetPartyByID(partyID)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
 	}
 	if !ok || !partyHasMember(snap, claims.Sub) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	conn, err := partyUpgrader.Upgrade(w, r, nil)
+	conn, err := partyUpgrader.Upgrade(c.Response().Writer, r, nil)
 	if err != nil {
-		return
+		return nil
 	}
 	defer conn.Close()
 
@@ -361,14 +326,14 @@ func (q *matchCoordinator) partyWS(w http.ResponseWriter, r *http.Request) {
 	if q.touchPartyPresence(partyID, claims.Sub, connID) {
 		q.publishPartyChanged(r.Context(), partyID)
 	}
-	if latest, ok, err := q.persist.GetPartyByID(partyID); err != nil || !ok {
+	if latest, ok, err := q.parties.GetPartyByID(partyID); err != nil || !ok {
 		q.writeQueueMessage(conn, &writeMu, "party_error", map[string]string{"message": "Party unavailable"})
-		return
+		return nil
 	} else {
 		snap = latest
 		if !partyHasMember(snap, claims.Sub) {
 			q.writeQueueMessage(conn, &writeMu, "party_error", map[string]string{"message": "You left this party"})
-			return
+			return nil
 		}
 	}
 	q.applyPartyPresence(&snap)
@@ -378,7 +343,7 @@ func (q *matchCoordinator) partyWS(w http.ResponseWriter, r *http.Request) {
 	revision := int64(1)
 
 	refreshParty := func() bool {
-		next, ok, err := q.persist.GetPartyByID(partyID)
+		next, ok, err := q.parties.GetPartyByID(partyID)
 		if err != nil || !ok {
 			q.writeQueueMessage(conn, &writeMu, "party_error", map[string]string{"message": "Party unavailable"})
 			return false
@@ -417,16 +382,16 @@ func (q *matchCoordinator) partyWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case event, ok := <-partyEvents:
 			if !ok {
-				return
+				return nil
 			}
 			if event == nil || event.Payload != partyevents.KindChanged {
 				continue
 			}
 			if !refreshParty() {
-				return
+				return nil
 			}
 		case <-presenceTicker.C:
 			if q.touchPartyPresence(partyID, claims.Sub, connID) {
@@ -434,63 +399,52 @@ func (q *matchCoordinator) partyWS(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-pingTicker.C:
 			if !q.writeQueuePing(conn, &writeMu) {
-				return
+				return nil
 			}
 		}
 	}
 }
 
-func (q *matchCoordinator) requirePlayableUser(w http.ResponseWriter, r *http.Request) (string, bool) {
-	appClaims, identity, ok := q.requireActiveAccount(w, r)
-	if !ok {
-		return "", false
+func (q *matchCoordinator) requirePlayableUser(c echo.Context) (string, error) {
+	appClaims, identity, err := q.requireActiveAccount(c)
+	if err != nil {
+		return "", err
 	}
 	if identity.NicknameRequired {
-		http.Error(w, "nickname required", http.StatusForbidden)
-		return "", false
+		return "", httpx.PlainTextError(c, http.StatusForbidden, "nickname required")
 	}
 	if identity.AuthMigrationRequired {
-		http.Error(w, "connect discord to continue", http.StatusForbidden)
-		return "", false
+		return "", httpx.PlainTextError(c, http.StatusForbidden, "connect discord to continue")
 	}
-	return appClaims.Sub, true
+	return appClaims.Sub, nil
 }
 
-func (q *matchCoordinator) writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func (q *matchCoordinator) startParty(w http.ResponseWriter, r *http.Request) {
-	claims, _, active := q.requireActiveAccount(w, r)
-	if !active {
-		return
-	}
-	partyID := strings.TrimSpace(mux.Vars(r)["id"])
-	snap, ok, err := q.persist.GetPartyByID(partyID)
+func (q *matchCoordinator) startParty(c echo.Context) error {
+	r := c.Request()
+	claims, _, err := q.requireActiveAccount(c)
 	if err != nil {
-		http.Error(w, "party unavailable", http.StatusBadGateway)
-		return
+		return err
+	}
+	partyID := strings.TrimSpace(c.Param("id"))
+	snap, ok, err := q.parties.GetPartyByID(partyID)
+	if err != nil {
+		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
 	}
 	if !ok {
-		http.Error(w, "party not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
 	}
 	if snap.OwnerUserID != claims.Sub {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if q.redis != nil {
 		q.applyPartyPresence(&snap)
 		if err := requirePartyPresence(snap); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
+			return httpx.PlainTextError(c, http.StatusConflict, err.Error())
 		}
 	}
 	found, err := q.partyMatchFound(snap)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
+		return httpx.PlainTextError(c, http.StatusConflict, err.Error())
 	}
 	for _, userID := range found.Players {
 		if assigned, ok, err := q.state.GetAssignmentByUser(r.Context(), userID); err == nil && ok {
@@ -498,8 +452,7 @@ func (q *matchCoordinator) startParty(w http.ResponseWriter, r *http.Request) {
 			switch q.launcher().ValidateAssignment(r.Context(), assigned) {
 			case matchlaunch.AssignmentValid, matchlaunch.AssignmentPending:
 				if contracts.IsPrivatePartyMode(mode) {
-					http.Error(w, activePartyMatchConflict(userID, assigned, found.Profiles[userID]), http.StatusConflict)
-					return
+					return httpx.PlainTextError(c, http.StatusConflict, activePartyMatchConflict(userID, assigned, found.Profiles[userID]))
 				}
 				q.clearSupersededAssignment(context.Background(), assigned)
 			case matchlaunch.AssignmentAbandoned, matchlaunch.AssignmentInvalid:
@@ -509,22 +462,18 @@ func (q *matchCoordinator) startParty(w http.ResponseWriter, r *http.Request) {
 	}
 	assigned, err := q.launcher().EnsureAssignment(r.Context(), found)
 	if err != nil {
-		http.Error(w, "party start failed", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "party start failed")
 	}
-	snap, err = q.persist.MarkPartyInMatch(partyID, found.MatchID)
+	snap, err = q.parties.MarkPartyInMatch(partyID, found.MatchID)
 	if err != nil {
-		http.Error(w, "party start failed", http.StatusConflict)
-		return
+		return httpx.PlainTextError(c, http.StatusConflict, "party start failed")
 	}
 	q.publishPartyChanged(r.Context(), snap.ID)
 	payload, ok, err := q.launcher().AssignedPayload(claims.Sub, assigned)
 	if err != nil || !ok {
-		http.Error(w, "unable to issue gameplay ticket", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "unable to issue gameplay ticket")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(contracts.PartyStartResponse{Assignment: payload})
+	return httpx.JSON(c, http.StatusOK, contracts.PartyStartResponse{Assignment: payload})
 }
 
 func (q *matchCoordinator) clearSupersededAssignment(ctx context.Context, assigned coordinator.Assignment) {
@@ -532,8 +481,8 @@ func (q *matchCoordinator) clearSupersededAssignment(ctx context.Context, assign
 		q.terminateSupersededMatch(ctx, assigned)
 	}
 	_ = q.state.ClearAssignment(ctx, assigned)
-	if q.persist != nil && sessionpolicy.NormalizeMode(assigned.Mode, assigned.MatchID) == contracts.ModeSingleplayer {
-		_ = q.persist.RecordRuntimeMatch(ctx, assigned.MatchID, string(contracts.MatchEnded), assigned.NodeEpoch, true)
+	if q.matches != nil && sessionpolicy.NormalizeMode(assigned.Mode, assigned.MatchID) == contracts.ModeSingleplayer {
+		_ = q.matches.RecordRuntimeMatch(ctx, assigned.MatchID, string(contracts.MatchEnded), assigned.NodeEpoch, true)
 	}
 }
 
@@ -641,7 +590,7 @@ func (q *matchCoordinator) partyMatchFound(snap contracts.PartySnapshot) (contra
 			IsAdmin:       member.IsAdmin,
 			SelectedBadge: member.SelectedBadge,
 		}
-		if profile, err := q.persist.GetProfile(member.UserID); err == nil {
+		if profile, err := q.profiles.GetProfile(member.UserID); err == nil {
 			player := match.Profiles[member.UserID]
 			player.MMR = profile.MMR
 			player.RatingRD = profile.RatingRD
@@ -913,12 +862,12 @@ func (q *matchCoordinator) runPartyCleanupLoop(interval, inactivityTTL time.Dura
 }
 
 func (q *matchCoordinator) cleanupOpenParties(_ time.Duration) {
-	if reopened, err := q.persist.ReopenEndedParties(); err != nil {
+	if reopened, err := q.parties.ReopenEndedParties(); err != nil {
 		observability.Log("warn", "ended party reopen failed", map[string]any{"error": err.Error()})
 	} else if reopened > 0 {
 		observability.Log("info", "ended parties reopened", map[string]any{"members": reopened})
 	}
-	if err := q.persist.ExpireOpenParties(); err != nil {
+	if err := q.parties.ExpireOpenParties(); err != nil {
 		observability.Log("warn", "party expiry cleanup failed", map[string]any{"error": err.Error()})
 		return
 	}

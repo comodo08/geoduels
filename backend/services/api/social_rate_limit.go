@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -59,10 +60,10 @@ func (a *api) allowSocialAction(r *http.Request, userID, policyName string) (boo
 	return ttl <= 0, time.Duration(ttl) * time.Millisecond, nil
 }
 
-func writeSocialRateLimited(w http.ResponseWriter, retryAfter time.Duration) {
+func writeSocialRateLimited(c echo.Context, retryAfter time.Duration) error {
 	if retryAfter > 0 {
 		seconds := max(1, int(retryAfter.Round(time.Second).Seconds()))
-		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		c.Response().Header().Set("Retry-After", strconv.Itoa(seconds))
 	}
-	writeSocialError(w, http.StatusTooManyRequests, "rate_limited")
+	return writeSocialError(c, http.StatusTooManyRequests, "rate_limited")
 }

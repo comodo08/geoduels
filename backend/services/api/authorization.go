@@ -5,30 +5,32 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/labstack/echo/v4"
+
+	"geoduels/internal/accounts"
 	"geoduels/pkg/auth"
-	"geoduels/pkg/persistence"
 )
 
 type requestPrincipalKey struct{}
 
 type requestPrincipal struct {
 	claims   auth.AppClaims
-	identity persistence.Identity
+	identity accounts.Identity
 }
 
-func (a *api) authenticatedAccount(r *http.Request) (auth.AppClaims, persistence.Identity, error) {
+func (a *api) authenticatedAccount(r *http.Request) (auth.AppClaims, accounts.Identity, error) {
 	if principal, ok := r.Context().Value(requestPrincipalKey{}).(requestPrincipal); ok {
 		return principal.claims, principal.identity, nil
 	}
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		return auth.AppClaims{}, persistence.Identity{}, err
+		return auth.AppClaims{}, accounts.Identity{}, err
 	}
 	identity, err := a.accounts.GetIdentity(claims.Sub)
 	return claims, identity, err
 }
 
-func (a *api) authenticatedIdentity(r *http.Request) (persistence.Identity, error) {
+func (a *api) authenticatedIdentity(r *http.Request) (accounts.Identity, error) {
 	_, identity, err := a.authenticatedAccount(r)
 	return identity, err
 }
@@ -41,24 +43,23 @@ func (a *api) accountBanned(userID string) (bool, error) {
 // active protects actions that a signed-in but banned account may not
 // perform. Authentication, account management, notifications, and read-only
 // routes deliberately do not use this wrapper.
-func (a *api) active(next http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, identity, err := a.authenticatedAccount(r)
+func (a *api) active(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		claims, identity, err := a.authenticatedAccount(c.Request())
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+			return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 		}
 		if identity.IsBanned {
-			writeAPIError(w, http.StatusForbidden, "account_banned", "user is banned")
-			return
+			return writeAPIError(c, http.StatusForbidden, "account_banned", "user is banned")
 		}
-		ctx := context.WithValue(r.Context(), requestPrincipalKey{}, requestPrincipal{claims: claims, identity: identity})
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+		ctx := context.WithValue(c.Request().Context(), requestPrincipalKey{}, requestPrincipal{claims: claims, identity: identity})
+		c.SetRequest(c.Request().WithContext(ctx))
+		return next(c)
+	}
 }
 
-func writeAPIError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message, "code": code})
+func writeAPIError(c echo.Context, status int, code, message string) error {
+	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	c.Response().WriteHeader(status)
+	return json.NewEncoder(c.Response()).Encode(map[string]string{"error": message, "code": code})
 }

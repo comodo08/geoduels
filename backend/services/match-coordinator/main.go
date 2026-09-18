@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -16,14 +15,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/internal/accounts"
+	"geoduels/internal/chat"
+	"geoduels/internal/envcfg"
+	"geoduels/internal/httpx"
+	"geoduels/internal/maps"
+	"geoduels/internal/matches"
+	"geoduels/internal/parties"
+	"geoduels/internal/profiles"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/controlplane"
 	"geoduels/pkg/coordinator"
+
 	"geoduels/pkg/maintenance"
 	"geoduels/pkg/matchlaunch"
 	"geoduels/pkg/matchstore"
@@ -32,29 +40,20 @@ import (
 	"geoduels/pkg/sessionpolicy"
 )
 
-// persistentStore is the narrow persistence surface the coordinator service
-// needs; satisfied by the sqlc-backed persistence store.
-// Handler-facing persistence types are re-exported locally so handler files
-// never import the persistence package directly.
-type chatRestriction = persistence.ChatRestriction
+type chatRestriction = chat.ChatRestriction
 
-var errPartyMapUnavailable = persistence.ErrPartyMapUnavailable
-
-type persistentStore interface {
-	persistence.AccountRepository
-	persistence.ProfileRepository
-	persistence.MatchRepository
-	persistence.RuntimeRepository
-	persistence.PartyRepository
-	persistence.GameplayMapRepository
-	persistence.ChatRepository
-	Close()
-}
+var errPartyMapUnavailable = parties.ErrPartyMapUnavailable
 
 type matchCoordinator struct {
 	store           matchstore.Store
 	state           *coordinator.Store
-	persist         persistentStore
+	db              *persistence.DB
+	accounts        accounts.Store
+	profiles        profiles.Store
+	matches         matches.Store
+	parties         parties.Store
+	chat            chat.Store
+	mapsStore       *maps.PGStore
 	redis           *redis.Client
 	httpClient      *http.Client
 	appSecret       []byte
@@ -70,7 +69,7 @@ type matchCoordinator struct {
 	chatRecent      map[string][]time.Time
 }
 
-var queueUpgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
+var queueUpgrader = websocket.Upgrader{CheckOrigin: httpx.WSOriginAllowed}
 
 func main() {
 	rdb, redisCleanup, err := redisFromEnv()
@@ -85,21 +84,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
-	if err := persist.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
+	pool := persist.Pool()
+	mapsStore := maps.NewPGStore(pool)
+	matchStore := matches.NewPGStore(pool)
+	partyStore := parties.NewPGStore(pool, mapsStore)
+	singleplayerTTL := envcfg.Duration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
+	if err := matchStore.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
-	if err := persist.ExpireOpenParties(); err != nil {
+	if err := partyStore.ExpireOpenParties(); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := persist.ReopenEndedParties(); err != nil {
+	if _, err := partyStore.ReopenEndedParties(); err != nil {
 		log.Fatal(err)
 	}
-	appSecret, err := requiredSecret("APP_AUTH_SECRET", 32)
+	appSecret, err := envcfg.RequiredSecret("APP_AUTH_SECRET", 32)
 	if err != nil {
 		log.Fatal(err)
 	}
-	ticketSecret, err := requiredSecret("GAMEPLAY_TICKET_SECRET", 32)
+	ticketSecret, err := envcfg.RequiredSecret("GAMEPLAY_TICKET_SECRET", 32)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -110,8 +113,14 @@ func main() {
 
 	q := &matchCoordinator{
 		store:      store,
-		state:      coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
-		persist:    persist,
+		state:      coordinator.NewStore(rdb, envcfg.Duration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		db:         persist,
+		accounts:   accounts.NewPGStore(pool),
+		profiles:   profiles.NewPGStore(pool),
+		matches:    matchStore,
+		parties:    partyStore,
+		chat:       chat.NewPGStore(pool),
+		mapsStore:  mapsStore,
 		redis:      rdb,
 		httpClient: &http.Client{Timeout: 3 * time.Second},
 		appSecret:  appSecret,
@@ -120,38 +129,60 @@ func main() {
 		metrics:    observability.NewAPIMetrics(),
 		chatRecent: map[string][]time.Time{},
 	}
-	defer q.persist.Close()
+	defer q.db.Close()
 	defer redisCleanup()
 	if err := q.acquireMatchmakerLease(); err != nil {
 		log.Fatal(err)
 	}
 	defer q.releaseMatchmakerLease()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/health", q.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/live", q.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/ready", q.healthReady).Methods(http.MethodGet)
-	r.HandleFunc("/queue", q.queue).Methods(http.MethodGet)
-	r.HandleFunc("/queue/heartbeat", q.heartbeat).Methods(http.MethodPost)
-	r.HandleFunc("/queue/online", q.online).Methods(http.MethodGet)
-	r.HandleFunc("/chat/ws", q.chatWS).Methods(http.MethodGet)
-	r.HandleFunc("/parties", q.createParty).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/ws", q.partyWS).Methods(http.MethodGet)
-	r.HandleFunc("/parties/{id}/presence", q.partyPresence).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/start", q.startParty).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/leave", q.leaveParty).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/kick", q.kickPartyMember).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/transfer-owner", q.transferPartyOwner).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{id}/team", q.updatePartyTeam).Methods(http.MethodPatch)
-	r.HandleFunc("/parties/{id}/settings", q.updatePartySettings).Methods(http.MethodPatch)
-	r.HandleFunc("/parties/{code}/join", q.joinParty).Methods(http.MethodPost)
-	r.HandleFunc("/parties/{code}", q.getParty).Methods(http.MethodGet)
-	r.Handle("/metrics", observability.Handler(q.metrics.Registry)).Methods(http.MethodGet)
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+		code := http.StatusInternalServerError
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+		}
+		if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
+			_ = c.NoContent(code)
+			return
+		}
+		e.DefaultHTTPErrorHandler(err, c)
+	}
+	e.Use(httpx.CORS)
+	if q.metrics != nil {
+		e.Use(q.metrics.EchoMiddleware)
+	}
+	e.GET("/health", q.healthLive)
+	e.GET("/health/live", q.healthLive)
+	e.GET("/health/ready", q.healthReady)
+	e.GET("/queue", q.queue)
+	e.POST("/queue/heartbeat", q.heartbeat)
+	e.GET("/queue/online", q.online)
+	e.GET("/chat/ws", q.chatWS)
+	e.POST("/parties", q.createParty)
+	e.GET("/parties/:id/ws", q.partyWS)
+	e.POST("/parties/:id/presence", q.partyPresence)
+	e.POST("/parties/:id/start", q.startParty)
+	e.POST("/parties/:id/leave", q.leaveParty)
+	e.POST("/parties/:id/kick", q.kickPartyMember)
+	e.POST("/parties/:id/transfer-owner", q.transferPartyOwner)
+	e.PATCH("/parties/:id/team", q.updatePartyTeam)
+	e.PATCH("/parties/:id/settings", q.updatePartySettings)
+	e.POST("/parties/:code/join", q.joinParty)
+	e.GET("/parties/:code", q.getParty)
+	if q.metrics != nil {
+		e.GET("/metrics", echo.WrapHandler(observability.Handler(q.metrics.Registry)))
+	}
 
-	addr := getenv("MATCH_COORDINATOR_ADDR", getenv("QUEUE_COORDINATOR_ADDR", ":8090"))
+	addr := envcfg.Get("MATCH_COORDINATOR_ADDR", envcfg.Get("QUEUE_COORDINATOR_ADDR", ":8090"))
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           cors(q.metrics.Middleware(r)),
+		Handler:           e,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       20 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -159,13 +190,13 @@ func main() {
 	}
 	observability.Log("info", "match-coordinator startup", map[string]any{"addr": addr})
 	go q.runPartyCleanupLoop(
-		getenvDuration("PARTY_CLEANUP_INTERVAL", getenvDuration("LOBBY_CLEANUP_INTERVAL", 30*time.Second)),
-		getenvDuration("PARTY_INACTIVITY_TTL", getenvDuration("LOBBY_INACTIVITY_TTL", 5*time.Minute)),
+		envcfg.Duration("PARTY_CLEANUP_INTERVAL", envcfg.Duration("LOBBY_CLEANUP_INTERVAL", 30*time.Second)),
+		envcfg.Duration("PARTY_INACTIVITY_TTL", envcfg.Duration("LOBBY_INACTIVITY_TTL", 5*time.Minute)),
 	)
 	go q.runMatchmakerLeaseLoop()
 	go q.runMatchmakingLoop(
-		getenvDuration("MATCHMAKING_INTERVAL", 500*time.Millisecond),
-		getenvInt("MATCHMAKING_BATCH_SIZE", 50),
+		envcfg.Duration("MATCHMAKING_INTERVAL", 500*time.Millisecond),
+		envcfg.Int("MATCHMAKING_BATCH_SIZE", 50),
 	)
 	go q.handleShutdown(srv)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -214,7 +245,7 @@ func (q *matchCoordinator) acquireMatchmakerLease() error {
 	if err != nil {
 		return fmt.Errorf("open matchmaker durable lease: %w", err)
 	}
-	ttl := getenvDuration("MATCHMAKER_LEASE_TTL", 15*time.Second)
+	ttl := envcfg.Duration("MATCHMAKER_LEASE_TTL", 15*time.Second)
 	lease, acquired, err := store.Acquire(ctx, matchmakerLeaseName, owner, ttl)
 	if err != nil {
 		closeStore()
@@ -231,7 +262,7 @@ func (q *matchCoordinator) acquireMatchmakerLease() error {
 }
 
 func (q *matchCoordinator) runMatchmakerLeaseLoop() {
-	ttl := getenvDuration("MATCHMAKER_LEASE_TTL", 15*time.Second)
+	ttl := envcfg.Duration("MATCHMAKER_LEASE_TTL", 15*time.Second)
 	interval := ttl / 3
 	if interval < time.Second {
 		interval = time.Second
@@ -272,41 +303,36 @@ func (q *matchCoordinator) releaseMatchmakerLease() {
 	}
 }
 
-func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
+func (q *matchCoordinator) queue(c echo.Context) error {
+	r := c.Request()
 	if q.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	if !q.isMatchmakerOwner() {
-		http.Error(w, "matchmaker unavailable", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "matchmaker unavailable")
 	}
 	status, err := q.maintenanceStatus(r.Context())
 	if err != nil {
-		http.Error(w, "queue unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "queue unavailable")
 	}
 	if status.QueueBlocked() {
-		http.Error(w, maintenanceQueueMessage(status), http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, maintenanceQueueMessage(status))
 	}
-	claims, identity, ok := q.requireActiveAccount(w, r)
-	if !ok {
-		return
+	claims, identity, err := q.requireActiveAccount(c)
+	if err != nil {
+		return err
 	}
 	if identity.NicknameRequired {
-		http.Error(w, "nickname required", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "nickname required")
 	}
 	if identity.AccountType == "guest" {
-		http.Error(w, "account required", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "account required")
 	}
 	userID := claims.Sub
 
-	conn, err := queueUpgrader.Upgrade(w, r, nil)
+	conn, err := queueUpgrader.Upgrade(c.Response().Writer, r, nil)
 	if err != nil {
-		return
+		return nil
 	}
 	defer conn.Close()
 	q.touchPresence(userID)
@@ -340,16 +366,16 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 				payload, ok, err := q.launcher().AssignedPayload(userID, assigned)
 				if err == nil && ok {
 					q.writeQueueMessage(conn, &writeMu, "match_assigned", payload)
-					return
+					return nil
 				}
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "ACTIVE_MATCH_CONFLICT", "message": "Finish or resume your current duel before queueing again."})
-				return
+				return nil
 			}
 			q.clearSupersededAssignment(context.Background(), assigned)
 		case matchlaunch.AssignmentPending:
 			if contracts.IsPrivatePartyMode(mode) {
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "ACTIVE_MATCH_CONFLICT", "message": "Finish or resume your current duel before queueing again."})
-				return
+				return nil
 			}
 			q.clearSupersededAssignment(context.Background(), assigned)
 		case matchlaunch.AssignmentAbandoned, matchlaunch.AssignmentInvalid:
@@ -357,23 +383,21 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	profile, err := q.persist.GetProfile(userID)
+	profile, err := q.profiles.GetProfile(userID)
 	if err != nil {
-		http.Error(w, "profile unavailable", http.StatusInternalServerError)
-		return
+		return httpx.PlainTextError(c, http.StatusInternalServerError, "profile unavailable")
 	}
 	if profile.DisplayName == "" {
 		profile.DisplayName = userID
 	}
 	queuePool := matchstore.QueuePoolRegistered
 	selectedQueues := parseQueueVariants(
-		r.URL.Query().Get("queues"),
-		r.URL.Query().Get("rulesets"),
+		c.QueryParam("queues"),
+		c.QueryParam("rulesets"),
 	)
 
 	if err := q.store.LeaveAllRulesets(queuePool, userID); err != nil {
-		http.Error(w, "queue unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "queue unavailable")
 	}
 
 	var found *contracts.MatchFound
@@ -391,8 +415,7 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 			SelectedBadge:     profile.SelectedBadge,
 		})
 		if err != nil {
-			http.Error(w, "queue unavailable", http.StatusBadGateway)
-			return
+			return httpx.PlainTextError(c, http.StatusBadGateway, "queue unavailable")
 		}
 		if found == nil {
 			found = nextFound
@@ -403,7 +426,7 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 		Status:   "queued",
 		QueuedAt: time.Now().UnixMilli(),
 	}) {
-		return
+		return nil
 	}
 
 	pollTicker := time.NewTicker(500 * time.Millisecond)
@@ -422,14 +445,14 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 	for {
 		if q.draining.Load() {
 			q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "DRAINING", "message": "Queue server is restarting. Please re-queue."})
-			return
+			return nil
 		}
 		if found == nil {
 			found, err = q.store.Poll(queuePool, selectedQueues, userID)
 			if err != nil {
 				observability.Log("warn", "queue poll failed", map[string]any{"userId": userID, "pool": string(queuePool), "queues": selectedQueues, "error": err.Error()})
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "QUEUE_POLL_FAILED", "message": "queue poll failed"})
-				return
+				return nil
 			}
 		}
 		if found != nil {
@@ -441,21 +464,21 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 			rec, err := q.launcher().EnsureAssignment(r.Context(), *found)
 			if err != nil {
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "MATCH_ASSIGN_FAILED", "message": err.Error()})
-				return
+				return nil
 			}
 			payload, ok, err := q.launcher().AssignedPayload(userID, rec)
 			if err != nil || !ok {
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "MATCH_ASSIGN_FAILED", "message": "unable to issue gameplay ticket"})
-				return
+				return nil
 			}
 			assigned = true
 			q.writeQueueMessage(conn, &writeMu, "match_assigned", payload)
-			return
+			return nil
 		}
 
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-pollTicker.C:
 		case <-heartbeatTicker.C:
 			q.touchPresence(userID)
@@ -463,15 +486,15 @@ func (q *matchCoordinator) queue(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				observability.Log("warn", "queue heartbeat failed", map[string]any{"userId": userID, "pool": string(queuePool), "queues": selectedQueues, "error": err.Error()})
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "QUEUE_HEARTBEAT_FAILED", "message": "queue heartbeat failed"})
-				return
+				return nil
 			}
 			if status == matchstore.QueuePresenceMissing {
 				q.writeQueueMessage(conn, &writeMu, "queue_error", map[string]string{"code": "QUEUE_EXPIRED", "message": "Queue expired. Please re-queue."})
-				return
+				return nil
 			}
 		case <-pingTicker.C:
 			if !q.writeQueuePing(conn, &writeMu) {
-				return
+				return nil
 			}
 		}
 	}
@@ -483,27 +506,24 @@ func (q *matchCoordinator) isMatchmakerOwner() bool {
 	return q.leaseStore == nil || q.matchmakerOwner.Load()
 }
 
-func (q *matchCoordinator) heartbeat(w http.ResponseWriter, r *http.Request) {
-	claims, identity, ok := q.requireActiveAccount(w, r)
-	if !ok {
-		return
+func (q *matchCoordinator) heartbeat(c echo.Context) error {
+	claims, identity, err := q.requireActiveAccount(c)
+	if err != nil {
+		return err
 	}
 	if identity.NicknameRequired {
-		http.Error(w, "nickname required", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "nickname required")
 	}
 	if identity.AccountType == "guest" {
-		http.Error(w, "account required", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "account required")
 	}
 	q.touchPresence(claims.Sub)
 
 	status, err := q.store.Heartbeat(matchstore.QueuePoolRegistered, matchstore.AllQueueVariants, claims.Sub)
 	if err != nil {
-		http.Error(w, "queue unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "queue unavailable")
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": status})
+	return httpx.JSON(c, http.StatusOK, map[string]string{"status": status})
 }
 
 func parseQueueVariants(rawQueues string, legacyRulesets string) []matchstore.QueueVariant {
@@ -549,7 +569,7 @@ func (q *matchCoordinator) matchEnded(matchID string) bool {
 	if matchID == "" {
 		return false
 	}
-	rec, ok, err := q.persist.GetRuntimeMatch(context.Background(), matchID)
+	rec, ok, err := q.matches.GetRuntimeMatch(context.Background(), matchID)
 	if err != nil {
 		log.Printf("runtime match lookup failed for %s: %v", matchID, err)
 		return false
@@ -577,22 +597,21 @@ func (q *matchCoordinator) clearQueuedMatch(ctx context.Context, players []strin
 	}
 }
 
-func (q *matchCoordinator) online(w http.ResponseWriter, r *http.Request) {
+func (q *matchCoordinator) online(c echo.Context) error {
+	r := c.Request()
 	total, err := q.state.CountPresentUsers(r.Context())
 	if err != nil {
-		http.Error(w, "unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "unavailable")
 	}
 	status, err := q.maintenanceStatus(r.Context())
 	if err != nil {
-		http.Error(w, "unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "unavailable")
 	}
 	resp := map[string]any{"online": total}
 	if status.IsVisible() {
 		resp["maintenance"] = status
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	return httpx.JSON(c, http.StatusOK, resp)
 }
 
 func (q *matchCoordinator) touchPresence(userID string) {
@@ -602,13 +621,17 @@ func (q *matchCoordinator) touchPresence(userID string) {
 }
 
 func (q *matchCoordinator) launcher() matchlaunch.Launcher {
-	return matchlaunch.Launcher{
+	l := matchlaunch.Launcher{
 		Coord:          q.state,
-		Persist:        q.persist,
+		Persist:        q.matches,
 		HTTPClient:     q.httpClient,
 		TicketSecret:   q.ticketAuth,
 		InternalSecret: q.internal,
 	}
+	if q.mapsStore != nil {
+		l.Planner = q.mapsStore
+	}
+	return l
 }
 
 func (q *matchCoordinator) authenticatedClaims(r *http.Request) (auth.AppClaims, error) {
@@ -630,24 +653,20 @@ func (q *matchCoordinator) authenticatedClaims(r *http.Request) (auth.AppClaims,
 	return claims, nil
 }
 
-func (q *matchCoordinator) requireActiveAccount(w http.ResponseWriter, r *http.Request) (auth.AppClaims, persistence.Identity, bool) {
+func (q *matchCoordinator) requireActiveAccount(c echo.Context) (auth.AppClaims, accounts.Identity, error) {
+	r := c.Request()
 	claims, err := q.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return auth.AppClaims{}, persistence.Identity{}, false
+		return auth.AppClaims{}, accounts.Identity{}, httpx.PlainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	identity, err := q.persist.GetIdentity(claims.Sub)
+	identity, err := q.accounts.GetIdentity(claims.Sub)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return auth.AppClaims{}, persistence.Identity{}, false
+		return auth.AppClaims{}, accounts.Identity{}, httpx.PlainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	if identity.IsBanned {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "user is banned", "code": "account_banned"})
-		return auth.AppClaims{}, persistence.Identity{}, false
+		return auth.AppClaims{}, accounts.Identity{}, httpx.JSON(c, http.StatusForbidden, map[string]string{"error": "user is banned", "code": "account_banned"})
 	}
-	return claims, identity, true
+	return claims, identity, nil
 }
 
 func (q *matchCoordinator) writeQueueMessage(conn *websocket.Conn, writeMu *sync.Mutex, event string, payload any) bool {
@@ -665,40 +684,36 @@ func (q *matchCoordinator) writeQueuePing(conn *websocket.Conn, writeMu *sync.Mu
 	return conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)) == nil
 }
 
-func (q *matchCoordinator) healthLive(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (q *matchCoordinator) healthLive(c echo.Context) error {
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ok"))
+	return nil
 }
 
-func (q *matchCoordinator) healthReady(w http.ResponseWriter, _ *http.Request) {
+func (q *matchCoordinator) healthReady(c echo.Context) error {
 	if q.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	if !q.isMatchmakerOwner() {
-		http.Error(w, "matchmaker standby", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "matchmaker standby")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := q.redis.Ping(ctx).Err(); err != nil {
-		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "redis not ready")
 	}
-	if _, err := q.persist.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetMoving, ""); err != nil {
-		http.Error(w, "moving map is not configured", http.StatusServiceUnavailable)
-		return
+	if _, err := q.mapsStore.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetMoving, ""); err != nil {
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "moving map is not configured")
 	}
-	if _, err := q.persist.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetNoMove, ""); err != nil {
-		http.Error(w, "no-move map is not configured", http.StatusServiceUnavailable)
-		return
+	if _, err := q.mapsStore.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetNoMove, ""); err != nil {
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "no-move map is not configured")
 	}
-	if _, err := q.persist.ResolveGameplayMapID(contracts.ModeSingleplayer, contracts.RulesetNMPZ, ""); err != nil {
-		http.Error(w, "nmpz map is not configured", http.StatusServiceUnavailable)
-		return
+	if _, err := q.mapsStore.ResolveGameplayMapID(contracts.ModeSingleplayer, contracts.RulesetNMPZ, ""); err != nil {
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "nmpz map is not configured")
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ready"))
+	return nil
 }
 
 func (q *matchCoordinator) maintenanceStatus(ctx context.Context) (maintenance.Status, error) {
@@ -738,7 +753,7 @@ func (q *matchCoordinator) handleShutdown(srv *http.Server) {
 }
 
 func redisFromEnv() (*redis.Client, func(), error) {
-	url := getenv("REDIS_URL", "")
+	url := envcfg.Get("REDIS_URL", "")
 	if url == "" {
 		return nil, nil, errors.New("REDIS_URL is required")
 	}
@@ -753,91 +768,4 @@ func redisFromEnv() (*redis.Client, func(), error) {
 		return nil, nil, err
 	}
 	return rdb, func() { _ = rdb.Close() }, nil
-}
-
-func cors(next http.Handler) http.Handler {
-	allowed := allowedOriginsSet()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" && (allowed["*"] || allowed[origin]) {
-			if allowed["*"] {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func allowedOriginsSet() map[string]bool {
-	raw := getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-	out := map[string]bool{}
-	for _, s := range strings.Split(raw, ",") {
-		origin := strings.TrimSpace(s)
-		if origin == "" {
-			continue
-		}
-		out[origin] = true
-	}
-	return out
-}
-
-func wsOriginAllowed(r *http.Request) bool {
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		return true
-	}
-	allowed := allowedOriginsSet()
-	return allowed["*"] || allowed[origin]
-}
-
-func getenv(k, fallback string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func getenvDuration(k string, fallback time.Duration) time.Duration {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
-}
-
-func getenvInt(k string, fallback int) int {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return n
-}
-
-func requiredSecret(k string, minLen int) ([]byte, error) {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return nil, errors.New(k + " is required")
-	}
-	if len(v) < minLen {
-		return nil, errors.New(k + " must be at least " + strconv.Itoa(minLen) + " characters")
-	}
-	return []byte(v), nil
 }

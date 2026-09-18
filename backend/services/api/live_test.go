@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,27 +9,27 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type liveSocialStore struct {
 	testRepositories
-	friends []persistence.CompactPlayer
+	friends []socialdomain.CompactPlayer
 }
 
 func (s *liveSocialStore) GetSocialAccount(context.Context, string) (bool, bool, bool, error) {
 	return false, true, true, nil
 }
-func (s *liveSocialStore) GetSocialSettings(context.Context, string) (persistence.SocialSettings, error) {
-	return persistence.SocialSettings{PresenceVisible: true}, nil
+func (s *liveSocialStore) GetSocialSettings(context.Context, string) (socialdomain.SocialSettings, error) {
+	return socialdomain.SocialSettings{PresenceVisible: true}, nil
 }
-func (s *liveSocialStore) ListFriends(_ context.Context, userID string, _ int) ([]persistence.CompactPlayer, error) {
+func (s *liveSocialStore) ListFriends(_ context.Context, userID string, _ int) ([]socialdomain.CompactPlayer, error) {
 	if userID == "viewer-1" {
 		return s.friends, nil
 	}
@@ -46,7 +45,7 @@ func TestUserLiveSendsHelloAndPresencePatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := &liveSocialStore{friends: []persistence.CompactPlayer{{UserID: "friend-1"}}}
+	store := &liveSocialStore{friends: []socialdomain.CompactPlayer{{UserID: "friend-1"}}}
 	coordStore := coordinator.NewStore(rdb, time.Minute, time.Hour, time.Hour, time.Second)
 	a := &api{
 		social:        socialdomain.NewService(store),
@@ -55,7 +54,9 @@ func TestUserLiveSendsHelloAndPresencePatch(t *testing.T) {
 		appAuthSecret: secret,
 	}
 	a.live = newLiveHub(a)
-	server := httptest.NewServer(http.HandlerFunc(a.userLive))
+	e := echo.New()
+	e.GET("/v1/me/live", a.userLive)
+	server := httptest.NewServer(e)
 	t.Cleanup(server.Close)
 
 	base := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/me/live?accessToken="

@@ -3,20 +3,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"geoduels/internal/matches"
+	"geoduels/internal/seasons"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/gorilla/mux"
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/internal/leaderboard"
+
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type matchAccessTestStore struct {
@@ -28,19 +30,19 @@ const testMatchID = "00000000-0000-7000-8000-000000000101"
 
 type leaderboardTestStore struct {
 	testRepositories
-	settings persistence.RankedSeasonSettings
+	settings seasons.RankedSeasonSettings
 }
 
-func (s *leaderboardTestStore) GetRankedSeasonSettings() (persistence.RankedSeasonSettings, error) {
+func (s *leaderboardTestStore) GetRankedSeasonSettings() (seasons.RankedSeasonSettings, error) {
 	return s.settings, nil
 }
 
-func (s *leaderboardTestStore) ListLeaderboard(context.Context, string, string, int, int) ([]persistence.LeaderboardEntry, error) {
-	return []persistence.LeaderboardEntry{}, nil
+func (s *leaderboardTestStore) ListLeaderboard(context.Context, string, string, int, int) ([]leaderboard.Entry, error) {
+	return []leaderboard.Entry{}, nil
 }
 
-func (s *leaderboardTestStore) GetLeaderboardOverview(_ context.Context, userID, mode, seasonID string, limit int) (persistence.LeaderboardOverview, error) {
-	return persistence.LeaderboardOverview{
+func (s *leaderboardTestStore) GetLeaderboardOverview(_ context.Context, userID, mode, seasonID string, limit int) (leaderboard.Overview, error) {
+	return leaderboard.Overview{
 		Mode:         mode,
 		SeasonID:     seasonID,
 		TotalPlayers: 12,
@@ -58,8 +60,8 @@ func (s *matchAccessTestStore) GetIdentity(sub string) (Identity, error) {
 	return Identity{Sub: sub}, nil
 }
 
-func (s *matchAccessTestStore) GetRuntimeMatch(_ context.Context, matchID string) (persistence.RuntimeMatch, bool, error) {
-	return persistence.RuntimeMatch{}, false, nil
+func (s *matchAccessTestStore) GetRuntimeMatch(_ context.Context, matchID string) (matches.RuntimeMatch, bool, error) {
+	return matches.RuntimeMatch{}, false, nil
 }
 
 func (s *matchAccessTestStore) MatchSessionSourceParty(_ context.Context, matchID string) (string, string, bool, error) {
@@ -69,17 +71,17 @@ func (s *matchAccessTestStore) MatchSessionSourceParty(_ context.Context, matchI
 func TestLeaderboardIncludesActiveSeasonResetTime(t *testing.T) {
 	nextResetAt := time.Date(2026, time.July, 1, 21, 0, 0, 0, time.UTC)
 	store := &leaderboardTestStore{
-		settings: persistence.RankedSeasonSettings{
+		settings: seasons.RankedSeasonSettings{
 			ActiveSeasonID: "s3",
 			NextResetAt:    &nextResetAt,
 		},
 	}
-	a := &api{leaderboardStore: store, seasons: store}
-	a.leaderboardService = newLeaderboardService(a.leaderboardStore)
+	a := &api{seasons: store}
+	a.leaderboardService = leaderboard.NewService(store)
 	req := httptest.NewRequest(http.MethodGet, "/v1/leaderboard", nil)
 	rec := httptest.NewRecorder()
 
-	a.leaderboard(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
@@ -113,7 +115,7 @@ func TestPublicFinalMatchSnapshotIsAvailableToAnyViewer(t *testing.T) {
 		t.Fatalf("marshal snapshot: %v", err)
 	}
 
-	a := &api{accounts: &matchAccessTestStore{snapshot: raw}, sessions: &matchAccessTestStore{snapshot: raw}, profiles: &matchAccessTestStore{snapshot: raw}, preferenceStore: &matchAccessTestStore{snapshot: raw}, badges: &matchAccessTestStore{snapshot: raw}, leaderboardStore: &matchAccessTestStore{snapshot: raw}, matchStore: &matchAccessTestStore{snapshot: raw}, moderation: &matchAccessTestStore{snapshot: raw}, admin: &matchAccessTestStore{snapshot: raw}, content: &matchAccessTestStore{snapshot: raw}, seasons: &matchAccessTestStore{snapshot: raw}, gameplayMaps: &matchAccessTestStore{snapshot: raw}, runtimeStore: &matchAccessTestStore{snapshot: raw}, chatStore: &matchAccessTestStore{snapshot: raw}, parties: &matchAccessTestStore{snapshot: raw}, social: socialdomain.NewService(&matchAccessTestStore{snapshot: raw})}
+	a := &api{accounts: &matchAccessTestStore{snapshot: raw}, sessions: &matchAccessTestStore{snapshot: raw}, profiles: &matchAccessTestStore{snapshot: raw}, badges: &matchAccessTestStore{snapshot: raw}, matchStore: &matchAccessTestStore{snapshot: raw}, moderation: &matchAccessTestStore{snapshot: raw}, admin: &matchAccessTestStore{snapshot: raw}, content: &matchAccessTestStore{snapshot: raw}, seasons: &matchAccessTestStore{snapshot: raw}, gameplayMaps: &matchAccessTestStore{snapshot: raw}, runtimeStore: &matchAccessTestStore{snapshot: raw}, chatStore: &matchAccessTestStore{snapshot: raw}, parties: &matchAccessTestStore{snapshot: raw}, social: socialdomain.NewService(&matchAccessTestStore{snapshot: raw})}
 	snapshot, found, err := a.getPublicFinalMatchSnapshot(testMatchID)
 	if err != nil {
 		t.Fatalf("get snapshot: %v", err)
@@ -138,12 +140,11 @@ func TestMatchRouteReturnsPublicHistoryWithoutAuth(t *testing.T) {
 		t.Fatalf("marshal snapshot: %v", err)
 	}
 
-	a := &api{accounts: &matchAccessTestStore{snapshot: raw}, sessions: &matchAccessTestStore{snapshot: raw}, profiles: &matchAccessTestStore{snapshot: raw}, preferenceStore: &matchAccessTestStore{snapshot: raw}, badges: &matchAccessTestStore{snapshot: raw}, leaderboardStore: &matchAccessTestStore{snapshot: raw}, matchStore: &matchAccessTestStore{snapshot: raw}, moderation: &matchAccessTestStore{snapshot: raw}, admin: &matchAccessTestStore{snapshot: raw}, content: &matchAccessTestStore{snapshot: raw}, seasons: &matchAccessTestStore{snapshot: raw}, gameplayMaps: &matchAccessTestStore{snapshot: raw}, runtimeStore: &matchAccessTestStore{snapshot: raw}, chatStore: &matchAccessTestStore{snapshot: raw}, parties: &matchAccessTestStore{snapshot: raw}, social: socialdomain.NewService(&matchAccessTestStore{snapshot: raw})}
+	a := &api{accounts: &matchAccessTestStore{snapshot: raw}, sessions: &matchAccessTestStore{snapshot: raw}, profiles: &matchAccessTestStore{snapshot: raw}, badges: &matchAccessTestStore{snapshot: raw}, matchStore: &matchAccessTestStore{snapshot: raw}, moderation: &matchAccessTestStore{snapshot: raw}, admin: &matchAccessTestStore{snapshot: raw}, content: &matchAccessTestStore{snapshot: raw}, seasons: &matchAccessTestStore{snapshot: raw}, gameplayMaps: &matchAccessTestStore{snapshot: raw}, runtimeStore: &matchAccessTestStore{snapshot: raw}, chatStore: &matchAccessTestStore{snapshot: raw}, parties: &matchAccessTestStore{snapshot: raw}, social: socialdomain.NewService(&matchAccessTestStore{snapshot: raw})}
 	req := httptest.NewRequest(http.MethodGet, "/v1/matches/"+matchID+"/route", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": matchID})
 	rec := httptest.NewRecorder()
 
-	a.matchRoute(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
@@ -201,18 +202,17 @@ func TestMatchSessionAllowsGuestAssignedToLiveMatch(t *testing.T) {
 	}
 
 	a := &api{
-		accounts: &matchAccessTestStore{}, sessions: &matchAccessTestStore{}, profiles: &matchAccessTestStore{}, preferenceStore: &matchAccessTestStore{}, badges: &matchAccessTestStore{}, leaderboardStore: &matchAccessTestStore{}, matchStore: &matchAccessTestStore{}, moderation: &matchAccessTestStore{}, admin: &matchAccessTestStore{}, content: &matchAccessTestStore{}, seasons: &matchAccessTestStore{}, gameplayMaps: &matchAccessTestStore{}, runtimeStore: &matchAccessTestStore{}, chatStore: &matchAccessTestStore{}, parties: &matchAccessTestStore{}, social: socialdomain.NewService(&matchAccessTestStore{}),
+		accounts: &matchAccessTestStore{}, sessions: &matchAccessTestStore{}, profiles: &matchAccessTestStore{}, badges: &matchAccessTestStore{}, matchStore: &matchAccessTestStore{}, moderation: &matchAccessTestStore{}, admin: &matchAccessTestStore{}, content: &matchAccessTestStore{}, seasons: &matchAccessTestStore{}, gameplayMaps: &matchAccessTestStore{}, runtimeStore: &matchAccessTestStore{}, chatStore: &matchAccessTestStore{}, parties: &matchAccessTestStore{}, social: socialdomain.NewService(&matchAccessTestStore{}),
 		coord:          coordStore,
 		appAuthSecret:  appSecret,
 		ticketAuth:     ticketSecret,
 		internalSecret: "",
 	}
 	req := httptest.NewRequest(http.MethodGet, "/v1/matches/"+matchID+"/session", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": matchID})
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	a.matchSession(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())

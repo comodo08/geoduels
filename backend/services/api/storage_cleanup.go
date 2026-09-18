@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
+	"geoduels/internal/storage"
 	"geoduels/pkg/observability"
-	"geoduels/pkg/persistence"
 )
 
 func (a *api) runStorageCleanupLoop() {
@@ -20,16 +20,18 @@ func (a *api) runStorageCleanupLoop() {
 }
 
 func (a *api) cleanupStorage() {
-	maintenance := a.db
-	if _, err := maintenance.ReconcileStaleMatchSessions(a.staleMatchGrace, a.storageCleanupBatchSize); err != nil {
+	if a.storage == nil {
+		return
+	}
+	if _, err := a.storage.ReconcileStaleMatchSessions(a.staleMatchGrace, a.storageCleanupBatchSize); err != nil {
 		observability.Log("warn", "stale match reconciliation failed", map[string]any{"error": err.Error()})
 	}
-	result, err := maintenance.CleanupStorage(a.storageCleanupBatchSize)
+	result, err := a.storage.CleanupStorage(a.storageCleanupBatchSize)
 	if err != nil {
 		observability.Log("warn", "storage cleanup failed", map[string]any{"error": err.Error()})
 		return
 	}
-	if result != (persistence.StorageCleanupResult{}) {
+	if result != (storage.StorageCleanupResult{}) {
 		observability.Log("info", "storage cleanup completed", map[string]any{
 			"replays_compressed":  result.ReplaysCompressed,
 			"expired_replays":     result.ExpiredReplays,

@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"geoduels/pkg/contracts"
-	"geoduels/pkg/persistence"
 )
 
 type bootstrapStore struct {
@@ -19,14 +18,14 @@ func (s *bootstrapStore) ResolveGameplayMapID(contracts.MatchMode, contracts.Gam
 	return "map-id", s.resolveErr
 }
 
-func (s *bootstrapStore) ReplaceMapLocations(mapKey, _ string, _ []byte) (persistence.MapImportSummary, error) {
+func (s *bootstrapStore) ReplaceMapLocations(mapKey, _ string, _ []byte) (contracts.MapImportSummary, error) {
 	s.imports = append(s.imports, mapKey)
-	return persistence.MapImportSummary{}, nil
+	return contracts.MapImportSummary{}, nil
 }
 
 func TestEnsureDevelopmentMapSkipsConfiguredMap(t *testing.T) {
 	store := &bootstrapStore{}
-	created, err := ensureDevelopmentMap(store, requiredDevelopmentMaps[0], []byte("[]"))
+	created, err := ensureDevelopmentMap(store, store, requiredDevelopmentMaps[0], []byte("[]"))
 	if err != nil || created || len(store.imports) != 0 {
 		t.Fatalf("created=%v imports=%v err=%v", created, store.imports, err)
 	}
@@ -34,7 +33,7 @@ func TestEnsureDevelopmentMapSkipsConfiguredMap(t *testing.T) {
 
 func TestEnsureDevelopmentMapImportsMissingMap(t *testing.T) {
 	store := &bootstrapStore{resolveErr: pgx.ErrNoRows}
-	created, err := ensureDevelopmentMap(store, requiredDevelopmentMaps[0], []byte("[]"))
+	created, err := ensureDevelopmentMap(store, store, requiredDevelopmentMaps[0], []byte("[]"))
 	if err != nil || !created || len(store.imports) != 1 || store.imports[0] != contracts.MapKeyMoving {
 		t.Fatalf("created=%v imports=%v err=%v", created, store.imports, err)
 	}
@@ -42,7 +41,7 @@ func TestEnsureDevelopmentMapImportsMissingMap(t *testing.T) {
 
 func TestEnsureDevelopmentMapDoesNotMaskDatabaseFailure(t *testing.T) {
 	store := &bootstrapStore{resolveErr: errors.New("database offline")}
-	created, err := ensureDevelopmentMap(store, requiredDevelopmentMaps[0], []byte("[]"))
+	created, err := ensureDevelopmentMap(store, store, requiredDevelopmentMaps[0], []byte("[]"))
 	if err == nil || created || len(store.imports) != 0 {
 		t.Fatalf("created=%v imports=%v err=%v", created, store.imports, err)
 	}

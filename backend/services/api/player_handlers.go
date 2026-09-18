@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 )
 
 type playerMatchesCursor struct {
@@ -17,61 +17,53 @@ type playerMatchesCursor struct {
 	MatchID string `json:"matchId"`
 }
 
-func (a *api) publicPlayerProfile(w http.ResponseWriter, r *http.Request) {
-	nickname := strings.TrimSpace(mux.Vars(r)["nickname"])
+func (a *api) publicPlayerProfile(c echo.Context) error {
+	nickname := strings.TrimSpace(c.Param("nickname"))
 	profile, err := a.profiles.GetPublicPlayerProfileByNickname(nickname)
 	if err != nil {
 		if errors.Is(err, ErrNoRows) {
-			http.Error(w, "player not found", http.StatusNotFound)
-			return
+			return plainTextError(c, http.StatusNotFound, "player not found")
 		}
-		http.Error(w, "player profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "player profile unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(profile)
+	c.Response().Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(c.Response()).Encode(profile)
 }
 
-func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
+func (a *api) publicPlayerMatches(c echo.Context) error {
 	limit := 20
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+	if raw := strings.TrimSpace(c.QueryParam("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 || parsed > 100 {
-			http.Error(w, "invalid limit", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid limit")
 		}
 		limit = parsed
 	}
-	profile, err := a.profiles.GetPublicPlayerProfileByNickname(strings.TrimSpace(mux.Vars(r)["nickname"]))
+	profile, err := a.profiles.GetPublicPlayerProfileByNickname(strings.TrimSpace(c.Param("nickname")))
 	if err != nil {
 		if errors.Is(err, ErrNoRows) {
-			http.Error(w, "player not found", http.StatusNotFound)
-			return
+			return plainTextError(c, http.StatusNotFound, "player not found")
 		}
-		http.Error(w, "player profile unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "player profile unavailable")
 	}
 	var beforeEndedAt time.Time
 	var beforeMatchID string
-	rankedOnly := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("filter")), "ranked") ||
-		strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("ranked")), "true")
-	if rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor")); rawCursor != "" {
+	rankedOnly := strings.EqualFold(strings.TrimSpace(c.QueryParam("filter")), "ranked") ||
+		strings.EqualFold(strings.TrimSpace(c.QueryParam("ranked")), "true")
+	if rawCursor := strings.TrimSpace(c.QueryParam("cursor")); rawCursor != "" {
 		cursor, err := decodePlayerMatchesCursor(rawCursor)
 		if err != nil {
-			http.Error(w, "invalid cursor", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid cursor")
 		}
 		beforeEndedAt, err = time.Parse(time.RFC3339Nano, cursor.EndedAt)
 		if err != nil || strings.TrimSpace(cursor.MatchID) == "" {
-			http.Error(w, "invalid cursor", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid cursor")
 		}
 		beforeMatchID = a.resolveEntityID("match", cursor.MatchID)
 	}
 	page, err := a.matchStore.ListPlayerMatchHistoryPage(profile.UserID, limit, beforeEndedAt, beforeMatchID, rankedOnly)
 	if err != nil {
-		http.Error(w, "match history unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "match history unavailable")
 	}
 	nextCursor := ""
 	if page.HasMore {
@@ -80,8 +72,8 @@ func (a *api) publicPlayerMatches(w http.ResponseWriter, r *http.Request) {
 			MatchID: page.NextMatchID,
 		})
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	c.Response().Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(c.Response()).Encode(map[string]any{
 		"matches":    page.Matches,
 		"nextCursor": nextCursor,
 	})

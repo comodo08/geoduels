@@ -14,10 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/internal/envcfg"
+	"geoduels/internal/httpx"
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/observability"
 )
@@ -31,7 +33,7 @@ type realtimeGateway struct {
 	drainTTL      time.Duration
 }
 
-var wsProxyUpgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
+var wsProxyUpgrader = websocket.Upgrader{CheckOrigin: httpx.WSOriginAllowed}
 
 func main() {
 	rdb, redisCleanup, err := redisFromEnv()
@@ -39,24 +41,43 @@ func main() {
 		log.Fatal(err)
 	}
 	g := &realtimeGateway{
-		state:    coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, 24*time.Hour, 5*time.Second),
+		state:    coordinator.NewStore(rdb, envcfg.Duration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, 24*time.Hour, 5*time.Second),
 		redis:    rdb,
 		metrics:  observability.NewAPIMetrics(),
-		drainTTL: getenvDuration("REALTIME_GATEWAY_DRAIN_TIMEOUT", 18*time.Minute),
+		drainTTL: envcfg.Duration("REALTIME_GATEWAY_DRAIN_TIMEOUT", 18*time.Minute),
 	}
 	defer redisCleanup()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/health", g.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/live", g.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/ready", g.healthReady).Methods(http.MethodGet)
-	r.HandleFunc("/ws/{node}", g.wsProxy).Methods(http.MethodGet)
-	r.Handle("/metrics", observability.Handler(g.metrics.Registry)).Methods(http.MethodGet)
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+		code := http.StatusInternalServerError
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+		}
+		// gorilla/mux wrote empty bodies for unrouted paths and methods.
+		if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
+			_ = c.NoContent(code)
+			return
+		}
+		e.DefaultHTTPErrorHandler(err, c)
+	}
+	e.Use(httpx.CORS)
+	e.Use(g.metrics.EchoMiddleware)
+	e.GET("/health", g.healthLive)
+	e.GET("/health/live", g.healthLive)
+	e.GET("/health/ready", g.healthReady)
+	e.GET("/ws/:node", g.wsProxy)
+	e.GET("/metrics", echo.WrapHandler(observability.Handler(g.metrics.Registry)))
 
-	addr := getenv("REALTIME_GATEWAY_ADDR", ":8092")
+	addr := envcfg.Get("REALTIME_GATEWAY_ADDR", ":8092")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           cors(g.metrics.Middleware(r)),
+		Handler:           e,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       20 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -69,41 +90,36 @@ func main() {
 	}
 }
 
-func (g *realtimeGateway) wsProxy(w http.ResponseWriter, r *http.Request) {
+func (g *realtimeGateway) wsProxy(c echo.Context) error {
+	r := c.Request()
 	if g.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
-	nodeRoute := strings.TrimSpace(mux.Vars(r)["node"])
+	nodeRoute := strings.TrimSpace(c.Param("node"))
 	if nodeRoute == "" {
-		http.Error(w, "missing node", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "missing node")
 	}
 	node, ok, err := g.state.GetNodeByRoute(r.Context(), nodeRoute)
 	if err != nil {
-		http.Error(w, "routing unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "routing unavailable")
 	}
 	if !ok || strings.TrimSpace(node.InternalURL) == "" {
-		http.Error(w, "node unavailable", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "node unavailable")
 	}
 
 	target := websocketTarget(node.InternalURL, r.URL.RequestURI())
 	backendConn, resp, err := websocket.DefaultDialer.DialContext(r.Context(), target, nil)
 	if err != nil {
 		if resp != nil && resp.StatusCode > 0 {
-			http.Error(w, "gameplay unavailable", resp.StatusCode)
-			return
+			return httpx.PlainTextError(c, resp.StatusCode, "gameplay unavailable")
 		}
-		http.Error(w, "gameplay unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "gameplay unavailable")
 	}
 	defer backendConn.Close()
 
-	clientConn, err := wsProxyUpgrader.Upgrade(w, r, nil)
+	clientConn, err := wsProxyUpgrader.Upgrade(c.Response().Writer, r, nil)
 	if err != nil {
-		return
+		return nil
 	}
 	defer clientConn.Close()
 	g.activeSockets.Add(1)
@@ -126,26 +142,27 @@ func (g *realtimeGateway) wsProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	closeBoth()
 	<-errc
+	return nil
 }
 
-func (g *realtimeGateway) healthLive(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (g *realtimeGateway) healthLive(c echo.Context) error {
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ok"))
+	return nil
 }
 
-func (g *realtimeGateway) healthReady(w http.ResponseWriter, _ *http.Request) {
+func (g *realtimeGateway) healthReady(c echo.Context) error {
 	if g.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := g.redis.Ping(ctx).Err(); err != nil {
-		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "redis not ready")
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ready"))
+	return nil
 }
 
 func (g *realtimeGateway) handleShutdown(srv *http.Server) {
@@ -212,72 +229,8 @@ func isExpectedWSClose(err error) bool {
 	)
 }
 
-func cors(next http.Handler) http.Handler {
-	allowed := allowedOriginsSet()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" && (allowed["*"] || allowed[origin]) {
-			if allowed["*"] {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func wsOriginAllowed(r *http.Request) bool {
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		return true
-	}
-	allowed := allowedOriginsSet()
-	return allowed["*"] || allowed[origin]
-}
-
-func allowedOriginsSet() map[string]bool {
-	raw := getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-	out := map[string]bool{}
-	for _, s := range strings.Split(raw, ",") {
-		origin := strings.TrimSpace(s)
-		if origin == "" {
-			continue
-		}
-		out[origin] = true
-	}
-	return out
-}
-
-func getenv(k, fallback string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func getenvDuration(k string, fallback time.Duration) time.Duration {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
-}
-
 func redisFromEnv() (*redis.Client, func(), error) {
-	url := getenv("REDIS_URL", "")
+	url := envcfg.Get("REDIS_URL", "")
 	if url == "" {
 		return nil, nil, errors.New("REDIS_URL is required")
 	}

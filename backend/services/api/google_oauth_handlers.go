@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
 
 	"geoduels/pkg/auth"
@@ -101,35 +102,31 @@ var oauthPopupTemplate = template.Must(template.New("oauth-popup").Parse(`<!doct
 </body>
 </html>`))
 
-func (a *api) googleOAuthStart(w http.ResponseWriter, r *http.Request) {
+func (a *api) googleOAuthStart(c echo.Context) error {
+	r := c.Request()
 	if !a.googleOAuthEnabled() {
-		http.Error(w, "google sign-in unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "google sign-in unavailable")
 	}
 	var req struct {
 		ReturnTo string `json:"returnTo"`
 		Intent   string `json:"intent"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
-		http.Error(w, "missing origin", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "missing origin")
 	}
 	allowedOrigins := allowedOriginsSet()
 	if !allowedOrigins[origin] && !allowedOrigins["*"] {
-		http.Error(w, "origin not allowed", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "origin not allowed")
 	}
 
 	intent := normalizeOAuthIntent(req.Intent)
 	linkSub, err := a.oauthLinkSubject(r, intent)
 	if err != nil {
-		http.Error(w, oauthStartError(intent), http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, oauthStartError(intent))
 	}
 
 	state := oauthStateClaims{
@@ -146,8 +143,7 @@ func (a *api) googleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	stateToken := jwt.NewWithClaims(jwt.SigningMethodHS256, state)
 	signedState, err := stateToken.SignedString(a.appAuthSecret)
 	if err != nil {
-		http.Error(w, "failed to create oauth state", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to create oauth state")
 	}
 
 	redirectURI := a.googleRedirectURI(r)
@@ -157,34 +153,34 @@ func (a *api) googleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
-	_ = json.NewEncoder(w).Encode(map[string]string{"authURL": authURL})
+	return writeJSON(c, map[string]string{"authURL": authURL})
 }
 
-func (a *api) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+func (a *api) googleOAuthCallback(c echo.Context) error {
+	r := c.Request()
 	if !a.googleOAuthEnabled() {
-		http.Error(w, "google sign-in unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "google sign-in unavailable")
 	}
 	payload := map[string]any{"ok": false, "error": "Sign-in failed", "provider": "google"}
 	targetOrigin := ""
 	defer func() {
-		renderOAuthPopup(w, targetOrigin, payload)
+		renderOAuthPopup(c, targetOrigin, payload)
 	}()
 
-	if errParam := strings.TrimSpace(r.URL.Query().Get("error")); errParam != "" {
+	if errParam := strings.TrimSpace(c.QueryParam("error")); errParam != "" {
 		payload["error"] = errParam
-		return
+		return nil
 	}
-	code := strings.TrimSpace(r.URL.Query().Get("code"))
-	stateToken := strings.TrimSpace(r.URL.Query().Get("state"))
+	code := strings.TrimSpace(c.QueryParam("code"))
+	stateToken := strings.TrimSpace(c.QueryParam("state"))
 	if code == "" || stateToken == "" {
 		payload["error"] = "missing oauth response"
-		return
+		return nil
 	}
 	state, err := a.parseOAuthState(stateToken)
 	if err != nil {
 		payload["error"] = "invalid oauth state"
-		return
+		return nil
 	}
 	targetOrigin = state.Origin
 	payload["returnTo"] = state.ReturnTo
@@ -192,12 +188,12 @@ func (a *api) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	idToken, err := a.exchangeGoogleCode(r.Context(), code, a.googleRedirectURI(r))
 	if err != nil {
 		payload["error"] = "google exchange failed"
-		return
+		return nil
 	}
 	idClaims, err := a.googleVerifier.ValidateIDToken(r.Context(), idToken, state.Nonce)
 	if err != nil {
 		payload["error"] = "invalid google identity"
-		return
+		return nil
 	}
 	email := googleAccountEmail(idClaims)
 	displayName := strings.TrimSpace(idClaims.Name)
@@ -216,22 +212,23 @@ func (a *api) googleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("google oauth callback: persist identity failed: %v", err)
 		payload["error"] = oauthUserError(err)
-		return
+		return nil
 	}
 	refreshToken, sessionRecord, err := a.createSession(identity.Sub, r)
 	if err != nil {
 		log.Printf("google oauth callback: create session failed for user %s: %v", identity.Sub, err)
 		payload["error"] = "issue session failed"
-		return
+		return nil
 	}
 	accessToken, err := auth.IssueAppAccessToken(a.appAuthSecret, identity.Sub, sessionRecord.ID, a.accessTokenTTL)
 	if err != nil {
 		log.Printf("google oauth callback: issue access token failed for user %s session %s: %v", identity.Sub, sessionRecord.ID, err)
 		payload["error"] = "issue session failed"
-		return
+		return nil
 	}
-	a.setRefreshCookie(w, r, refreshToken)
+	a.setRefreshCookie(c, r, refreshToken)
 	payload = a.oauthSessionPayload("google", accessToken, identity, displayName, state.ReturnTo)
+	return nil
 }
 
 func googleAccountEmail(claims auth.IdentityTokenClaims) string {
@@ -312,11 +309,11 @@ func (a *api) googleRedirectURI(r *http.Request) string {
 	return fmt.Sprintf("%s://%s/v1/auth/google/callback", scheme, host)
 }
 
-func renderOAuthPopup(w http.ResponseWriter, targetOrigin string, payload map[string]any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+func renderOAuthPopup(c echo.Context, targetOrigin string, payload map[string]any) {
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	payloadJSON, _ := json.Marshal(payload)
 	originJSON, _ := json.Marshal(targetOrigin)
-	_ = oauthPopupTemplate.Execute(w, map[string]template.JS{
+	_ = oauthPopupTemplate.Execute(c.Response(), map[string]template.JS{
 		"Payload":      template.JS(payloadJSON),
 		"TargetOrigin": template.JS(originJSON),
 	})

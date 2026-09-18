@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	socialdomain "geoduels/pkg/social"
+	socialdomain "geoduels/internal/social"
 	"sync"
 	"testing"
 	"time"

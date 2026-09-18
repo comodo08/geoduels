@@ -17,10 +17,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
+	"geoduels/internal/envcfg"
+	"geoduels/internal/httpx"
+	"geoduels/internal/matches"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
 	"geoduels/pkg/duel"
@@ -39,16 +42,10 @@ const (
 	matchLeaseTTL        = 45 * time.Second
 )
 
-var upgrader = websocket.Upgrader{CheckOrigin: wsOriginAllowed}
+var upgrader = websocket.Upgrader{CheckOrigin: httpx.WSOriginAllowed}
 
 // gameplayPersistence is the narrow persistence surface the gameplay node
 // needs; satisfied by the sqlc-backed persistence store.
-type gameplayPersistence interface {
-	persistence.MatchRepository
-	persistence.RuntimeRepository
-	Close()
-}
-
 type gameplayNode struct {
 	mu sync.RWMutex
 
@@ -57,7 +54,8 @@ type gameplayNode struct {
 	publicRoute string
 	internalURL string
 
-	persist    gameplayPersistence
+	db         *persistence.DB
+	persist    matches.Store
 	coord      *coordinator.Store
 	redis      *redis.Client
 	ticketAuth []byte
@@ -83,7 +81,7 @@ type gameplayNode struct {
 }
 
 func main() {
-	nodeID := getenv("GAMEPLAY_NODE_ID", "")
+	nodeID := envcfg.Get("GAMEPLAY_NODE_ID", "")
 	if nodeID == "" {
 		h, _ := os.Hostname()
 		if h == "" {
@@ -91,22 +89,23 @@ func main() {
 		}
 		nodeID = h + "-" + shortID()
 	}
-	publicRoute := getenv("GAMEPLAY_PUBLIC_ROUTE", nodeID)
-	internalURL := getenv("GAMEPLAY_INTERNAL_URL", "http://localhost:8091")
+	publicRoute := envcfg.Get("GAMEPLAY_PUBLIC_ROUTE", nodeID)
+	internalURL := envcfg.Get("GAMEPLAY_INTERNAL_URL", "http://localhost:8091")
 
 	rdb, redisCleanup, err := redisFromEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
-	store, err := persistence.NewFromEnv()
+	db, err := persistence.NewFromEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
-	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
+	store := matches.NewPGStore(db.Pool())
+	singleplayerTTL := envcfg.Duration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
 	if err := store.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
-	ticketSecret, err := requiredSecret("GAMEPLAY_TICKET_SECRET", 32)
+	ticketSecret, err := envcfg.RequiredSecret("GAMEPLAY_TICKET_SECRET", 32)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -126,8 +125,9 @@ func main() {
 		nodeEpoch:    time.Now().UnixNano(),
 		publicRoute:  publicRoute,
 		internalURL:  internalURL,
+		db:           db,
 		persist:      store,
-		coord:        coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		coord:        coordinator.NewStore(rdb, envcfg.Duration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
 		redis:        rdb,
 		ticketAuth:   ticketSecret,
 		coordAuth:    internalSecret,
@@ -148,9 +148,9 @@ func main() {
 		finalizing:   map[string]bool{},
 		lastTeamPing: map[string]time.Time{},
 		metrics:      observability.NewRuntimeMetrics(),
-		drainTTL:     getenvDuration("GAMEPLAY_DRAIN_TIMEOUT", 9*time.Minute+30*time.Second),
+		drainTTL:     envcfg.Duration("GAMEPLAY_DRAIN_TIMEOUT", 9*time.Minute+30*time.Second),
 	}
-	defer g.persist.Close()
+	defer g.db.Close()
 	defer g.redisCleanup()
 	defer g.coord.RemoveNode(context.Background(), g.nodeID)
 
@@ -158,20 +158,39 @@ func main() {
 	go g.matchLeaseLoop()
 	go g.tick()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/health", g.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/live", g.healthLive).Methods(http.MethodGet)
-	r.HandleFunc("/health/ready", g.healthReady).Methods(http.MethodGet)
-	r.HandleFunc("/ws/{node}", g.ws).Methods(http.MethodGet)
-	r.HandleFunc("/internal/matches", g.createMatch).Methods(http.MethodPost)
-	r.HandleFunc("/internal/matches/{id}", g.matchStatus).Methods(http.MethodGet, http.MethodHead)
-	r.HandleFunc("/internal/matches/{id}/terminate", g.terminateMatch).Methods(http.MethodPost)
-	r.Handle("/metrics", observability.Handler(g.metrics.Registry)).Methods(http.MethodGet)
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+		code := http.StatusInternalServerError
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+		}
+		// gorilla/mux wrote empty bodies for unrouted paths and methods.
+		if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
+			_ = c.NoContent(code)
+			return
+		}
+		e.DefaultHTTPErrorHandler(err, c)
+	}
+	e.Use(httpx.CORS)
+	e.GET("/health", g.healthLive)
+	e.GET("/health/live", g.healthLive)
+	e.GET("/health/ready", g.healthReady)
+	e.GET("/ws/:node", g.ws)
+	e.POST("/internal/matches", g.createMatch)
+	e.GET("/internal/matches/:id", g.matchStatus)
+	e.HEAD("/internal/matches/:id", g.matchStatus)
+	e.POST("/internal/matches/:id/terminate", g.terminateMatch)
+	e.GET("/metrics", echo.WrapHandler(observability.Handler(g.metrics.Registry)))
 
-	addr := getenv("GAMEPLAY_NODE_ADDR", ":8091")
+	addr := envcfg.Get("GAMEPLAY_NODE_ADDR", ":8091")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           corsMiddleware(r),
+		Handler:           e,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       20 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -184,19 +203,17 @@ func main() {
 	}
 }
 
-func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
+func (g *gameplayNode) createMatch(c echo.Context) error {
+	req := c.Request()
 	if subtleHeader(req.Header.Get("X-Coordinator-Secret")) != g.coordAuth {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if g.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	var found contracts.MatchFound
 	if err := json.NewDecoder(req.Body).Decode(&found); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	mode := found.Mode
 	if mode == "" {
@@ -204,148 +221,123 @@ func (g *gameplayNode) createMatch(w http.ResponseWriter, req *http.Request) {
 	}
 	runtime, ok := g.runtimes[mode]
 	if !ok {
-		http.Error(w, "unsupported mode", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "unsupported mode")
 	}
 	if found.MatchID == "" || len(found.Players) == 0 {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid match")
 	}
 	for _, playerID := range found.Players {
 		if strings.TrimSpace(playerID) == "" {
-			http.Error(w, "invalid match: blank player id", http.StatusBadRequest)
-			return
+			return httpx.PlainTextError(c, http.StatusBadRequest, "invalid match: blank player id")
 		}
 	}
 	if len(found.PlannedRounds) == 0 || found.ResolvedMap.MapID == "" {
-		http.Error(w, "match has no resolved round plan", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "match has no resolved round plan")
 	}
 	if _, err := runtime.GetSnapshot(found.MatchID); err == nil {
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "exists"})
-		return
+		return httpx.JSON(c, http.StatusOK, map[string]string{"status": "exists"})
 	}
 	found.Config = contracts.NormalizeMatchConfig(found.Config)
 	g.plans.Set(found.MatchID, found.PlannedRounds)
 	if err := runtime.CreateMatch(found.MatchID, found.Players, found.Profiles, found.Unranked, found.SeasonID, found.Config, found.Teams); err != nil && !strings.Contains(err.Error(), "already exists") {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, err.Error())
 	}
 	if err := g.persist.RecordRuntimeMatch(req.Context(), found.MatchID, string(contracts.MatchLive), g.nodeEpoch, false); err != nil {
-		http.Error(w, "match persistence unavailable", http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, "match persistence unavailable")
 	}
 	g.mu.Lock()
 	g.matchUsers[found.MatchID] = append([]string(nil), found.Players...)
 	g.matchModes[found.MatchID] = mode
 	g.mu.Unlock()
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	return httpx.JSON(c, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (g *gameplayNode) matchStatus(w http.ResponseWriter, req *http.Request) {
-	if subtleHeader(req.Header.Get("X-Coordinator-Secret")) != g.coordAuth {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+func (g *gameplayNode) matchStatus(c echo.Context) error {
+	if subtleHeader(c.Request().Header.Get("X-Coordinator-Secret")) != g.coordAuth {
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	matchID := strings.TrimSpace(mux.Vars(req)["id"])
+	matchID := strings.TrimSpace(c.Param("id"))
 	if matchID == "" {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid match")
 	}
 	if _, ok := g.getSnapshot(matchID); !ok {
-		http.Error(w, "match not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "match not found")
 	}
-	w.WriteHeader(http.StatusOK)
+	c.Response().WriteHeader(http.StatusOK)
+	return nil
 }
 
-func (g *gameplayNode) terminateMatch(w http.ResponseWriter, req *http.Request) {
-	if subtleHeader(req.Header.Get("X-Coordinator-Secret")) != g.coordAuth {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+func (g *gameplayNode) terminateMatch(c echo.Context) error {
+	if subtleHeader(c.Request().Header.Get("X-Coordinator-Secret")) != g.coordAuth {
+		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	matchID := strings.TrimSpace(mux.Vars(req)["id"])
+	matchID := strings.TrimSpace(c.Param("id"))
 	if matchID == "" {
-		http.Error(w, "invalid match", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid match")
 	}
 	snap, ok := g.getSnapshot(matchID)
 	if !ok {
-		http.Error(w, "match not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "match not found")
 	}
 	var payload struct {
 		UserID string `json:"userId"`
 	}
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if strings.TrimSpace(payload.UserID) == "" {
-		http.Error(w, "invalid user", http.StatusBadRequest)
-		return
+		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid user")
 	}
 	if snap.Mode != contracts.ModeSingleplayer {
-		http.Error(w, "replacement unsupported", http.StatusConflict)
-		return
+		return httpx.PlainTextError(c, http.StatusConflict, "replacement unsupported")
 	}
 	runtime, ok := g.runtimeForMatch(matchID)
 	if !ok {
-		http.Error(w, "match not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "match not found")
 	}
 	nextSnap, err := runtime.Forfeit(matchID, payload.UserID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return httpx.PlainTextError(c, http.StatusBadGateway, err.Error())
 	}
 	if nextSnap != nil && nextSnap.State == contracts.MatchEnded {
 		g.terminalize(matchID, nextSnap)
 	}
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	return httpx.JSON(c, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (g *gameplayNode) ws(w http.ResponseWriter, req *http.Request) {
-	nodePath := mux.Vars(req)["node"]
+func (g *gameplayNode) ws(c echo.Context) error {
+	req := c.Request()
+	nodePath := c.Param("node")
 	if nodePath == "" || nodePath != g.publicRoute {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "not found")
 	}
-	claims, err := gameticket.Validate(g.ticketAuth, strings.TrimSpace(req.URL.Query().Get("ticket")))
+	claims, err := gameticket.Validate(g.ticketAuth, strings.TrimSpace(c.QueryParam("ticket")))
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return httpx.PlainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	if claims.Node != nodePath {
-		http.Error(w, "wrong node", http.StatusUnauthorized)
-		return
+		return httpx.PlainTextError(c, http.StatusUnauthorized, "wrong node")
 	}
 	matchID := claims.MatchID
 	userID := claims.Subject
 	runtime, ok := g.runtimeForMatch(matchID)
 	if !ok {
-		http.Error(w, "match not found", http.StatusNotFound)
-		return
+		return httpx.PlainTextError(c, http.StatusNotFound, "match not found")
 	}
 	snap, err := runtime.MarkResumed(matchID, userID)
 	if err != nil {
 		snap, err = runtime.GetSnapshot(matchID)
 		if err != nil {
-			http.Error(w, "match not found", http.StatusNotFound)
-			return
+			return httpx.PlainTextError(c, http.StatusNotFound, "match not found")
 		}
 		if _, ok := snap.Players[userID]; !ok {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
+			return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 		}
 	}
 
-	conn, err := upgrader.Upgrade(w, req, nil)
+	conn, err := upgrader.Upgrade(c.Response().Writer, req, nil)
 	if err != nil {
-		return
+		return nil
 	}
 	defer conn.Close()
 
@@ -389,14 +381,14 @@ func (g *gameplayNode) ws(w http.ResponseWriter, req *http.Request) {
 	for {
 		var cmd contracts.CommandEnvelope
 		if err := conn.ReadJSON(&cmd); err != nil {
-			return
+			return nil
 		}
 		if cmd.CommandID == "" {
 			cmd.CommandID = shortID()
 		}
 		ack, nextSnap := g.executeCommand(userID, matchID, cmd)
 		if !g.safeWriteConn(conn, writeMu, ack) {
-			return
+			return nil
 		}
 		if nextSnap != nil {
 			g.publishRuntimeState(matchID, nextSnap, "")
@@ -823,24 +815,24 @@ func (g *gameplayNode) safeWriteControl(conn *websocket.Conn, wm *sync.Mutex, me
 	return conn.WriteControl(messageType, payload, time.Now().Add(wsWriteWait)) == nil
 }
 
-func (g *gameplayNode) healthLive(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (g *gameplayNode) healthLive(c echo.Context) error {
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ok"))
+	return nil
 }
 
-func (g *gameplayNode) healthReady(w http.ResponseWriter, _ *http.Request) {
+func (g *gameplayNode) healthReady(c echo.Context) error {
 	if g.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := g.redis.Ping(ctx).Err(); err != nil {
-		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
-		return
+		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "redis not ready")
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ready"))
+	return nil
 }
 
 func (g *gameplayNode) handleShutdown(srv *http.Server) {
@@ -877,7 +869,7 @@ func (g *gameplayNode) handleShutdown(srv *http.Server) {
 }
 
 func redisFromEnv() (*redis.Client, func(), error) {
-	url := getenv("REDIS_URL", "")
+	url := envcfg.Get("REDIS_URL", "")
 	if url == "" {
 		return nil, nil, errors.New("REDIS_URL is required")
 	}
@@ -892,81 +884,6 @@ func redisFromEnv() (*redis.Client, func(), error) {
 		return nil, nil, err
 	}
 	return rdb, func() { _ = rdb.Close() }, nil
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	allowed := allowedOriginsSet()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" && (allowed["*"] || allowed[origin]) {
-			if allowed["*"] {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func wsOriginAllowed(r *http.Request) bool {
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		return true
-	}
-	allowed := allowedOriginsSet()
-	return allowed["*"] || allowed[origin]
-}
-
-func allowedOriginsSet() map[string]bool {
-	raw := getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-	out := map[string]bool{}
-	for _, s := range strings.Split(raw, ",") {
-		origin := strings.TrimSpace(s)
-		if origin == "" {
-			continue
-		}
-		out[origin] = true
-	}
-	return out
-}
-
-func getenv(k, fallback string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func getenvDuration(k string, fallback time.Duration) time.Duration {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
-}
-
-func requiredSecret(k string, minLen int) ([]byte, error) {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return nil, errors.New(k + " is required")
-	}
-	if len(v) < minLen {
-		return nil, errors.New(k + " must be at least " + strconv.Itoa(minLen) + " characters")
-	}
-	return []byte(v), nil
 }
 
 func shortID() string {

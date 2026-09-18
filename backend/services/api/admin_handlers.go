@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/maintenance"
@@ -68,117 +68,101 @@ func (a *api) moderatorIdentity(r *http.Request) (Identity, error) {
 	return identity, nil
 }
 
-func (a *api) adminBootstrap(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminBootstrap(c echo.Context) error {
+	r := c.Request()
 	claims, identity, err := a.authenticatedAccount(r)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	email := strings.ToLower(strings.TrimSpace(identity.Email))
 	if email == "" {
-		http.Error(w, "email required", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "email required")
 	}
 	if _, ok := a.adminBootstrapEmails[email]; !ok {
-		http.Error(w, "not allowlisted", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "not allowlisted")
 	}
 	if !identity.IsAdmin {
-		if err := a.admin.SetUserAdmin(identity.Sub, true); err != nil {
-			http.Error(w, "failed to promote account", http.StatusInternalServerError)
-			return
+		if err := a.accounts.SetUserAdmin(identity.Sub, true); err != nil {
+			return plainTextError(c, http.StatusInternalServerError, "failed to promote account")
 		}
 		identity, err = a.accounts.GetIdentity(claims.Sub)
 		if err != nil {
-			http.Error(w, "identity not found", http.StatusUnauthorized)
-			return
+			return plainTextError(c, http.StatusUnauthorized, "identity not found")
 		}
 	}
 	payload, err := a.issueAuthSessionPayload(identity, claims.SessionID)
 	if err != nil {
-		http.Error(w, "issue session failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "issue session failed")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(payload)
+	return writeJSON(c, payload)
 }
 
-func (a *api) adminPlayers(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPlayers(c echo.Context) error {
+	r := c.Request()
 	identity, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	players, err := a.admin.SearchPlayers(r.URL.Query().Get("query"), 30)
+	players, err := a.admin.SearchPlayers(c.QueryParam("query"), 30)
 	if err != nil {
-		http.Error(w, "player search unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "player search unavailable")
 	}
 	if !identity.IsAdmin {
 		sanitizeAdminPlayerSummariesForModerator(players)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"players": players})
+	return writeJSON(c, map[string]any{"players": players})
 }
 
-func (a *api) adminPlayerDetail(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPlayerDetail(c echo.Context) error {
+	r := c.Request()
 	identity, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	detail, err := a.admin.GetAdminPlayerDetail(a.resolveEntityID("user", mux.Vars(r)["id"]))
+	detail, err := a.admin.GetAdminPlayerDetail(a.resolveEntityID("user", c.Param("id")))
 	if err != nil {
 		if errors.Is(err, ErrNoRows) {
-			http.Error(w, "player not found", http.StatusNotFound)
-			return
+			return plainTextError(c, http.StatusNotFound, "player not found")
 		}
-		http.Error(w, "player detail unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "player detail unavailable")
 	}
 	if !identity.IsAdmin {
 		sanitizeAdminPlayerSummaryForModerator(&detail.Player)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(detail)
+	return writeJSON(c, detail)
 }
 
-func (a *api) adminPlayerMatches(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPlayerMatches(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.moderatorIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	matches, err := a.matchStore.ListPlayerMatchHistory(a.resolveEntityID("user", mux.Vars(r)["id"]), 50)
+	matches, err := a.matchStore.ListPlayerMatchHistory(a.resolveEntityID("user", c.Param("id")), 50)
 	if err != nil {
-		http.Error(w, "match history unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "match history unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"matches": matches})
+	return writeJSON(c, map[string]any{"matches": matches})
 }
 
-func (a *api) adminMatchChat(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminMatchChat(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.moderatorIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	limit := 200
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+	if raw := strings.TrimSpace(c.QueryParam("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			http.Error(w, "invalid limit", http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, "invalid limit")
 		}
 		limit = parsed
 	}
-	matchID := a.resolveEntityID("match", mux.Vars(r)["id"])
+	matchID := a.resolveEntityID("match", c.Param("id"))
 	messages, err := a.chatStore.ListChatMessages("match:"+matchID, limit)
 	if err != nil {
-		http.Error(w, "chat log unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "chat log unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"messages": messages})
+	return writeJSON(c, map[string]any{"messages": messages})
 }
 
 func sanitizeAdminPlayerSummariesForModerator(players []AdminPlayerSummary) {
@@ -196,224 +180,207 @@ func sanitizeAdminPlayerSummaryForModerator(player *AdminPlayerSummary) {
 	player.Identities = nil
 }
 
-func (a *api) moderatorSubject(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSubject(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.moderatorIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	profile, err := a.moderation.ListSubjectModerationProfile(a.resolveEntityID("user", mux.Vars(r)["userId"]))
+	profile, err := a.moderation.ListSubjectModerationProfile(a.resolveEntityID("user", c.Param("userId")))
 	if err != nil {
-		http.Error(w, "moderation subject unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "moderation subject unavailable")
 	}
 	sanitizeAdminPlayerSummaryForModerator(&profile.Player)
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(profile)
+	return writeJSON(c, profile)
 }
 
-func (a *api) moderatorSignals(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSignals(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.moderatorIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	signals, err := a.moderation.ListModerationSignals(100)
 	if err != nil {
-		http.Error(w, "moderation signals unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "moderation signals unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"signals": signals})
+	return writeJSON(c, map[string]any{"signals": signals})
 }
 
-func (a *api) adminBanPlayer(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminBanPlayer(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	a.banPlayerForCheating(w, r, mux.Vars(r)["id"], admin.Sub)
+	a.banPlayerForCheating(c, c.Param("id"), admin.Sub)
+	return nil
 }
 
-func (a *api) moderatorSubjectCheatingBan(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSubjectCheatingBan(c echo.Context) error {
+	r := c.Request()
 	moderator, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	a.banPlayerForCheating(w, r, mux.Vars(r)["userId"], moderator.Sub)
+	a.banPlayerForCheating(c, c.Param("userId"), moderator.Sub)
+	return nil
 }
 
-func (a *api) moderatorSubjectUnban(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSubjectUnban(c echo.Context) error {
+	r := c.Request()
 	moderator, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	if err := a.moderation.SetPlayerBan(a.resolveEntityID("user", mux.Vars(r)["userId"]), req.Reason, moderator.Sub, false); err != nil {
-		http.Error(w, "failed to unban player", http.StatusInternalServerError)
-		return
+	if err := a.moderation.SetPlayerBan(a.resolveEntityID("user", c.Param("userId")), req.Reason, moderator.Sub, false); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to unban player")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) moderatorSubjectMute(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSubjectMute(c echo.Context) error {
+	r := c.Request()
 	moderator, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Reason        string `json:"reason"`
 		DurationHours int    `json:"durationHours"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if req.DurationHours <= 0 {
 		req.DurationHours = 7 * 24
 	}
-	if err := a.moderation.SetPlayerMute(a.resolveEntityID("user", mux.Vars(r)["userId"]), mux.Vars(r)["kind"], req.Reason, moderator.Sub, time.Now().Add(time.Duration(req.DurationHours)*time.Hour), true); err != nil {
-		http.Error(w, "failed to mute player", http.StatusBadRequest)
-		return
+	if err := a.moderation.SetPlayerMute(a.resolveEntityID("user", c.Param("userId")), c.Param("kind"), req.Reason, moderator.Sub, time.Now().Add(time.Duration(req.DurationHours)*time.Hour), true); err != nil {
+		return plainTextError(c, http.StatusBadRequest, "failed to mute player")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) moderatorSubjectUnmute(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorSubjectUnmute(c echo.Context) error {
+	r := c.Request()
 	moderator, err := a.moderatorIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	if err := a.moderation.SetPlayerMute(a.resolveEntityID("user", mux.Vars(r)["userId"]), mux.Vars(r)["kind"], "", moderator.Sub, time.Time{}, false); err != nil {
-		http.Error(w, "failed to unmute player", http.StatusBadRequest)
-		return
+	if err := a.moderation.SetPlayerMute(a.resolveEntityID("user", c.Param("userId")), c.Param("kind"), "", moderator.Sub, time.Time{}, false); err != nil {
+		return plainTextError(c, http.StatusBadRequest, "failed to unmute player")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) banPlayerForCheating(w http.ResponseWriter, r *http.Request, rawUserID, actorUserID string) {
+func (a *api) banPlayerForCheating(c echo.Context, rawUserID, actorUserID string) {
+	r := c.Request()
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		_ = plainTextError(c, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	summary, err := a.moderation.BanPlayerForCheating(a.resolveEntityID("user", rawUserID), req.Reason, actorUserID)
 	if err != nil {
-		http.Error(w, "failed to ban player", http.StatusInternalServerError)
+		_ = plainTextError(c, http.StatusInternalServerError, "failed to ban player")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(summary)
+	_ = writeJSON(c, summary)
 }
 
-func (a *api) adminUnbanPlayer(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminUnbanPlayer(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	if err := a.moderation.SetPlayerBan(a.resolveEntityID("user", mux.Vars(r)["id"]), "", admin.Sub, false); err != nil {
-		http.Error(w, "failed to unban player", http.StatusInternalServerError)
-		return
+	if err := a.moderation.SetPlayerBan(a.resolveEntityID("user", c.Param("id")), "", admin.Sub, false); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to unban player")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminCommunityPardonPreview(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminCommunityPardonPreview(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	summary, err := a.moderation.PreviewCommunityPardon(7 * 24 * time.Hour)
 	if err != nil {
-		http.Error(w, "failed to preview community pardon", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to preview community pardon")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(summary)
+	return writeJSON(c, summary)
 }
 
-func (a *api) adminCommunityPardon(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminCommunityPardon(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Confirm bool `json:"confirm"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil || !req.Confirm {
-		http.Error(w, "explicit confirmation required", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "explicit confirmation required")
 	}
 	summary, err := a.moderation.PardonBannedPlayers(7*24*time.Hour, admin.Sub)
 	if err != nil {
-		http.Error(w, "failed to pardon banned players", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to pardon banned players")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(summary)
+	return writeJSON(c, summary)
 }
 
-func (a *api) adminClearReporterMute(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminClearReporterMute(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	if err := a.moderation.ClearReporterMute(a.resolveEntityID("user", mux.Vars(r)["id"])); err != nil {
-		http.Error(w, "failed to unmute reporter", http.StatusInternalServerError)
-		return
+	if err := a.moderation.ClearReporterMute(a.resolveEntityID("user", c.Param("id"))); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to unmute reporter")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminPromoteModerator(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPromoteModerator(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	userID := a.resolveEntityID("user", mux.Vars(r)["id"])
-	if err := a.admin.SetUserModerator(userID, true); err != nil {
-		http.Error(w, "failed to promote moderator", http.StatusInternalServerError)
-		return
+	userID := a.resolveEntityID("user", c.Param("id"))
+	if err := a.accounts.SetUserModerator(userID, true); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to promote moderator")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminDemoteModerator(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminDemoteModerator(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	if err := a.admin.SetUserModerator(a.resolveEntityID("user", mux.Vars(r)["id"]), false); err != nil {
-		http.Error(w, "failed to demote moderator", http.StatusInternalServerError)
-		return
+	if err := a.accounts.SetUserModerator(a.resolveEntityID("user", c.Param("id")), false); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to demote moderator")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminSetMapCreatorTier(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminSetMapCreatorTier(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Tier string `json:"tier"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	var tier *int
 	switch strings.ToLower(strings.TrimSpace(req.Tier)) {
@@ -428,41 +395,35 @@ func (a *api) adminSetMapCreatorTier(w http.ResponseWriter, r *http.Request) {
 		value := 2
 		tier = &value
 	default:
-		http.Error(w, "tier must be auto, base, trusted, or established", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "tier must be auto, base, trusted, or established")
 	}
-	repository := a.db
-	quota, err := repository.SetMapCreatorTierOverride(a.resolveEntityID("user", mux.Vars(r)["id"]), tier)
+	quota, err := a.maps.SetMapCreatorTierOverride(a.resolveEntityID("user", c.Param("id")), tier)
 	if errors.Is(err, ErrNoRows) {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
 	if err != nil {
-		http.Error(w, "failed to update map creator tier", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to update map creator tier")
 	}
-	writeJSONResponse(w, quota)
+	return writeJSON(c, quota)
 }
 
-func (a *api) adminListRoles(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminListRoles(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	roles, err := a.admin.ListUserRoles()
 	if err != nil {
-		http.Error(w, "roles unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "roles unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"roles": roles})
+	return writeJSON(c, map[string]any{"roles": roles})
 }
 
-func (a *api) adminGrantRole(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGrantRole(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		UserID string `json:"userId"`
@@ -470,269 +431,233 @@ func (a *api) adminGrantRole(w http.ResponseWriter, r *http.Request) {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if err := a.admin.GrantUserRole(a.resolveEntityID("user", req.UserID), req.Role, admin.Sub, req.Reason); err != nil {
-		http.Error(w, "failed to grant role", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to grant role")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminRevokeRole(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminRevokeRole(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	if err := a.admin.RevokeUserRole(a.resolveEntityID("user", mux.Vars(r)["id"]), strings.TrimSpace(mux.Vars(r)["role"]), admin.Sub, req.Reason); err != nil {
-		http.Error(w, "failed to revoke role", http.StatusInternalServerError)
-		return
+	if err := a.admin.RevokeUserRole(a.resolveEntityID("user", c.Param("id")), strings.TrimSpace(c.Param("role")), admin.Sub, req.Reason); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "failed to revoke role")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminBadgeDefinitions(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminBadgeDefinitions(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"badges": a.admin.ListAdminGrantableBadges()})
+	return writeJSON(c, map[string]any{"badges": a.badges.ListAdminGrantableBadges()})
 }
 
-func (a *api) adminGrantBadge(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGrantBadge(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		Nickname string `json:"nickname"`
 		BadgeID  string `json:"badgeId"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	nickname := strings.TrimSpace(req.Nickname)
 	if nickname == "" {
-		http.Error(w, "nickname required", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "nickname required")
 	}
 	if strings.TrimSpace(req.BadgeID) == "" {
-		http.Error(w, "badge id required", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "badge id required")
 	}
-	badge, changed, err := a.admin.GrantBadgeToUser(nickname, req.BadgeID, admin.Sub)
+	badge, changed, err := a.badges.GrantBadgeToUser(nickname, req.BadgeID, admin.Sub)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrBadgeUserNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			return plainTextError(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, ErrBadgeUnavailable), errors.Is(err, ErrBadgeNicknameRequired):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			return plainTextError(c, http.StatusBadRequest, err.Error())
 		default:
-			http.Error(w, "failed to grant badge", http.StatusInternalServerError)
+			return plainTextError(c, http.StatusInternalServerError, "failed to grant badge")
 		}
-		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"badge": badge, "changed": changed})
+	return writeJSON(c, map[string]any{"badge": badge, "changed": changed})
 }
 
-func (a *api) moderatorLog(w http.ResponseWriter, r *http.Request) {
+func (a *api) moderatorLog(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.moderatorIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	entries, err := a.moderation.ListModerationLog(100)
 	if err != nil {
-		http.Error(w, "moderation log unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "moderation log unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"log": entries})
+	return writeJSON(c, map[string]any{"log": entries})
 }
 
-func (a *api) adminListSignupIPBans(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminListSignupIPBans(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	bans, err := a.moderation.ListSignupIPBans(100)
 	if err != nil {
-		http.Error(w, "ip bans unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "ip bans unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"bans": bans})
+	return writeJSON(c, map[string]any{"bans": bans})
 }
 
-func (a *api) adminAddSignupIPBan(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminAddSignupIPBan(c echo.Context) error {
+	r := c.Request()
 	admin, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		IPAddress string `json:"ipAddress"`
 		Reason    string `json:"reason"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if err := a.moderation.AddSignupIPBan(strings.TrimSpace(req.IPAddress), req.Reason, admin.Sub); err != nil {
-		http.Error(w, "failed to ban ip", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to ban ip")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminRemoveSignupIPBan(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminRemoveSignupIPBan(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	ip, err := url.PathUnescape(strings.TrimSpace(mux.Vars(r)["ip"]))
+	ip, err := url.PathUnescape(strings.TrimSpace(c.Param("ip")))
 	if err != nil {
-		http.Error(w, "invalid ip", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid ip")
 	}
 	if err := a.moderation.RemoveSignupIPBan(ip); err != nil {
-		http.Error(w, "failed to remove ip ban", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to remove ip ban")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminGetMaintenance(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGetMaintenance(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	status, err := maintenance.Read(r.Context(), a.redis)
 	if err != nil {
-		http.Error(w, "maintenance unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "maintenance unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(status)
+	return writeJSON(c, status)
 }
 
-func (a *api) adminPutMaintenance(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPutMaintenance(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if a.redis == nil {
-		http.Error(w, "redis unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "redis unavailable")
 	}
 	var status maintenance.Status
 	if err := decodeJSONBody(r, &status); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	status = status.Normalized()
 	body, err := json.Marshal(status)
 	if err != nil {
-		http.Error(w, "invalid maintenance status", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid maintenance status")
 	}
 	if err := a.redis.Set(r.Context(), maintenance.RedisKey, body, 0).Err(); err != nil {
-		http.Error(w, "failed to save maintenance", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "failed to save maintenance")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(status)
+	return writeJSON(c, status)
 }
 
-func (a *api) adminClearMaintenance(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminClearMaintenance(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if a.redis == nil {
-		http.Error(w, "redis unavailable", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "redis unavailable")
 	}
 	if err := a.redis.Del(r.Context(), maintenance.RedisKey).Err(); err != nil {
-		http.Error(w, "failed to clear maintenance", http.StatusBadGateway)
-		return
+		return plainTextError(c, http.StatusBadGateway, "failed to clear maintenance")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) adminGetModerationSettings(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGetModerationSettings(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	settings, err := a.content.GetModerationSettings()
 	if err != nil {
-		http.Error(w, "moderation settings unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "moderation settings unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(settings)
+	return writeJSON(c, settings)
 }
 
-func (a *api) adminPutModerationSettings(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPutModerationSettings(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req ModerationSettings
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	webhookURL, err := normalizeDiscordWebhookURL(req.DiscordWebhookURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	settings := ModerationSettings{DiscordWebhookURL: webhookURL}
 	if err := a.content.SetModerationSettings(settings); err != nil {
-		http.Error(w, "failed to save moderation settings", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to save moderation settings")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(settings)
+	return writeJSON(c, settings)
 }
 
-func (a *api) adminGetDiscordIntegrationSettings(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGetDiscordIntegrationSettings(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	settings, err := a.content.GetDiscordIntegrationSettings()
 	if err != nil {
-		http.Error(w, "discord integration settings unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "discord integration settings unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(settings)
+	return writeJSON(c, settings)
 }
 
-func (a *api) adminPutDiscordIntegrationSettings(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPutDiscordIntegrationSettings(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var settings DiscordIntegrationSettings
 	if err := decodeJSONBody(r, &settings); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	for label, value := range map[string]string{
 		"guild id":         settings.GuildID,
@@ -742,28 +667,23 @@ func (a *api) adminPutDiscordIntegrationSettings(w http.ResponseWriter, r *http.
 		"2k role id":       settings.Elo2000RoleID,
 	} {
 		if err := validateOptionalDiscordSnowflake(label, value); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, err.Error())
 		}
 	}
 	if settings.ReconcileIntervalMinutes < 1 || settings.ReconcileIntervalMinutes > 1440 {
-		http.Error(w, "reconcile interval must be between 1 and 1440 minutes", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "reconcile interval must be between 1 and 1440 minutes")
 	}
 	// Managed role history is server-owned so old configured roles can be
 	// removed safely after an administrator changes a role ID.
 	settings.ManagedRoleIDs = nil
 	if err := a.content.SetDiscordIntegrationSettings(settings); err != nil {
-		http.Error(w, "failed to save discord integration settings", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to save discord integration settings")
 	}
 	saved, err := a.content.GetDiscordIntegrationSettings()
 	if err != nil {
-		http.Error(w, "discord integration settings unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "discord integration settings unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(saved)
+	return writeJSON(c, saved)
 }
 
 func validateOptionalDiscordSnowflake(label, raw string) error {
@@ -782,44 +702,38 @@ func validateOptionalDiscordSnowflake(label, raw string) error {
 	return nil
 }
 
-func (a *api) adminGetRankedSeason(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGetRankedSeason(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	settings, err := a.seasons.GetRankedSeasonSettings()
 	if err != nil {
-		http.Error(w, "season settings unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "season settings unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(settings)
+	return writeJSON(c, settings)
 }
 
-func (a *api) adminPutRankedSeasonResetRule(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminPutRankedSeasonResetRule(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req struct {
 		MonthlyResetDay int `json:"monthlyResetDay"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	settings, err := a.seasons.SetRankedSeasonResetRule(req.MonthlyResetDay)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "reset day") {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			return plainTextError(c, http.StatusBadRequest, err.Error())
 		}
-		http.Error(w, "season settings update failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "season settings update failed")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(settings)
+	return writeJSON(c, settings)
 }
 
 func normalizeDiscordWebhookURL(raw string) (string, error) {
@@ -844,53 +758,44 @@ func normalizeDiscordWebhookURL(raw string) (string, error) {
 	return value, nil
 }
 
-func (a *api) publicLobbyChangelog(w http.ResponseWriter, r *http.Request) {
+func (a *api) publicLobbyChangelog(c echo.Context) error {
 	content, err := a.content.GetLobbyChangelog(defaultLobbyChangelogContent)
 	if err != nil {
-		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "changelog unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(content)
+	return writeJSON(c, content)
 }
 
-func (a *api) publicChangelogPosts(w http.ResponseWriter, r *http.Request) {
+func (a *api) publicChangelogPosts(c echo.Context) error {
 	posts, err := a.content.ListChangelogPosts(false)
 	if err != nil {
-		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "changelog unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"posts": posts})
+	return writeJSON(c, map[string]any{"posts": posts})
 }
 
-func (a *api) publicChangelogPost(w http.ResponseWriter, r *http.Request) {
-	slug := strings.TrimSpace(mux.Vars(r)["slug"])
+func (a *api) publicChangelogPost(c echo.Context) error {
+	slug := strings.TrimSpace(c.Param("slug"))
 	post, ok, err := a.content.GetChangelogPostBySlug(slug, true)
 	if err != nil {
-		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "changelog unavailable")
 	}
 	if !ok {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(post)
+	return writeJSON(c, post)
 }
 
-func (a *api) adminGetChangelog(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminGetChangelog(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	posts, err := a.content.ListChangelogPosts(true)
 	if err != nil {
-		http.Error(w, "changelog unavailable", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "changelog unavailable")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"posts": posts})
+	return writeJSON(c, map[string]any{"posts": posts})
 }
 
 func normalizeChangelogPostInput(req ChangelogPostInput) (ChangelogPostInput, error) {
@@ -933,78 +838,62 @@ func slugifyChangelogPost(value string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-func (a *api) adminCreateChangelogPost(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminCreateChangelogPost(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	var req ChangelogPostInput
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	input, err := normalizeChangelogPostInput(req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	post, err := a.content.CreateChangelogPost(input)
 	if err != nil {
-		http.Error(w, "failed to save changelog", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to save changelog")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(post)
+	return writeJSONStatus(c, http.StatusCreated, post)
 }
 
-func (a *api) adminUpdateChangelogPost(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminUpdateChangelogPost(c echo.Context) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	id, err := strconv.ParseInt(strings.TrimSpace(mux.Vars(r)["id"]), 10, 64)
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid post id", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid post id")
 	}
 	var req ChangelogPostInput
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	input, err := normalizeChangelogPostInput(req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	post, ok, err := a.content.UpdateChangelogPost(id, input)
 	if err != nil {
-		http.Error(w, "failed to save changelog", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to save changelog")
 	}
 	if !ok {
-		http.NotFound(w, r)
-		return
+		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(post)
+	return writeJSON(c, post)
 }
 
-func (a *api) adminImportOfficialMap(w http.ResponseWriter, r *http.Request) {
+func (a *api) adminImportOfficialMap(c echo.Context) error {
+	r := c.Request()
 	identity, err := a.adminIdentity(r)
 	if err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	catalog, ok := a.mapCatalog(w)
-	if !ok {
-		return
-	}
-	file, closeFile, err := mapUploadFile(w, r)
+	file, closeFile, err := mapUploadFile(c)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	defer closeFile()
 	input := OfficialMapImportInput{
@@ -1018,55 +907,47 @@ func (a *api) adminImportOfficialMap(w http.ResponseWriter, r *http.Request) {
 		OfficialRegionType: r.FormValue("officialRegionType"),
 		OfficialRegionCode: r.FormValue("officialRegionCode"),
 	}
-	item, err := catalog.ImportOfficialMap(identity.Sub, input, file)
+	item, err := a.maps.ImportOfficialMap(identity.Sub, input, file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	w.Header().Set("Content-Type", "application/json")
-	writeJSONResponse(w, item)
+	return writeJSON(c, item)
 }
 
-func (a *api) adminUploadCurrentMap(w http.ResponseWriter, r *http.Request) {
-	a.uploadMap(w, r, contracts.MapKeyMoving)
+func (a *api) adminUploadCurrentMap(c echo.Context) error {
+	return a.uploadMap(c, contracts.MapKeyMoving)
 }
 
-func (a *api) adminUploadMap(w http.ResponseWriter, r *http.Request) {
-	mapKey := strings.TrimSpace(mux.Vars(r)["mapKey"])
+func (a *api) adminUploadMap(c echo.Context) error {
+	mapKey := strings.TrimSpace(c.Param("mapKey"))
 	if mapKey != contracts.MapKeyMoving && mapKey != contracts.MapKeyNMPZ {
-		http.Error(w, "unsupported map key", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "unsupported map key")
 	}
-	a.uploadMap(w, r, mapKey)
+	return a.uploadMap(c, mapKey)
 }
 
-func (a *api) uploadMap(w http.ResponseWriter, r *http.Request, mapKey string) {
+func (a *api) uploadMap(c echo.Context, mapKey string) error {
+	r := c.Request()
 	if _, err := a.adminIdentity(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "forbidden")
 	}
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
-		http.Error(w, "invalid multipart form", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid multipart form")
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "file is required", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "file is required")
 	}
 	defer file.Close()
 	dataset, err := readUploadedFile(file, header)
 	if err != nil {
-		http.Error(w, "failed to read file", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "failed to read file")
 	}
-	summary, err := a.seasons.ReplaceMapLocations(mapKey, mapKey, dataset)
+	summary, err := a.maps.ReplaceMapLocations(mapKey, mapKey, dataset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(summary)
+	return writeJSON(c, summary)
 }
 
 func readUploadedFile(file multipart.File, _ *multipart.FileHeader) ([]byte, error) {

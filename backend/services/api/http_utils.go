@@ -6,127 +6,62 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"geoduels/internal/envcfg"
+	"geoduels/internal/httpx"
 )
 
-func (a *api) healthLive(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (a *api) healthLive(c echo.Context) error {
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ok"))
+	return nil
 }
 
-func (a *api) healthReady(w http.ResponseWriter, _ *http.Request) {
+func (a *api) healthReady(c echo.Context) error {
 	if a.draining.Load() {
-		http.Error(w, "draining", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
 	defer cancel()
 	if err := a.redis.Ping(ctx).Err(); err != nil {
-		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "redis not ready")
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	c.Response().WriteHeader(http.StatusOK)
+	_, _ = c.Response().Write([]byte("ready"))
+	return nil
 }
 
-func cors(next http.Handler) http.Handler {
-	allowed := allowedOriginsSet()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" && (allowed["*"] || allowed[origin]) {
-			if allowed["*"] {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func corsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return httpx.CORS(next)
 }
 
 func allowedOriginsSet() map[string]bool {
-	raw := getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-	out := map[string]bool{}
-	for _, s := range strings.Split(raw, ",") {
-		origin := strings.TrimSpace(s)
-		if origin == "" {
-			continue
-		}
-		out[origin] = true
-	}
-	return out
+	return httpx.AllowedOriginsSet()
 }
 
 func getenv(k, fallback string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return fallback
+	return envcfg.Get(k, fallback)
 }
 
 func getenvDuration(k string, fallback time.Duration) time.Duration {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
+	return envcfg.Duration(k, fallback)
 }
 
 func getenvInt(k string, fallback int) int {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return n
+	return envcfg.Int(k, fallback)
 }
 
 func getenvBool(k string, fallback bool) bool {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return fallback
-	}
-	switch strings.ToLower(v) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return fallback
-	}
+	return envcfg.Bool(k, fallback)
 }
 
 func getenvSameSite(k string, fallback http.SameSite) http.SameSite {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(k))) {
-	case "strict":
-		return http.SameSiteStrictMode
-	case "none":
-		return http.SameSiteNoneMode
-	case "lax":
-		return http.SameSiteLaxMode
-	case "":
-		return fallback
-	default:
-		return fallback
-	}
+	return envcfg.SameSite(k, fallback)
 }
 
 func defaultStr(v, fallback string) string {
@@ -137,14 +72,7 @@ func defaultStr(v, fallback string) string {
 }
 
 func requiredSecret(k string, minLen int) ([]byte, error) {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return nil, errors.New(k + " is required")
-	}
-	if len(v) < minLen {
-		return nil, errors.New(k + " must be at least " + strconv.Itoa(minLen) + " characters")
-	}
-	return []byte(v), nil
+	return envcfg.RequiredSecret(k, minLen)
 }
 
 func decodeJSONBody(r *http.Request, dst any) error {
@@ -156,4 +84,27 @@ func decodeJSONBody(r *http.Request, dst any) error {
 		return err
 	}
 	return nil
+}
+
+// writeJSONStatus keeps the previous net/http response shape: an
+// "application/json" content type and the standard encoder's HTML escaping.
+func writeJSONStatus(c echo.Context, status int, value any) error {
+	return httpx.JSON(c, status, value)
+}
+
+func writeJSON(c echo.Context, value any) error {
+	return writeJSONStatus(c, http.StatusOK, value)
+}
+
+// plainTextError mirrors http.Error, including the nosniff header.
+func plainTextError(c echo.Context, status int, msg string) error {
+	return httpx.PlainTextError(c, status, msg)
+}
+
+func queryLimit(r *http.Request, fallback int) int {
+	value, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }

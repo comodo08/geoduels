@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"geoduels/internal/chat"
 	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
-	"geoduels/pkg/persistence"
 )
 
 func TestBuildCoordinatorChatMessageRejectsAbusiveText(t *testing.T) {
@@ -69,7 +69,7 @@ func TestBuildCoordinatorChatMessageRejectsUnknownAudience(t *testing.T) {
 
 func TestChatRestrictionErrorMessageIncludesExpiry(t *testing.T) {
 	endsAt := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
-	got := chatRestrictionErrorMessage(persistence.ChatRestriction{ActionType: "chat_mute", EndsAt: endsAt})
+	got := chatRestrictionErrorMessage(chat.ChatRestriction{ActionType: "chat_mute", EndsAt: endsAt})
 	want := "chat access is restricted until 2026-07-28T12:00:00Z"
 	if got != want {
 		t.Fatalf("chatRestrictionErrorMessage = %q, want %q", got, want)

@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"geoduels/pkg/notifications"
+	"geoduels/internal/content"
+	"geoduels/internal/notifications"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
 )
@@ -23,15 +24,9 @@ const (
 
 // workerPersistence is the narrow persistence surface the moderation worker
 // needs; satisfied by the sqlc-backed persistence store.
-type workerPersistence interface {
-	persistence.BadgeRepository
-	persistence.ContentRepository
-	persistence.RuntimeRepository
-	Close()
-}
-
 type worker struct {
-	store               workerPersistence
+	db                  *persistence.DB
+	content             content.Store
 	notificationService *notifications.Service
 	httpClient          *http.Client
 	draining            atomic.Bool
@@ -75,15 +70,16 @@ func newWorker() (*worker, error) {
 		return nil, err
 	}
 	return &worker{
-		store:               store,
-		notificationService: notifications.NewService(store),
+		db:                  store,
+		content:             content.NewPGStore(store.Pool()),
+		notificationService: notifications.NewService(notifications.NewPGStore(store.Pool())),
 		httpClient:          &http.Client{Timeout: 3 * time.Second},
 	}, nil
 }
 
 func (w *worker) close() {
-	if w.store != nil {
-		w.store.Close()
+	if w.db != nil {
+		w.db.Close()
 	}
 }
 

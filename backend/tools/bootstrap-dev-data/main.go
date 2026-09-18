@@ -9,13 +9,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"geoduels/internal/maps"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/persistence"
 )
 
+// mapStore resolves configured gameplay maps (persistence-owned settings);
+// the maps feature store owns dataset imports.
 type mapStore interface {
 	ResolveGameplayMapID(mode contracts.MatchMode, ruleset contracts.GameRuleset, requestedMapID string) (string, error)
-	ReplaceMapLocations(mapKey, displayName string, dataset []byte) (persistence.MapImportSummary, error)
+}
+
+type mapDatasetStore interface {
+	ReplaceMapLocations(mapKey, displayName string, dataset []byte) (contracts.MapImportSummary, error)
 }
 
 type requiredMap struct {
@@ -44,9 +50,10 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer store.Close()
+	datasets := maps.NewPGStore(store.Pool())
 
 	for _, required := range requiredDevelopmentMaps {
-		created, err := ensureDevelopmentMap(store, required, dataset)
+		created, err := ensureDevelopmentMap(datasets, datasets, required, dataset)
 		if err != nil {
 			log.Fatalf("bootstrap %s: %v", required.key, err)
 		}
@@ -58,13 +65,13 @@ func main() {
 	}
 }
 
-func ensureDevelopmentMap(store mapStore, required requiredMap, dataset []byte) (bool, error) {
+func ensureDevelopmentMap(store mapStore, datasets mapDatasetStore, required requiredMap, dataset []byte) (bool, error) {
 	if _, err := store.ResolveGameplayMapID(required.mode, required.ruleset, ""); err == nil {
 		return false, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return false, fmt.Errorf("check configured map: %w", err)
 	}
-	if _, err := store.ReplaceMapLocations(required.key, required.displayName, dataset); err != nil {
+	if _, err := datasets.ReplaceMapLocations(required.key, required.displayName, dataset); err != nil {
 		return false, fmt.Errorf("import sample dataset: %w", err)
 	}
 	return true, nil

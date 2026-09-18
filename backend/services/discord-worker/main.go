@@ -15,6 +15,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"geoduels/internal/badges"
+	"geoduels/internal/content"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
 )
@@ -28,17 +30,13 @@ const (
 
 // discordPersistence is the narrow persistence surface the discord worker
 // needs; satisfied by the sqlc-backed persistence store.
-type discordPersistence interface {
-	persistence.BadgeRepository
-	persistence.ContentRepository
-	Close()
-}
-
 type worker struct {
-	store    discordPersistence
+	db       *persistence.DB
+	badges   badges.Store
+	content  content.Store
 	session  *discordgo.Session
 	configMu sync.RWMutex
-	config   persistence.DiscordIntegrationSettings
+	config   content.DiscordIntegrationSettings
 	draining atomic.Bool
 	ready    atomic.Bool
 }
@@ -86,21 +84,22 @@ func newWorker() (*worker, error) {
 	if token == "" {
 		return nil, errors.New("DISCORD_BOT_TOKEN is required")
 	}
-	store, err := persistence.NewFromEnv()
+	db, err := persistence.NewFromEnv()
 	if err != nil {
 		return nil, err
 	}
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
-		store.Close()
+		db.Close()
 		return nil, err
 	}
-	settings, err := store.GetDiscordIntegrationSettings()
+	contentStore := content.NewPGStore(db.Pool())
+	settings, err := contentStore.GetDiscordIntegrationSettings()
 	if err != nil {
-		store.Close()
+		db.Close()
 		return nil, err
 	}
-	w := &worker{store: store, config: settings, session: session}
+	w := &worker{db: db, badges: badges.NewPGStore(db.Pool()), content: contentStore, config: settings, session: session}
 	session.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages
 	session.AddHandler(w.onGuildMemberAdd)
 	session.AddHandler(w.onMessageCreate)
@@ -119,8 +118,8 @@ func (w *worker) close() {
 	if w.session != nil {
 		_ = w.session.Close()
 	}
-	if w.store != nil {
-		w.store.Close()
+	if w.db != nil {
+		w.db.Close()
 	}
 }
 
@@ -153,7 +152,7 @@ func (w *worker) onMessageCreate(_ *discordgo.Session, event *discordgo.MessageC
 }
 
 func (w *worker) awardDiscordMemberBadge(discordUserID, source string) {
-	if awarded, err := w.store.AwardDiscordServerMemberByDiscordID(discordUserID); err != nil {
+	if awarded, err := w.badges.AwardDiscordServerMemberByDiscordID(discordUserID); err != nil {
 		log.Printf("discord member badge award failed for %s: %v", discordUserID, err)
 	} else if awarded {
 		observability.Log("info", "discord member badge awarded", map[string]any{"discordUserId": discordUserID, "source": source})
@@ -169,7 +168,7 @@ func (w *worker) startConfigRefresh(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				settings, err := w.store.GetDiscordIntegrationSettings()
+				settings, err := w.content.GetDiscordIntegrationSettings()
 				if err != nil {
 					observability.Log("warn", "discord settings refresh failed", map[string]any{"error": err.Error()})
 					continue
@@ -274,40 +273,40 @@ func (w *worker) drainDiscordSync(ctx context.Context) {
 }
 
 func (w *worker) processOneDiscordSync() (bool, error) {
-	item, ok, err := w.store.ClaimPendingDiscordSync(time.Now())
+	item, ok, err := w.badges.ClaimPendingDiscordSync(time.Now())
 	if err != nil || !ok {
 		return false, err
 	}
 	var processErr error
 	switch item.Action {
-	case persistence.DiscordSyncActionCleanupRoles:
+	case badges.DiscordSyncActionCleanupRoles:
 		// Cleanup jobs can outlive an unlink/relink sequence. Re-resolve the
 		// identity so a stale cleanup cannot remove a newly valid role.
-		_, linked, lookupErr := w.store.GetDiscordLinkedUser(item.DiscordUserID)
+		_, linked, lookupErr := w.badges.GetDiscordLinkedUser(item.DiscordUserID)
 		if lookupErr != nil {
 			processErr = lookupErr
-		} else if discordSyncActionForLinkState(item.Action, linked) == persistence.DiscordSyncActionSync {
+		} else if discordSyncActionForLinkState(item.Action, linked) == badges.DiscordSyncActionSync {
 			processErr = w.syncRankRoles(item.DiscordUserID)
 		} else {
 			processErr = w.cleanupRankRoles(item.DiscordUserID)
 		}
-	case persistence.DiscordSyncActionSync:
+	case badges.DiscordSyncActionSync:
 		processErr = w.syncDiscordUser(item.DiscordUserID)
 	default:
 		processErr = errors.New("unknown discord sync action")
 	}
 	if processErr != nil {
-		return true, w.store.MarkDiscordSyncFailed(item.ID, nextDiscordSyncAttempt(item.Attempts), processErr.Error())
+		return true, w.badges.MarkDiscordSyncFailed(item.ID, nextDiscordSyncAttempt(item.Attempts), processErr.Error())
 	}
-	if err := w.store.MarkDiscordSyncProcessed(item.ID); err != nil {
+	if err := w.badges.MarkDiscordSyncProcessed(item.ID); err != nil {
 		return true, err
 	}
 	return true, nil
 }
 
 func discordSyncActionForLinkState(requested string, linked bool) string {
-	if requested == persistence.DiscordSyncActionCleanupRoles && linked {
-		return persistence.DiscordSyncActionSync
+	if requested == badges.DiscordSyncActionCleanupRoles && linked {
+		return badges.DiscordSyncActionSync
 	}
 	return requested
 }
@@ -355,7 +354,7 @@ func (w *worker) syncRankRoles(discordUserID string) error {
 	if config.GuildID == "" {
 		return errors.New("discord guild is not configured")
 	}
-	user, ok, err := w.store.GetDiscordLinkedUser(discordUserID)
+	user, ok, err := w.badges.GetDiscordLinkedUser(discordUserID)
 	if err != nil {
 		return err
 	}
@@ -394,7 +393,7 @@ func (w *worker) cleanupRankRoles(discordUserID string) error {
 	return w.applyExclusiveRankRole(config, discordUserID, member.Roles, "")
 }
 
-func rankRoleForMMR(config persistence.DiscordIntegrationSettings, mmr int) string {
+func rankRoleForMMR(config content.DiscordIntegrationSettings, mmr int) string {
 	switch {
 	case mmr >= 2000:
 		return config.Elo2000RoleID
@@ -407,7 +406,7 @@ func rankRoleForMMR(config persistence.DiscordIntegrationSettings, mmr int) stri
 	}
 }
 
-func (w *worker) applyExclusiveRankRole(config persistence.DiscordIntegrationSettings, discordUserID string, currentRoles []string, targetRole string) error {
+func (w *worker) applyExclusiveRankRole(config content.DiscordIntegrationSettings, discordUserID string, currentRoles []string, targetRole string) error {
 	current := map[string]bool{}
 	for _, roleID := range currentRoles {
 		current[roleID] = true
@@ -440,7 +439,7 @@ func (w *worker) applyExclusiveRankRole(config persistence.DiscordIntegrationSet
 	return nil
 }
 
-func (w *worker) currentConfig() persistence.DiscordIntegrationSettings {
+func (w *worker) currentConfig() content.DiscordIntegrationSettings {
 	w.configMu.RLock()
 	defer w.configMu.RUnlock()
 	return w.config

@@ -11,10 +11,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/coordinator"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type friendsPageTestStore struct{ testRepositories }
@@ -22,21 +21,21 @@ type friendsPageTestStore struct{ testRepositories }
 func (s *friendsPageTestStore) GetSocialAccount(context.Context, string) (bool, bool, bool, error) {
 	return false, true, true, nil
 }
-func (s *friendsPageTestStore) ListFriends(_ context.Context, _ string, _ int) ([]persistence.CompactPlayer, error) {
-	return []persistence.CompactPlayer{{UserID: "friend-1", DisplayName: "Friend"}}, nil
+func (s *friendsPageTestStore) ListFriends(_ context.Context, _ string, _ int) ([]socialdomain.CompactPlayer, error) {
+	return []socialdomain.CompactPlayer{{UserID: "friend-1", DisplayName: "Friend"}}, nil
 }
-func (s *friendsPageTestStore) ListFriendRequests(_ context.Context, _ string, direction string, _ int) ([]persistence.FriendRequest, error) {
-	return []persistence.FriendRequest{{ID: direction + "-1", Direction: direction}}, nil
+func (s *friendsPageTestStore) ListFriendRequests(_ context.Context, _ string, direction string, _ int) ([]socialdomain.FriendRequest, error) {
+	return []socialdomain.FriendRequest{{ID: direction + "-1", Direction: direction}}, nil
 }
-func (s *friendsPageTestStore) ListRecentPlayers(_ context.Context, _ string, _ int) ([]persistence.CompactPlayer, error) {
-	return []persistence.CompactPlayer{{UserID: "recent-1", DisplayName: "Recent"}}, nil
+func (s *friendsPageTestStore) ListRecentPlayers(_ context.Context, _ string, _ int) ([]socialdomain.CompactPlayer, error) {
+	return []socialdomain.CompactPlayer{{UserID: "recent-1", DisplayName: "Recent"}}, nil
 }
-func (s *friendsPageTestStore) ListPartyInviteStatus(_ context.Context, _ string, partyID string) (map[string]persistence.CompactPartyInvite, error) {
+func (s *friendsPageTestStore) ListPartyInviteStatus(_ context.Context, _ string, partyID string) (map[string]socialdomain.CompactPartyInvite, error) {
 	if partyID != "party-1" {
-		return map[string]persistence.CompactPartyInvite{}, nil
+		return map[string]socialdomain.CompactPartyInvite{}, nil
 	}
 	created := time.Unix(1_700_000_000, 0).UTC()
-	return map[string]persistence.CompactPartyInvite{
+	return map[string]socialdomain.CompactPartyInvite{
 		"friend-1": {ID: "invite-1", CreatedAt: created, ExpiresAt: created.Add(20 * time.Minute)},
 	}, nil
 }
@@ -53,15 +52,15 @@ func TestFriendsPageReturnsOneCohesiveReadModel(t *testing.T) {
 	response := httptest.NewRecorder()
 	a := &api{social: socialdomain.NewService(store), appAuthSecret: secret}
 
-	a.friendsPage(response, request)
+	dispatch(a, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 	var body struct {
-		Friends       []persistence.CompactPlayer            `json:"friends"`
-		Requests      map[string][]persistence.FriendRequest `json:"requests"`
-		RecentPlayers []persistence.CompactPlayer            `json:"recentPlayers"`
+		Friends       []socialdomain.CompactPlayer            `json:"friends"`
+		Requests      map[string][]socialdomain.FriendRequest `json:"requests"`
+		RecentPlayers []socialdomain.CompactPlayer            `json:"recentPlayers"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
@@ -86,13 +85,13 @@ func TestFriendsPageAttachesPartyInviteStatus(t *testing.T) {
 	response := httptest.NewRecorder()
 	a := &api{social: socialdomain.NewService(store), appAuthSecret: secret}
 
-	a.friendsPage(response, request)
+	dispatch(a, response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 	var body struct {
-		Friends []persistence.CompactPlayer `json:"friends"`
+		Friends []socialdomain.CompactPlayer `json:"friends"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
@@ -111,7 +110,7 @@ func TestApplySocialPresenceUsesCoordinatorOnlineSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	seen := time.Now()
-	players := []persistence.CompactPlayer{
+	players := []socialdomain.CompactPlayer{
 		{UserID: "online-friend", LastSeenAt: &seen},
 		{UserID: "offline-friend", LastSeenAt: &seen},
 		{UserID: "hidden-friend"},

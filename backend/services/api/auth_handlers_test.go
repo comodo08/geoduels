@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"geoduels/internal/profiles"
 	"io"
 	"log"
 	"net/http"
@@ -17,10 +18,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
+	socialdomain "geoduels/internal/social"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
-	"geoduels/pkg/persistence"
-	socialdomain "geoduels/pkg/social"
 )
 
 type guestAuthTestStore struct {
@@ -115,8 +115,8 @@ func (s *guestAuthTestStore) GetIdentity(sub string) (Identity, error) {
 	return s.identity, nil
 }
 
-func (s *guestAuthTestStore) GetProfile(userID string) (persistence.Profile, error) {
-	return persistence.Profile{
+func (s *guestAuthTestStore) GetProfile(userID string) (profiles.Profile, error) {
+	return profiles.Profile{
 		UserID: userID, DisplayName: s.identity.DisplayName,
 		IsGuest: s.identity.AccountType == "guest", IsAdmin: s.identity.IsAdmin,
 		IsModerator: s.identity.IsModerator, IsBanned: s.identity.IsBanned,
@@ -134,7 +134,7 @@ func TestGuestLoginReusesExistingRefreshSession(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                 rdb,
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
@@ -147,7 +147,7 @@ func TestGuestLoginReusesExistingRefreshSession(t *testing.T) {
 
 	firstReq := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 	firstRec := httptest.NewRecorder()
-	a.guestLogin(firstRec, firstReq)
+	dispatch(a, firstRec, firstReq)
 	if firstRec.Code != http.StatusOK {
 		t.Fatalf("first guest login status = %d", firstRec.Code)
 	}
@@ -162,7 +162,7 @@ func TestGuestLoginReusesExistingRefreshSession(t *testing.T) {
 	secondReq := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 	secondReq.AddCookie(cookie)
 	secondRec := httptest.NewRecorder()
-	a.guestLogin(secondRec, secondReq)
+	dispatch(a, secondRec, secondReq)
 	if secondRec.Code != http.StatusOK {
 		t.Fatalf("second guest login status = %d", secondRec.Code)
 	}
@@ -177,14 +177,14 @@ func TestAnonymousBootstrapReturnsAnonymousPayloadWithoutLogging(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 
 	a := &api{
-		accounts: &guestAuthTestStore{}, sessions: &guestAuthTestStore{}, profiles: &guestAuthTestStore{}, preferenceStore: &guestAuthTestStore{}, badges: &guestAuthTestStore{}, leaderboardStore: &guestAuthTestStore{}, matchStore: &guestAuthTestStore{}, moderation: &guestAuthTestStore{}, admin: &guestAuthTestStore{}, content: &guestAuthTestStore{}, seasons: &guestAuthTestStore{}, gameplayMaps: &guestAuthTestStore{}, runtimeStore: &guestAuthTestStore{}, chatStore: &guestAuthTestStore{}, parties: &guestAuthTestStore{}, social: socialdomain.NewService(&guestAuthTestStore{}),
+		accounts: &guestAuthTestStore{}, sessions: &guestAuthTestStore{}, profiles: &guestAuthTestStore{}, badges: &guestAuthTestStore{}, matchStore: &guestAuthTestStore{}, moderation: &guestAuthTestStore{}, admin: &guestAuthTestStore{}, content: &guestAuthTestStore{}, seasons: &guestAuthTestStore{}, gameplayMaps: &guestAuthTestStore{}, runtimeStore: &guestAuthTestStore{}, chatStore: &guestAuthTestStore{}, parties: &guestAuthTestStore{}, social: socialdomain.NewService(&guestAuthTestStore{}),
 		refreshCookieName:     "geoduels_refresh",
 		refreshCookieSameSite: http.SameSiteLaxMode,
 	}
 	req := httptest.NewRequest(http.MethodGet, "/v1/bootstrap", nil)
 	rec := httptest.NewRecorder()
 
-	a.bootstrap(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("bootstrap status = %d, want %d", rec.Code, http.StatusOK)
@@ -200,7 +200,7 @@ func TestSessionFailureDoesNotClearRefreshCookie(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 
 	a := &api{
-		accounts: &guestAuthTestStore{}, sessions: &guestAuthTestStore{}, profiles: &guestAuthTestStore{}, preferenceStore: &guestAuthTestStore{}, badges: &guestAuthTestStore{}, leaderboardStore: &guestAuthTestStore{}, matchStore: &guestAuthTestStore{}, moderation: &guestAuthTestStore{}, admin: &guestAuthTestStore{}, content: &guestAuthTestStore{}, seasons: &guestAuthTestStore{}, gameplayMaps: &guestAuthTestStore{}, runtimeStore: &guestAuthTestStore{}, chatStore: &guestAuthTestStore{}, parties: &guestAuthTestStore{}, social: socialdomain.NewService(&guestAuthTestStore{}),
+		accounts: &guestAuthTestStore{}, sessions: &guestAuthTestStore{}, profiles: &guestAuthTestStore{}, badges: &guestAuthTestStore{}, matchStore: &guestAuthTestStore{}, moderation: &guestAuthTestStore{}, admin: &guestAuthTestStore{}, content: &guestAuthTestStore{}, seasons: &guestAuthTestStore{}, gameplayMaps: &guestAuthTestStore{}, runtimeStore: &guestAuthTestStore{}, chatStore: &guestAuthTestStore{}, parties: &guestAuthTestStore{}, social: socialdomain.NewService(&guestAuthTestStore{}),
 		refreshCookieName:     "geoduels_refresh",
 		refreshCookieSameSite: http.SameSiteLaxMode,
 	}
@@ -212,7 +212,7 @@ func TestSessionFailureDoesNotClearRefreshCookie(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 
-	a.bootstrap(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("bootstrap status = %d, want %d", rec.Code, http.StatusOK)
@@ -245,7 +245,7 @@ func TestSessionUsesValidRefreshCookieWhenStaleDuplicateComesFirst(t *testing.T)
 		LastUsedAt:       time.Now(),
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
 		refreshTokenTTL:       30 * 24 * time.Hour,
@@ -257,7 +257,7 @@ func TestSessionUsesValidRefreshCookieWhenStaleDuplicateComesFirst(t *testing.T)
 	req.Header.Set("Cookie", "geoduels_refresh=stale-token; geoduels_refresh="+validToken)
 	rec := httptest.NewRecorder()
 
-	a.bootstrap(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("session status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
@@ -290,7 +290,7 @@ func TestSessionBootstrapIsIdempotent(t *testing.T) {
 		LastUsedAt:       time.Now(),
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
 		refreshTokenTTL:       30 * 24 * time.Hour,
@@ -303,7 +303,7 @@ func TestSessionBootstrapIsIdempotent(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "geoduels_refresh", Value: refreshToken})
 		rec := httptest.NewRecorder()
 
-		a.bootstrap(rec, req)
+		dispatch(a, rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("session bootstrap %d status = %d, want %d; body = %s", attempt, rec.Code, http.StatusOK, rec.Body.String())
@@ -324,7 +324,7 @@ func TestGuestLoginIgnoresNicknamePayload(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                 rdb,
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
@@ -337,7 +337,7 @@ func TestGuestLoginIgnoresNicknamePayload(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", strings.NewReader(`{"nickname":"Custom"}`))
 	rec := httptest.NewRecorder()
-	a.guestLogin(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("guest login status = %d", rec.Code)
 	}
@@ -353,7 +353,7 @@ func TestGuestLoginRequiresTurnstileWhenEnabled(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                  rdb,
 		appAuthSecret:          []byte("01234567890123456789012345678901"),
 		accessTokenTTL:         15 * time.Minute,
@@ -369,7 +369,7 @@ func TestGuestLoginRequiresTurnstileWhenEnabled(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 	rec := httptest.NewRecorder()
-	a.guestLogin(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("guest login status = %d", rec.Code)
 	}
@@ -407,7 +407,7 @@ func TestGuestLoginValidatesTurnstileToken(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                  rdb,
 		appAuthSecret:          []byte("01234567890123456789012345678901"),
 		accessTokenTTL:         15 * time.Minute,
@@ -426,7 +426,7 @@ func TestGuestLoginValidatesTurnstileToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", strings.NewReader(`{"turnstileToken":"token-123"}`))
 	req.RemoteAddr = "203.0.113.44:12345"
 	rec := httptest.NewRecorder()
-	a.guestLogin(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("guest login status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -480,7 +480,7 @@ func TestUpdateNicknameClaimsRequiredNickname(t *testing.T) {
 		},
 	}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:  secret,
 		accessTokenTTL: 15 * time.Minute,
 	}
@@ -492,7 +492,7 @@ func TestUpdateNicknameClaimsRequiredNickname(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	a.updateNickname(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update nickname status = %d, body = %s", rec.Code, rec.Body.String())
@@ -522,7 +522,7 @@ func TestUpdateNicknameReturnsConflictWhenTaken(t *testing.T) {
 		},
 		setErr: ErrNicknameTaken,
 	}
-	a := &api{accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret}
+	a := &api{accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store), appAuthSecret: secret}
 	token, err := auth.IssueAppAccessToken(secret, "user-1", "session-1", 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -531,7 +531,7 @@ func TestUpdateNicknameReturnsConflictWhenTaken(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	a.updateNickname(rec, req)
+	dispatch(a, rec, req)
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("update nickname status = %d, body = %s", rec.Code, rec.Body.String())
@@ -551,7 +551,7 @@ func TestSuggestedNicknameUsesAvailableStoreSuggestion(t *testing.T) {
 		},
 		suggestedName: "Player.Name4821",
 	}
-	a := &api{accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store)}
+	a := &api{accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store)}
 
 	got, err := a.suggestedNickname(store.identity, "")
 
@@ -573,7 +573,7 @@ func TestGuestLoginRateLimitsNewGuestsByIP(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                 rdb,
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
@@ -588,7 +588,7 @@ func TestGuestLoginRateLimitsNewGuestsByIP(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 		req.RemoteAddr = "203.0.113.10:12345"
 		rec := httptest.NewRecorder()
-		a.guestLogin(rec, req)
+		dispatch(a, rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("guest login %d status = %d", i+1, rec.Code)
 		}
@@ -597,7 +597,7 @@ func TestGuestLoginRateLimitsNewGuestsByIP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 	req.RemoteAddr = "203.0.113.10:12345"
 	rec := httptest.NewRecorder()
-	a.guestLogin(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("third guest login status = %d", rec.Code)
 	}
@@ -616,7 +616,7 @@ func TestGuestLoginDailyRateLimitsNewGuestsByIP(t *testing.T) {
 
 	store := &guestAuthTestStore{}
 	a := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		redis:                  rdb,
 		appAuthSecret:          []byte("01234567890123456789012345678901"),
 		accessTokenTTL:         15 * time.Minute,
@@ -633,7 +633,7 @@ func TestGuestLoginDailyRateLimitsNewGuestsByIP(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 		req.RemoteAddr = "203.0.113.20:12345"
 		rec := httptest.NewRecorder()
-		a.guestLogin(rec, req)
+		dispatch(a, rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("guest login %d status = %d", i+1, rec.Code)
 		}
@@ -642,7 +642,7 @@ func TestGuestLoginDailyRateLimitsNewGuestsByIP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/guest", nil)
 	req.RemoteAddr = "203.0.113.20:12345"
 	rec := httptest.NewRecorder()
-	a.guestLogin(rec, req)
+	dispatch(a, rec, req)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("third daily guest login status = %d", rec.Code)
 	}

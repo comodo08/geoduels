@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"sync"
 	"time"
+
+	"github.com/labstack/echo/v4"
 
 	"geoduels/pkg/maintenance"
 )
@@ -120,6 +121,6 @@ func (a *api) statusHub() *globalStatusHub {
 	return a.globalStatus
 }
 
-func (a *api) publicGlobalStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, a.statusHub().current())
+func (a *api) publicGlobalStatus(c echo.Context) error {
+	return writeJSON(c, a.statusHub().current())
 }

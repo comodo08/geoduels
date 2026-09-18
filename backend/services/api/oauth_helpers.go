@@ -2,11 +2,11 @@ package main
 
 import (
 	"errors"
+	"geoduels/internal/accounts"
 	"net/http"
 	"strings"
 
 	"geoduels/pkg/contentfilter"
-	"geoduels/pkg/persistence"
 )
 
 const (
@@ -50,33 +50,33 @@ func oauthStartError(intent string) string {
 	}
 }
 
-func (a *api) resolveOAuthIdentity(r *http.Request, state oauthStateClaims, provider, providerUserID, email, displayName, avatarURL string) (persistence.Identity, error) {
+func (a *api) resolveOAuthIdentity(r *http.Request, state oauthStateClaims, provider, providerUserID, email, displayName, avatarURL string) (accounts.Identity, error) {
 	provider = strings.TrimSpace(strings.ToLower(provider))
 	providerUserID = strings.TrimSpace(providerUserID)
 	if provider == "" || providerUserID == "" {
-		return persistence.Identity{}, errors.New("provider identity unavailable")
+		return accounts.Identity{}, errors.New("provider identity unavailable")
 	}
 	intent := normalizeOAuthIntent(state.Intent)
 	identityExists, err := a.accounts.ProviderIdentityExists(provider, providerUserID)
 	if err != nil {
-		return persistence.Identity{}, err
+		return accounts.Identity{}, err
 	}
 	switch intent {
 	case oauthIntentLink:
 		if state.LinkSub == "" {
-			return persistence.Identity{}, errors.New("link requires sign in")
+			return accounts.Identity{}, errors.New("link requires sign in")
 		}
 		return a.accounts.LinkProviderIdentity(provider, providerUserID, email, displayName, avatarURL, state.LinkSub)
 	case oauthIntentUpgradeGuest:
 		if state.LinkSub == "" {
-			return persistence.Identity{}, errors.New("guest upgrade requires sign in")
+			return accounts.Identity{}, errors.New("guest upgrade requires sign in")
 		}
 		identity, err := a.accounts.GetIdentity(state.LinkSub)
 		if err != nil {
-			return persistence.Identity{}, err
+			return accounts.Identity{}, err
 		}
 		if identity.AccountType != "guest" {
-			return persistence.Identity{}, errors.New("guest upgrade requires guest account")
+			return accounts.Identity{}, errors.New("guest upgrade requires guest account")
 		}
 		// Mixed merge/login: attach a brand-new provider to this guest, or
 		// sign into the existing GeoDuels account for that provider.
@@ -84,15 +84,15 @@ func (a *api) resolveOAuthIdentity(r *http.Request, state oauthStateClaims, prov
 	}
 	if !identityExists {
 		if banned, err := a.moderation.IsSignupIPBanned(a.clientIP(r)); err != nil {
-			return persistence.Identity{}, errors.New("signup unavailable")
+			return accounts.Identity{}, errors.New("signup unavailable")
 		} else if banned {
-			return persistence.Identity{}, errors.New("signup unavailable")
+			return accounts.Identity{}, errors.New("signup unavailable")
 		}
 	}
 	return a.accounts.UpsertProviderIdentity(provider, providerUserID, email, displayName, avatarURL, "")
 }
 
-func (a *api) oauthSessionPayload(provider, accessToken string, identity persistence.Identity, fallbackName, returnTo string) map[string]any {
+func (a *api) oauthSessionPayload(provider, accessToken string, identity accounts.Identity, fallbackName, returnTo string) map[string]any {
 	suggestedNick, err := a.suggestedNickname(identity, fallbackName)
 	if err != nil {
 		suggestedNick = contentfilter.NicknameSuggestionBase(defaultStr(identity.ProviderName, defaultStr(fallbackName, identity.DisplayName)))
@@ -131,7 +131,7 @@ func oauthUserError(err error) string {
 		return "Sign in as a guest before saving progress."
 	case strings.Contains(msg, "identity banned"):
 		return "This sign-in method is banned from GeoDuels."
-	case errors.Is(err, persistence.ErrOAuthEmailConflict):
+	case errors.Is(err, ErrOAuthEmailConflict):
 		return "This verified email is linked to multiple GeoDuels accounts. Contact support to recover the account."
 	case strings.Contains(msg, "signup unavailable"):
 		return "signup unavailable"

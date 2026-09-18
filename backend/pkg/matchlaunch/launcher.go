@@ -38,8 +38,14 @@ const (
 )
 
 type Launcher struct {
-	Coord          *coordinator.Store
-	Persist        MatchPersistence
+	Coord   *coordinator.Store
+	Persist MatchPersistence
+	// Planner, when set, prepares the per-match round plan from the maps
+	// feature. Persist implementations may also satisfy it directly; the
+	// field wins so the feature store can own the planning workflow.
+	Planner interface {
+		PrepareMatchPlan(context.Context, *contracts.MatchFound) error
+	}
 	HTTPClient     *http.Client
 	TicketSecret   []byte
 	InternalSecret string
@@ -99,6 +105,18 @@ func (l Launcher) ValidateAssignment(ctx context.Context, assigned coordinator.A
 	}
 }
 
+func lPersistPlanner(l Launcher) (interface {
+	PrepareMatchPlan(context.Context, *contracts.MatchFound) error
+}, bool) {
+	if l.Planner != nil {
+		return l.Planner, true
+	}
+	planner, ok := l.Persist.(interface {
+		PrepareMatchPlan(context.Context, *contracts.MatchFound) error
+	})
+	return planner, ok
+}
+
 func (l Launcher) EnsureAssignment(ctx context.Context, found contracts.MatchFound) (coordinator.Assignment, error) {
 	found.Mode = sessionpolicy.NormalizeMode(found.Mode, found.MatchID)
 	found.Config = contracts.NormalizeMatchConfig(found.Config)
@@ -127,9 +145,7 @@ func (l Launcher) EnsureAssignment(ctx context.Context, found contracts.MatchFou
 	defer func() {
 		_ = l.Coord.UnlockMatch(context.Background(), found.MatchID, holder)
 	}()
-	if planner, ok := l.Persist.(interface {
-		PrepareMatchPlan(context.Context, *contracts.MatchFound) error
-	}); ok {
+	if planner, ok := lPersistPlanner(l); ok {
 		if err := planner.PrepareMatchPlan(ctx, &found); err != nil {
 			return coordinator.Assignment{}, err
 		}

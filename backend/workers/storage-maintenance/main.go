@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"geoduels/internal/storage"
 	"geoduels/pkg/persistence"
 )
 
@@ -20,9 +21,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
-	maintenance := persistence.StorageMaintenance(store)
+	maintenance := storage.NewPGStore(store.Pool())
 
-	var total persistence.StorageCleanupResult
+	var total storage.StorageCleanupResult
 	for batch := 1; *maxBatches == 0 || batch <= *maxBatches; batch++ {
 		result, err := maintenance.CleanupStorage(*batchSize)
 		if err != nil {
@@ -30,7 +31,7 @@ func main() {
 		}
 		total = add(total, result)
 		log.Printf("storage maintenance batch=%d result=%+v", batch, result)
-		if result == (persistence.StorageCleanupResult{}) {
+		if result == (storage.StorageCleanupResult{}) {
 			break
 		}
 		if *pause > 0 {
@@ -40,8 +41,8 @@ func main() {
 	fmt.Printf("storage maintenance total=%+v\n", total)
 }
 
-func add(a, b persistence.StorageCleanupResult) persistence.StorageCleanupResult {
-	return persistence.StorageCleanupResult{
+func add(a, b storage.StorageCleanupResult) storage.StorageCleanupResult {
+	return storage.StorageCleanupResult{
 		ReplaysCompressed:  a.ReplaysCompressed + b.ReplaysCompressed,
 		ExpiredReplays:     a.ExpiredReplays + b.ExpiredReplays,
 		RuntimeMatches:     a.RuntimeMatches + b.RuntimeMatches,

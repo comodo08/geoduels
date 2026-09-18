@@ -1,17 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
+	"geoduels/internal/authsession"
 	"geoduels/pkg/auth"
-	"geoduels/pkg/authsession"
 	"geoduels/pkg/contentfilter"
 	"geoduels/pkg/contracts"
 )
@@ -26,181 +25,166 @@ func (a *api) sessionService() *authsession.Service {
 var errMissingRefreshToken = errors.New("missing refresh token")
 var errUnavailableRefreshSession = errors.New("session unavailable")
 
-func (a *api) guestLogin(w http.ResponseWriter, r *http.Request) {
+func (a *api) guestLogin(c echo.Context) error {
+	r := c.Request()
 	if payload, nextRefreshToken, err := a.rotateSessionFromCookie(r); err == nil {
-		a.setRefreshCookie(w, r, nextRefreshToken)
-		_ = json.NewEncoder(w).Encode(payload)
-		return
+		a.setRefreshCookie(c, r, nextRefreshToken)
+		return writeJSON(c, payload)
 	}
 	var req struct {
 		TurnstileToken string `json:"turnstileToken"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if banned, err := a.moderation.IsSignupIPBanned(a.clientIP(r)); err != nil {
-		http.Error(w, "signup unavailable (101)", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "signup unavailable (101)")
 	} else if banned {
-		http.Error(w, "signup unavailable (102)", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "signup unavailable (102)")
 	}
 	if ok, retryAfter, err := a.checkGuestSignupRateLimit(r); err != nil {
-		http.Error(w, "signup unavailable (103)", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "signup unavailable (103)")
 	} else if !ok {
-		writeRateLimited(w, retryAfter)
-		return
+		return writeRateLimited(c, retryAfter)
 	}
 	if err := a.verifyGuestTurnstile(r.Context(), req.TurnstileToken, a.clientIP(r)); err != nil {
 		if errors.Is(err, errTurnstileRejected) {
-			http.Error(w, "verification failed", http.StatusForbidden)
-			return
+			return plainTextError(c, http.StatusForbidden, "verification failed")
 		}
-		http.Error(w, "verification unavailable", http.StatusServiceUnavailable)
-		return
+		return plainTextError(c, http.StatusServiceUnavailable, "verification unavailable")
 	}
 	identity, err := a.accounts.CreateGuestIdentity()
 	if err != nil {
-		http.Error(w, "persist guest failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "persist guest failed")
 	}
-	if err := a.writeSessionResponse(w, r, identity); err != nil {
-		http.Error(w, "issue session failed", http.StatusInternalServerError)
+	if err := a.writeSessionResponse(c, r, identity); err != nil {
+		return plainTextError(c, http.StatusInternalServerError, "issue session failed")
 	}
+	return nil
 }
 
-func (a *api) refresh(w http.ResponseWriter, r *http.Request) {
-	if err := a.writeRotatedSessionResponse(w, r); err != nil {
-		a.clearRefreshCookie(w, r)
-		http.Error(w, "invalid session", http.StatusUnauthorized)
+func (a *api) refresh(c echo.Context) error {
+	r := c.Request()
+	if err := a.writeRotatedSessionResponse(c, r); err != nil {
+		a.clearRefreshCookie(c, r)
+		return plainTextError(c, http.StatusUnauthorized, "invalid session")
 	}
+	return nil
 }
 
-func (a *api) updateNickname(w http.ResponseWriter, r *http.Request) {
+func (a *api) updateNickname(c echo.Context) error {
+	r := c.Request()
 	claims, identity, err := a.authenticatedAccount(r)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	if identity.AccountType == "guest" {
-		http.Error(w, "guest nicknames cannot be changed", http.StatusForbidden)
-		return
+		return plainTextError(c, http.StatusForbidden, "guest nicknames cannot be changed")
 	}
 	var req struct {
 		Nickname string `json:"nickname"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	nick, err := validatedNickname(req.Nickname)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, err.Error())
 	}
 	if err := a.accounts.SetNickname(claims.Sub, nick); err != nil {
 		if errors.Is(err, ErrNicknameTaken) {
-			http.Error(w, "nickname already taken", http.StatusConflict)
-			return
+			return plainTextError(c, http.StatusConflict, "nickname already taken")
 		}
-		http.Error(w, "failed to update nickname", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to update nickname")
 	}
 	updated, err := a.accounts.GetIdentity(claims.Sub)
 	if err != nil {
-		http.Error(w, "identity not found", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
 	payload, err := a.issueAuthSessionPayload(updated, claims.SessionID)
 	if err != nil {
-		http.Error(w, "issue session failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "issue session failed")
 	}
-	_ = json.NewEncoder(w).Encode(payload)
+	return writeJSON(c, payload)
 }
 
-func (a *api) unlinkAuthProvider(w http.ResponseWriter, r *http.Request) {
+func (a *api) unlinkAuthProvider(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
-	provider := strings.ToLower(strings.TrimSpace(mux.Vars(r)["provider"]))
+	provider := strings.ToLower(strings.TrimSpace(c.Param("provider")))
 	if provider != IdentityProviderGoogle && provider != IdentityProviderDiscord {
-		http.Error(w, "unknown provider", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "unknown provider")
 	}
 	identity, err := a.accounts.UnlinkProviderIdentity(claims.Sub, provider)
 	if err != nil {
 		msg := strings.ToLower(strings.TrimSpace(err.Error()))
 		switch {
 		case strings.Contains(msg, "last sign-in method"):
-			http.Error(w, "cannot unlink the last sign-in method", http.StatusConflict)
+			return plainTextError(c, http.StatusConflict, "cannot unlink the last sign-in method")
 		case strings.Contains(msg, "not linked"):
-			http.Error(w, "provider is not linked", http.StatusNotFound)
+			return plainTextError(c, http.StatusNotFound, "provider is not linked")
 		default:
-			http.Error(w, "failed to unlink provider", http.StatusInternalServerError)
+			return plainTextError(c, http.StatusInternalServerError, "failed to unlink provider")
 		}
-		return
 	}
 	payload, err := a.issueAuthSessionPayload(identity, claims.SessionID)
 	if err != nil {
-		http.Error(w, "issue session failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "issue session failed")
 	}
-	_ = json.NewEncoder(w).Encode(payload)
+	return writeJSON(c, payload)
 }
 
-func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
+func (a *api) deleteAccount(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	var req struct {
 		Confirm string `json:"confirm"`
 	}
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
 	if strings.TrimSpace(req.Confirm) != "DELETE" {
-		http.Error(w, "confirmation required", http.StatusBadRequest)
-		return
+		return plainTextError(c, http.StatusBadRequest, "confirmation required")
 	}
 	if err := a.accounts.DeleteAccount(claims.Sub); err != nil {
-		http.Error(w, "failed to delete account", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "failed to delete account")
 	}
-	a.clearRefreshCookie(w, r)
-	w.WriteHeader(http.StatusNoContent)
+	a.clearRefreshCookie(c, r)
+	c.Response().WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func (a *api) logout(w http.ResponseWriter, r *http.Request) {
+func (a *api) logout(c echo.Context) error {
+	r := c.Request()
 	sessionID, userID := a.sessionIdentity(r)
 	if sessionID != "" {
 		_ = a.sessionService().Revoke(r.Context(), sessionID)
 	} else if userID != "" {
 		_ = a.sessionService().RevokeAll(r.Context(), userID)
 	}
-	a.clearRefreshCookie(w, r)
-	w.WriteHeader(http.StatusNoContent)
+	a.clearRefreshCookie(c, r)
+	c.Response().WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func (a *api) logoutAll(w http.ResponseWriter, r *http.Request) {
+func (a *api) logoutAll(c echo.Context) error {
+	r := c.Request()
 	claims, err := a.authenticatedClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	if err := a.sessionService().RevokeAll(r.Context(), claims.Sub); err != nil {
-		http.Error(w, "logout failed", http.StatusInternalServerError)
-		return
+		return plainTextError(c, http.StatusInternalServerError, "logout failed")
 	}
-	a.clearRefreshCookie(w, r)
-	w.WriteHeader(http.StatusNoContent)
+	a.clearRefreshCookie(c, r)
+	c.Response().WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func validatedNickname(raw string) (string, error) {
@@ -236,7 +220,7 @@ func (a *api) sessionIdentity(r *http.Request) (string, string) {
 	return "", ""
 }
 
-func (a *api) writeSessionResponse(w http.ResponseWriter, r *http.Request, identity Identity) error {
+func (a *api) writeSessionResponse(c echo.Context, r *http.Request, identity Identity) error {
 	refreshToken, sessionRecord, err := a.createSession(identity.Sub, r)
 	if err != nil {
 		return err
@@ -245,17 +229,17 @@ func (a *api) writeSessionResponse(w http.ResponseWriter, r *http.Request, ident
 	if err != nil {
 		return err
 	}
-	a.setRefreshCookie(w, r, refreshToken)
-	return json.NewEncoder(w).Encode(payload)
+	a.setRefreshCookie(c, r, refreshToken)
+	return writeJSON(c, payload)
 }
 
-func (a *api) writeRotatedSessionResponse(w http.ResponseWriter, r *http.Request) error {
+func (a *api) writeRotatedSessionResponse(c echo.Context, r *http.Request) error {
 	payload, nextRefreshToken, err := a.rotateSessionFromCookie(r)
 	if err != nil {
 		return err
 	}
-	a.setRefreshCookie(w, r, nextRefreshToken)
-	return json.NewEncoder(w).Encode(payload)
+	a.setRefreshCookie(c, r, nextRefreshToken)
+	return writeJSON(c, payload)
 }
 
 func (a *api) authSessionFromCookies(r *http.Request) (RefreshTokenRecord, error) {
@@ -368,7 +352,7 @@ func (a *api) autoBootstrapAdmin(identity Identity) (Identity, error) {
 	if _, ok := a.adminBootstrapEmails[email]; !ok {
 		return identity, nil
 	}
-	if err := a.admin.SetUserAdmin(identity.Sub, true); err != nil {
+	if err := a.accounts.SetUserAdmin(identity.Sub, true); err != nil {
 		return Identity{}, err
 	}
 	return a.accounts.GetIdentity(identity.Sub)
@@ -386,8 +370,8 @@ func sessionUser(identity Identity) contracts.AuthUser {
 	}
 }
 
-func (a *api) setRefreshCookie(w http.ResponseWriter, r *http.Request, refreshToken string) {
-	http.SetCookie(w, &http.Cookie{
+func (a *api) setRefreshCookie(c echo.Context, r *http.Request, refreshToken string) {
+	http.SetCookie(c.Response(), &http.Cookie{
 		Name:     a.refreshCookieName,
 		Value:    refreshToken,
 		Path:     "/",
@@ -400,8 +384,8 @@ func (a *api) setRefreshCookie(w http.ResponseWriter, r *http.Request, refreshTo
 	})
 }
 
-func (a *api) clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
+func (a *api) clearRefreshCookie(c echo.Context, r *http.Request) {
+	http.SetCookie(c.Response(), &http.Cookie{
 		Name:     a.refreshCookieName,
 		Value:    "",
 		Path:     "/",

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
@@ -64,28 +65,28 @@ func (h *liveHub) start() {
 	})
 }
 
-func (a *api) userLive(w http.ResponseWriter, r *http.Request) {
+func (a *api) userLive(c echo.Context) error {
 	if a.live == nil {
 		a.live = newLiveHub(a)
 		a.live.start()
 	}
+	r := c.Request()
 	claims, err := a.liveClaims(r)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return plainTextError(c, http.StatusUnauthorized, "unauthorized")
 	}
 	if a.social != nil {
 		isGuest, _, _, err := a.social.GetSocialAccount(r.Context(), claims.Sub)
 		if err != nil || isGuest {
-			http.Error(w, "registration_required", http.StatusForbidden)
-			return
+			return plainTextError(c, http.StatusForbidden, "registration_required")
 		}
 	}
-	conn, err := a.live.upgrader.Upgrade(w, r, nil)
+	conn, err := a.live.upgrader.Upgrade(c.Response().Writer, r, nil)
 	if err != nil {
-		return
+		return nil
 	}
 	a.live.serve(r.Context(), claims.Sub, conn)
+	return nil
 }
 
 func (a *api) liveClaims(r *http.Request) (auth.AppClaims, error) {

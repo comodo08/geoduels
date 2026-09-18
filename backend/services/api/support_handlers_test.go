@@ -1,7 +1,8 @@
 package main
 
 import (
-	socialdomain "geoduels/pkg/social"
+	"geoduels/internal/accounts"
+	socialdomain "geoduels/internal/social"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,10 @@ type supportTestStore struct {
 	refUserID string
 }
 
+func (s *supportTestStore) GetIdentity(sub string) (accounts.Identity, error) {
+	return accounts.Identity{Sub: sub}, nil
+}
+
 func (s *supportTestStore) CreateDonationRef(userID string) (string, error) {
 	s.refUserID = userID
 	return "don_test", nil
@@ -23,7 +28,7 @@ func (s *supportTestStore) CreateDonationRef(userID string) (string, error) {
 
 func TestCreateSupportDonationRequiresConfiguredTestLinkInTestMode(t *testing.T) {
 	api := &api{
-		accounts: &supportTestStore{}, sessions: &supportTestStore{}, profiles: &supportTestStore{}, preferenceStore: &supportTestStore{}, badges: &supportTestStore{}, leaderboardStore: &supportTestStore{}, matchStore: &supportTestStore{}, moderation: &supportTestStore{}, admin: &supportTestStore{}, content: &supportTestStore{}, seasons: &supportTestStore{}, gameplayMaps: &supportTestStore{}, runtimeStore: &supportTestStore{}, chatStore: &supportTestStore{}, parties: &supportTestStore{}, social: socialdomain.NewService(&supportTestStore{}),
+		accounts: &supportTestStore{}, sessions: &supportTestStore{}, profiles: &supportTestStore{}, badges: &supportTestStore{}, matchStore: &supportTestStore{}, moderation: &supportTestStore{}, admin: &supportTestStore{}, content: &supportTestStore{}, seasons: &supportTestStore{}, gameplayMaps: &supportTestStore{}, runtimeStore: &supportTestStore{}, chatStore: &supportTestStore{}, parties: &supportTestStore{}, social: socialdomain.NewService(&supportTestStore{}),
 		appAuthSecret:  []byte("01234567890123456789012345678901"),
 		accessTokenTTL: 15 * time.Minute,
 		stripeMode:     "test",
@@ -36,7 +41,7 @@ func TestCreateSupportDonationRequiresConfiguredTestLinkInTestMode(t *testing.T)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	api.createSupportDonation(rec, req)
+	dispatch(api, rec, req)
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
@@ -49,7 +54,7 @@ func TestCreateSupportDonationRequiresConfiguredTestLinkInTestMode(t *testing.T)
 func TestCreateSupportDonationUsesTestPaymentLinkInTestMode(t *testing.T) {
 	store := &supportTestStore{}
 	api := &api{
-		accounts: store, sessions: store, profiles: store, preferenceStore: store, badges: store, leaderboardStore: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
+		accounts: store, sessions: store, profiles: store, badges: store, matchStore: store, moderation: store, admin: store, content: store, seasons: store, gameplayMaps: store, runtimeStore: store, chatStore: store, parties: store, social: socialdomain.NewService(store),
 		appAuthSecret:         []byte("01234567890123456789012345678901"),
 		accessTokenTTL:        15 * time.Minute,
 		stripeMode:            "test",
@@ -64,7 +69,7 @@ func TestCreateSupportDonationUsesTestPaymentLinkInTestMode(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	api.createSupportDonation(rec, req)
+	dispatch(api, rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())

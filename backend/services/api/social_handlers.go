@@ -4,33 +4,31 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 
+	"geoduels/internal/social"
 	"geoduels/pkg/contracts"
-	"geoduels/pkg/social"
 )
 
-func (a *api) friendsPage(w http.ResponseWriter, r *http.Request) {
+func (a *api) friendsPage(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	result, err := service.FriendsPage(r.Context(), userID, strings.TrimSpace(r.URL.Query().Get("partyId")))
+	result, err := service.FriendsPage(r.Context(), userID, strings.TrimSpace(c.QueryParam("partyId")))
 	if err != nil {
-		writeSocialError(w, http.StatusInternalServerError, "friends_page_unavailable")
-		return
+		return writeSocialError(c, http.StatusInternalServerError, "friends_page_unavailable")
 	}
 	friends, incoming, outgoing, recent := result.Friends, result.Incoming, result.Outgoing, result.Recent
 	attachPartyInvites(friends, result.PartyInvites)
 	a.touchViewerPresence(r.Context(), userID)
 	a.applySocialPresence(r.Context(), friends)
 	a.applySocialPresence(r.Context(), recent)
-	writeJSON(w, map[string]any{
+	return writeJSON(c, map[string]any{
 		"friends":       friends,
 		"requests":      map[string]any{"incoming": incoming, "outgoing": outgoing},
 		"recentPlayers": recent,
@@ -68,287 +66,257 @@ func (a *api) socialActor(r *http.Request) (string, *social.Service, bool) {
 	return claims.Sub, service, true
 }
 
-func (a *api) socialSettings(w http.ResponseWriter, r *http.Request) {
+func (a *api) socialSettings(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if r.Method == http.MethodGet {
 		settings, err := service.GetSocialSettings(r.Context(), userID)
 		if err != nil {
-			writeSocialStoreError(w, err)
-			return
+			return writeSocialStoreError(c, err)
 		}
-		writeJSON(w, settings)
-		return
+		return writeJSON(c, settings)
 	}
 	var settings social.SocialSettings
 	if json.NewDecoder(r.Body).Decode(&settings) != nil {
-		writeSocialError(w, http.StatusBadRequest, "invalid_request")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_request")
 	}
 	settings, err := service.UpdateSocialSettings(r.Context(), userID, settings)
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
-	writeJSON(w, settings)
+	return writeJSON(c, settings)
 }
 
-func (a *api) sendFriendRequest(w http.ResponseWriter, r *http.Request) {
+func (a *api) sendFriendRequest(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if allowed, retry, err := a.allowSocialAction(r, userID, "friend_request"); err != nil || !allowed {
-		writeSocialRateLimited(w, retry)
-		return
+		return writeSocialRateLimited(c, retry)
 	}
 	var body struct {
 		UserID string `json:"userId"`
 	}
 	if json.NewDecoder(r.Body).Decode(&body) != nil {
-		writeSocialError(w, http.StatusBadRequest, "invalid_request")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_request")
 	}
 	item, err := service.SendFriendRequest(r.Context(), userID, strings.TrimSpace(body.UserID))
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	targetID := strings.TrimSpace(body.UserID)
 	a.publishSocialLive(targetID, "friend_request_received", userID, targetID)
-	writeJSONStatus(w, http.StatusCreated, item)
+	return writeJSONStatus(c, http.StatusCreated, item)
 }
 
-func (a *api) respondFriendRequest(w http.ResponseWriter, r *http.Request) {
+func (a *api) respondFriendRequest(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	action := mux.Vars(r)["action"]
+	action := c.Param("action")
 	if action != "accept" && action != "decline" && action != "cancel" {
-		writeSocialError(w, http.StatusBadRequest, "invalid_action")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_action")
 	}
-	requestID := mux.Vars(r)["id"]
+	requestID := c.Param("id")
 	if err := service.RespondFriendRequest(r.Context(), userID, requestID, action); err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.liveInvalidate(userID)
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) removeFriend(w http.ResponseWriter, r *http.Request) {
+func (a *api) removeFriend(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	targetID := mux.Vars(r)["userId"]
+	targetID := c.Param("userId")
 	if err := service.RemoveFriend(r.Context(), userID, targetID); err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.liveInvalidate(userID, targetID)
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) userBlock(w http.ResponseWriter, r *http.Request) {
+func (a *api) userBlock(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	targetID := mux.Vars(r)["userId"]
+	targetID := c.Param("userId")
 	if err := service.SetUserBlock(r.Context(), userID, targetID, r.Method == http.MethodPost); err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.liveInvalidate(userID, targetID)
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) socialPlayerSearch(w http.ResponseWriter, r *http.Request) {
+func (a *api) socialPlayerSearch(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if allowed, retry, err := a.allowSocialAction(r, userID, "player_search"); err != nil || !allowed {
-		writeSocialRateLimited(w, retry)
-		return
+		return writeSocialRateLimited(c, retry)
 	}
-	players, err := service.SearchSocialPlayers(r.Context(), userID, r.URL.Query().Get("q"), queryLimit(r, 10))
+	players, err := service.SearchSocialPlayers(r.Context(), userID, c.QueryParam("q"), queryLimit(r, 10))
 	if err != nil {
-		writeSocialError(w, http.StatusInternalServerError, "search_unavailable")
-		return
+		return writeSocialError(c, http.StatusInternalServerError, "search_unavailable")
 	}
 	a.applySocialPresence(r.Context(), players)
-	writeJSON(w, map[string]any{"players": players})
+	return writeJSON(c, map[string]any{"players": players})
 }
 
-func (a *api) playerRelationship(w http.ResponseWriter, r *http.Request) {
+func (a *api) playerRelationship(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	profile, err := a.profiles.GetPublicPlayerProfileByNickname(mux.Vars(r)["nickname"])
+	profile, err := a.profiles.GetPublicPlayerProfileByNickname(c.Param("nickname"))
 	if err != nil {
-		writeSocialError(w, http.StatusNotFound, "player_not_found")
-		return
+		return writeSocialError(c, http.StatusNotFound, "player_not_found")
 	}
 	state, requestID, err := service.Relationship(r.Context(), userID, profile.UserID)
 	if err != nil {
-		writeSocialError(w, http.StatusInternalServerError, "relationship_unavailable")
-		return
+		return writeSocialError(c, http.StatusInternalServerError, "relationship_unavailable")
 	}
-	writeJSON(w, map[string]any{"state": state, "requestId": requestID})
+	return writeJSON(c, map[string]any{"state": state, "requestId": requestID})
 }
 
-func (a *api) createFriendCode(w http.ResponseWriter, r *http.Request) {
+func (a *api) createFriendCode(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	code, err := service.CreateFriendCode(r.Context(), userID, 7*24*time.Hour)
+	code, err := service.CreateFriendCode(r.Context(), userID, social.DefaultFriendCodeTTL)
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
-	writeJSONStatus(w, http.StatusCreated, code)
+	return writeJSONStatus(c, http.StatusCreated, code)
 }
 
-func (a *api) resolveFriendCode(w http.ResponseWriter, r *http.Request) {
+func (a *api) resolveFriendCode(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if allowed, retry, err := a.allowSocialAction(r, userID, "code_resolve"); err != nil || !allowed {
-		writeSocialRateLimited(w, retry)
-		return
+		return writeSocialRateLimited(c, retry)
 	}
-	player, err := service.ResolveFriendCode(r.Context(), userID, mux.Vars(r)["code"])
+	player, err := service.ResolveFriendCode(r.Context(), userID, c.Param("code"))
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
-	writeJSON(w, player)
+	return writeJSON(c, player)
 }
 
-func (a *api) sendFriendCodeRequest(w http.ResponseWriter, r *http.Request) {
+func (a *api) sendFriendCodeRequest(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	player, err := service.ResolveFriendCode(r.Context(), userID, mux.Vars(r)["code"])
+	player, err := service.ResolveFriendCode(r.Context(), userID, c.Param("code"))
 	if err == nil {
 		_, err = service.SendFriendRequest(r.Context(), userID, player.UserID)
 	}
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.publishSocialLive(player.UserID, "friend_request_received", userID, player.UserID)
-	w.WriteHeader(http.StatusNoContent)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *api) partyInvitations(w http.ResponseWriter, r *http.Request) {
+func (a *api) partyInvitations(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if r.Method == http.MethodGet {
 		items, err := service.ListPartyInvitations(r.Context(), userID, queryLimit(r, 10))
 		if err != nil {
-			writeSocialStoreError(w, err)
-			return
+			return writeSocialStoreError(c, err)
 		}
-		writeJSON(w, map[string]any{"invitations": items})
-		return
+		return writeJSON(c, map[string]any{"invitations": items})
 	}
 	if allowed, retry, err := a.allowSocialAction(r, userID, "party_invite"); err != nil || !allowed {
-		writeSocialRateLimited(w, retry)
-		return
+		return writeSocialRateLimited(c, retry)
 	}
 	var body struct {
 		UserID string `json:"userId"`
 	}
 	if json.NewDecoder(r.Body).Decode(&body) != nil {
-		writeSocialError(w, http.StatusBadRequest, "invalid_request")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_request")
 	}
-	item, err := service.CreatePartyInvitation(r.Context(), mux.Vars(r)["id"], userID, body.UserID, 20*time.Minute)
+	item, err := service.CreatePartyInvitation(r.Context(), c.Param("id"), userID, body.UserID, 20*time.Minute)
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.publishSocialLive(body.UserID, "party_invitation_received", userID, body.UserID)
-	writeJSONStatus(w, http.StatusCreated, item)
+	return writeJSONStatus(c, http.StatusCreated, item)
 }
 
-func (a *api) createPartyAndInvite(w http.ResponseWriter, r *http.Request) {
+func (a *api) createPartyAndInvite(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
 	if allowed, retry, err := a.allowSocialAction(r, userID, "party_invite"); err != nil || !allowed {
-		writeSocialRateLimited(w, retry)
-		return
+		return writeSocialRateLimited(c, retry)
 	}
 	var body struct {
 		UserID string `json:"userId"`
 	}
 	if json.NewDecoder(r.Body).Decode(&body) != nil {
-		writeSocialError(w, http.StatusBadRequest, "invalid_request")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_request")
 	}
 	party, err := a.parties.CreateParty(userID, contracts.ModeDuel, "world", 2*time.Hour)
 	if err != nil {
-		writeSocialError(w, http.StatusInternalServerError, "party_unavailable")
-		return
+		return writeSocialError(c, http.StatusInternalServerError, "party_unavailable")
 	}
-	invitation, err := service.CreatePartyInvitation(r.Context(), party.ID, userID, body.UserID, 20*time.Minute)
+	invitation, err := service.CreatePartyInvitation(r.Context(), party.ID, userID, body.UserID, social.DefaultPartyInviteTTL)
 	if err != nil {
 		_, _ = a.parties.LeaveParty(party.ID, userID)
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.publishSocialLive(body.UserID, "party_invitation_received", userID, body.UserID)
-	writeJSONStatus(w, http.StatusCreated, map[string]any{
+	return writeJSONStatus(c, http.StatusCreated, map[string]any{
 		"invitation": invitation,
 		"party":      party,
 	})
 }
 
-func (a *api) respondPartyInvitation(w http.ResponseWriter, r *http.Request) {
+func (a *api) respondPartyInvitation(c echo.Context) error {
+	r := c.Request()
 	userID, service, ok := a.socialActor(r)
 	if !ok {
-		writeSocialError(w, http.StatusUnauthorized, "registration_required")
-		return
+		return writeSocialError(c, http.StatusUnauthorized, "registration_required")
 	}
-	action := mux.Vars(r)["action"]
+	action := c.Param("action")
 	if action != "accept" && action != "decline" {
-		writeSocialError(w, http.StatusBadRequest, "invalid_action")
-		return
+		return writeSocialError(c, http.StatusBadRequest, "invalid_action")
 	}
-	item, err := service.RespondPartyInvitation(r.Context(), userID, mux.Vars(r)["id"], action)
+	item, err := service.RespondPartyInvitation(r.Context(), userID, c.Param("id"), action)
 	if err != nil {
-		writeSocialStoreError(w, err)
-		return
+		return writeSocialStoreError(c, err)
 	}
 	a.liveInvalidate(userID)
-	writeJSON(w, item)
+	return writeJSON(c, item)
 }
 
 func (a *api) publishSocialLive(notifyUserID, notificationType string, invalidate ...string) {
@@ -368,37 +336,19 @@ func (a *api) liveInvalidate(userIDs ...string) {
 	a.live.publishInvalidate(userIDs...)
 }
 
-func queryLimit(r *http.Request, fallback int) int {
-	value, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil || value <= 0 {
-		return fallback
-	}
-	return value
-}
-
-func writeJSON(w http.ResponseWriter, value any) {
-	writeJSONStatus(w, http.StatusOK, value)
-}
-
-func writeJSONStatus(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-
-func writeSocialStoreError(w http.ResponseWriter, err error) {
+func writeSocialStoreError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, ErrSocialNotFound):
-		writeSocialError(w, http.StatusNotFound, "social_action_unavailable")
+		return writeSocialError(c, http.StatusNotFound, "social_action_unavailable")
 	case errors.Is(err, ErrSocialBlocked):
-		writeSocialError(w, http.StatusForbidden, "social_action_unavailable")
+		return writeSocialError(c, http.StatusForbidden, "social_action_unavailable")
 	case errors.Is(err, ErrSocialLimit):
-		writeSocialError(w, http.StatusConflict, "social_limit_reached")
+		return writeSocialError(c, http.StatusConflict, "social_limit_reached")
 	default:
-		writeSocialError(w, http.StatusInternalServerError, "social_action_failed")
+		return writeSocialError(c, http.StatusInternalServerError, "social_action_failed")
 	}
 }
 
-func writeSocialError(w http.ResponseWriter, status int, code string) {
-	writeJSONStatus(w, status, map[string]string{"error": code})
+func writeSocialError(c echo.Context, status int, code string) error {
+	return writeJSONStatus(c, status, map[string]string{"error": code})
 }
