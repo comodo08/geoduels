@@ -2,7 +2,7 @@
 .env
 .env.*
 !.env.example
-!apps/web/.env.local.example
+!web/.env.local.example
 infra/k3s/overlays/k3d/secrets.env
 infra/k3s/overlays/prod/secrets.prod.env
 
@@ -10,10 +10,10 @@ infra/k3s/overlays/prod/secrets.prod.env
 node_modules/
 **/node_modules/
 .next/
-apps/web/.next/
-apps/web/.next-dev/
-apps/web/out/
-apps/web/.turbo/
+web/.next/
+web/.next-dev/
+web/out/
+web/.turbo/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
@@ -35,11 +35,6 @@ coverage.out
 runtime/*.json
 *.log
 
-# Ansible local/vendor files
-infra/ansible/**/.roles/
-infra/ansible/**/inventory/hosts.ini
-infra/ansible/**/group_vars/all.yml
-
 # IDE / OS files
 .idea/
 .vscode/
@@ -48,16 +43,16 @@ infra/ansible/**/group_vars/all.yml
 tmp/
 
 # data
-datasets/*.json
-!datasets/a-source-world.sample.json
-datasets/vali
+maps/datasets/*.json
+!maps/datasets/a-source-world.sample.json
+maps/datasets/vali
 vali-fun-balanced-world-1k.json
 
 # Local map thumbnail source images
-apps/web/assets/source-map-thumbnails/continents/*
-!apps/web/assets/source-map-thumbnails/continents/.gitkeep
-apps/web/assets/source-map-thumbnails/countries/*
-!apps/web/assets/source-map-thumbnails/countries/.gitkeep
+web/assets/source-map-thumbnails/continents/*
+!web/assets/source-map-thumbnails/continents/.gitkeep
+web/assets/source-map-thumbnails/countries/*
+!web/assets/source-map-thumbnails/countries/.gitkeep
 
 # sqlc generated code is regenerated via: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
-pkg/persistence/sqlc/
+backend/pkg/persistence/sqlc/

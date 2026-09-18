@@ -47,16 +47,20 @@ jobs:
         with:
           go-version: '1.26.x'
           cache: true
+          cache-dependency-path: backend/go.sum
 
-      - run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
-      - run: go test ./...
-      - run: go vet ./...
+      - name: Generate and test Go code
+        working-directory: backend
+        run: |
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+          go test ./...
+          go vet ./...
 
       - name: Upload generated sqlc package
         uses: actions/upload-artifact@v4
         with:
           name: sqlc-generated-${{ needs.release-meta.outputs.release_sha }}
-          path: pkg/persistence/sqlc/db
+          path: backend/pkg/persistence/sqlc/db
           if-no-files-found: error
           retention-days: 1
 
@@ -73,10 +77,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Test
-        working-directory: apps/web
+        working-directory: web
         run: |
           npm ci --no-audit --no-fund
           npm run test
@@ -97,14 +101,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sqlc-generated-${{ needs.release-meta.outputs.release_sha }}
-          path: pkg/persistence/sqlc/db
+          path: backend/pkg/persistence/sqlc/db
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
           cache: true
+          cache-dependency-path: backend/go.sum
 
       - name: Compile backend services once
+        working-directory: backend
         env:
           CGO_ENABLED: '0'
           GOOS: linux
@@ -135,11 +141,11 @@ jobs:
           for binary in api discord-worker match-coordinator gameplay-node moderation-worker realtime-gateway; do
             docker buildx build \
               --platform linux/amd64 \
-              --file services/Dockerfile.release \
+              --file backend/services/Dockerfile.release \
               --build-arg "BINARY=${binary}" \
               --tag "${REGISTRY}/geoduels-${binary}:${RELEASE_TAG}-amd64" \
               --push \
-              .
+              backend
           done
 
   build-and-push-web-amd64:
@@ -165,8 +171,8 @@ jobs:
       - name: Build and push web (amd64)
         uses: docker/build-push-action@v6
         with:
-          context: apps/web
-          file: apps/web/Dockerfile
+          context: web
+          file: web/Dockerfile
           platforms: linux/amd64
           push: true
           build-args: |

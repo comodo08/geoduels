@@ -1,0 +1,9 @@
+# Local build/test artifacts not needed for image builds. dist/release is
+# deliberately kept in the context: services/Dockerfile.release packages
+# binaries that CI compiles into backend/dist/release.
+tmp/
+*.log
+.DS_Store
+
+# Generated sqlc code is regenerated inside the image build.
+pkg/persistence/sqlc/

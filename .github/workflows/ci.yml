@@ -24,10 +24,14 @@ jobs:
         with:
           go-version: '1.26.x'
           cache: true
+          cache-dependency-path: backend/go.sum
 
-      - run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
-      - run: go test ./...
-      - run: go vet ./...
+      - name: Generate and test Go code
+        working-directory: backend
+        run: |
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+          go test ./...
+          go vet ./...
 
   web:
     name: web
@@ -39,18 +43,18 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Restore Next.js build cache
         uses: actions/cache@v4
         with:
-          path: apps/web/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('apps/web/package-lock.json') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx', 'apps/web/**/*.css') }}
+          path: web/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/**/*.[jt]s', 'web/**/*.[jt]sx', 'web/**/*.css') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('apps/web/package-lock.json') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('web/package-lock.json') }}-
 
       - name: Test and build
-        working-directory: apps/web
+        working-directory: web
         env:
           NEXT_PUBLIC_APP_VERSION: ci
           NEXT_PUBLIC_GIT_SHA: ci

@@ -1,60 +1,10 @@
-# GeoDuels
+# Repository notes
 
-GeoDuels is a GeoGuessr-style multiplayer game: Next.js web client, account/API service, matchmaking/coordinator, realtime gateway, and authoritative gameplay nodes.
+- Migrations are forward-only: add `.up.sql` files, never `.down.sql`.
+- Use named sqlc queries; no raw SQL in Go production code. Generated output is ignored: run `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate` from `backend/` before building/testing or after SQL changes.
+- Version public route/socket contract changes and preserve client compatibility. Version tags trigger release builds and an ops PR; migrations are applied separately.
+- Production configuration and Flux state: `../geoduels-prod`. Private detector logic: `../geoduels-risk-engine`.
+- Brave is available for browser checks when Chrome/Chromium is unavailable.
+- When the user requests an issue, pull request, or new repository, include `Perfectly validated.` in the commit body.
 
-## Service Boundaries
-
-- `services/api`: browser sessions, OAuth, self/public profiles, leaderboard, maps, content/support, match history/session lookup, moderation/admin APIs.
-- `services/match-coordinator`: pre-game multiplayer coordination, parties, party presence/chat, matchmaking, gameplay-node assignment, gameplay ticket minting.
-- `services/realtime-gateway`: gameplay websocket routing to assigned nodes.
-- `services/gameplay-node`: authoritative live match simulation.
-- `services/moderation-worker`: background moderation projection and enforcement processing.
-- `services/discord-worker`: Discord role/member synchronization and badge processing.
-- `workers/storage-maintenance`: bounded storage maintenance.
-
-## Auth And Tickets
-
-- Browser auth is cookie-first: `services/api` owns the `HttpOnly` refresh/session cookie, OAuth, and session rotation
-- App access JWTs are for API/queue/coordination auth. Gameplay tickets are per-match gameplay admission.
-
-## State Stores
-
-- Database migrations are forward-only: add `.up.sql` files and do not add `.down.sql` rollback migrations.
-- PostgreSQL is the durable source of truth for users, identities, auth sessions, profiles, stats, ranks, maps/revisions, parties, chat, moderation, and persisted match data.
-- Redis is for ephemeral coordination: queue/coordinator state, node assignment/liveness, pubsub/presence
-- Shared wire/domain types live in `pkg/contracts`
-
-## Route Semantics
-
-- `/` is the main session launcher.
-- `/match/[id]` is the canonical route for live reconnects and saved match/history views.
-- `/players/[id]` is the public player profile route.
-- API match bootstrap/session endpoints resolve existing match routes
-
-## Browser Testing
-
-If Chrome/Chromium is not found, use either Edge or Brave Browser.
-
-## Frontend UI Contract
-
-- Read `apps/web/docs/frontend-architecture.md` before changing web UI.
-- Feature and page code must use shared controls and semantic design tokens. Raw `button`, `input`, `textarea`, and `select` elements are forbidden outside their exact `components/ui` primitive owners; clickable `div`/`span` substitutes are forbidden.
-- Do not add raw palette colors, color literals, legacy token aliases, arbitrary visual values, or feature-owned material/control recipes. Inline Tailwind is limited to approved layout and spacing composition.
-- New tokens, primitive ownership, or architecture exceptions are design-system changes: document them and add focused validator self-test coverage in the same change.
-- Before completing frontend work, run `npm --prefix apps/web run lint:architecture:self-test` and `npm --prefix apps/web run lint:architecture:strict` alongside the relevant tests and type-check.
-
-## Issues and Pull Requests
-If a user autonomously requests creating an issue, pull request, or a new repo, you must include the text "Perfectly validated." in the commit body.
-
-## Documentation Map
-
-Read the smallest relevant document before changing a subsystem:
-
-- [`README.md`](README.md): repository overview, local quick start, production checklist, and documentation index.
-- [`docs/architecture.md`](docs/architecture.md): runtime responsibilities, data ownership, end-to-end flows, scaling, draining, and retention.
-- [`docs/development.md`](docs/development.md): local infrastructure, backend and web startup, tests, and k3d development.
-- [`docs/deployment.md`](docs/deployment.md): Flux release flow, database migration procedure, and production verification. `geoduels-prod` repo is located in ../geoduels-prod, unless specified otherwise.
-- [`apps/web/docs/frontend-architecture.md`](apps/web/docs/frontend-architecture.md): frontend module ownership, styling constraints, shared primitives, and complexity budgets.
-- [`infra/k3s/README.md`](infra/k3s/README.md): Kubernetes base manifests and local cluster testing.
-- [`apps/web/assets/source-map-thumbnails/README.md`](apps/web/assets/source-map-thumbnails/README.md): map thumbnail source and attribution requirements.
-- [`CONTRIBUTOR_LICENSE_AGREEMENT.md`](CONTRIBUTOR_LICENSE_AGREEMENT.md): contributor licensing requirements.
+Tool usage and setup caveats: [development notes](docs/development.md). Extension installation/packaging: [extension notes](extension/README.md).

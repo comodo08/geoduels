@@ -1,140 +1,77 @@
-# Development on macOS
+# Development notes
 
-## Prerequisites
+Commands run from the repository root unless a block changes directory. Keep this file for tool usage and non-obvious prerequisites; scripts/configuration own flag lists and defaults.
 
-- Docker Desktop
-- Go 1.26+
-- Node 20+
+## Build and verification
 
-## Prepare infrastructure
+sqlc output is ignored, so a clean checkout cannot build Go until generation runs. Regenerate after changing queries or migrations; do not edit generated files.
 
-```bash
-cp .env.example .env
-./scripts/dev-up.sh
-```
-
-`dev-up.sh` starts PostgreSQL and Redis, applies migrations, bootstraps sample
-maps when needed, and starts the playable backend stack. The development-data
-bootstrap is idempotent: it imports the lightweight sample dataset only when
-the configured Moving or NMPZ map is missing. Run
-`./scripts/bootstrap-dev-data.sh` at any time to repair an empty local database
-without replacing existing maps.
-
-Create and manage maps through the web map administration UI.
-
-## Start the backend stack
-
-The core playable backend services are defined in `docker-compose.yml`.
-
-To rebuild/recreate containers before starting them:
-
-```bash
-docker compose up -d --force-recreate gameplay-node match-coordinator realtime-gateway api
-```
-
-Start background workers when exercising moderation or Discord integration:
-
-```bash
-docker compose up -d moderation-worker
-docker compose up -d discord-worker
-```
-
-`discord-worker` requires the Discord bot, guild, channel, and role IDs in `.env`.
-`moderation-worker` can run without the private risk engine. To exercise private
-detector integration locally, run the sibling `../geoduels-risk-engine` service
-and set `RISK_ENGINE_URL=http://host.docker.internal:8096` plus
-`RISK_ENGINE_TOKEN` before starting Docker Compose.
-
-## Start the web app
-
-Run the Next.js app separately:
-
-```bash
-cd apps/web
-npm ci
-cp .env.local.example .env.local
-npm run dev
-```
-
-The browser connects directly to the local backend services. Next.js does not
-proxy API, coordinator, or realtime traffic in development.
-
-## Endpoints
-
-- Web: `http://localhost:3000`
-- API health: `http://localhost:8080/health`
-- Queue health: `http://localhost:8090/health`
-- Gameplay health: `http://localhost:8091/health`
-- Realtime websocket base: `ws://localhost:8092/ws/{node}`
-- Moderation worker health, when started: `http://localhost:8093/health`
-- Discord worker health, when started: `http://localhost:8094/health`
-
-## PostgreSQL Local (macOS)
-
-Start local PostgreSQL container:
-
-```bash
-docker compose up -d postgres
-```
-
-Run migrations with the repository helper, which uses the pinned migration container. This release applies only forward migrations to an existing GeoDuels v2 database at schema version 2000 or later:
-
-```bash
-MIGRATIONS_DB_URL='postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable' \
-./scripts/migrate.sh up
-```
-
-For a database below migration 2000, check out the `v2.0.1` tag and complete
-its migration path before returning to this release. Post-v2 migrations belong
-in `db/migrations` at version 2001 or later.
-
-To verify v2 forward migrations from schema version 2000 using a disposable
-PostgreSQL container, run:
-
-```bash
-./scripts/test-migrations-local.sh
-```
-
-The check confirms that forward migrations apply cleanly from the published
-version-2000 baseline.
-
-Set backend DB URL in `.env`:
-
-```bash
-POSTGRES_URL=postgres://geoduels:geoduels@localhost:5432/geoduels?sslmode=disable
-```
-
-Regenerate the sqlc persistence layer (generated code is gitignored and must
-exist before building or testing any Go service):
-
-```bash
+```sh
+cd backend
 go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
-```
-
-Restart backend services after changing `.env`:
-
-```bash
-docker compose up -d --force-recreate gameplay-node match-coordinator realtime-gateway api
-```
-
-Stop local PostgreSQL:
-
-```bash
-docker compose stop postgres
-```
-
-## Stop stack
-
-```bash
-docker compose down
-```
-
-## Running Go tests locally
-
-```bash
 go test ./...
+go vet ./...
 ```
 
-## Local k3d routing test
+`go test ./...` alone does not establish database correctness. Finalization integration tests require `FINALIZATION_TEST_POSTGRES_URL`; replay integration requires `REPLAY_TEST_POSTGRES_URL` plus `REPLAY_TEST_MATCH_ID` pointing to a compressed replay fixture. Use a disposable migrated database and synthetic data; finalization tests write records. Run with `-v` to distinguish execution from skips.
 
-For a local multi-node Kubernetes test of websocket routing and `gameplay-node` scaling, use `infra/k3s/overlays/k3d` with a k3d cluster that has 3 agent nodes. The overlay expects PostgreSQL and Redis to stay on the host and be reachable from the cluster through `host.k3d.internal`.
+```sh
+npm --prefix web run lint:architecture:self-test
+npm --prefix web run lint:architecture:strict
+npm --prefix web test
+(cd web && npx tsc --noEmit)
+npm --prefix web run build
+```
+
+The architecture checker owns exact native-element allowances, geometry exceptions, and size budgets. Document new exceptions beside that contract with a focused self-test, not in a second component catalog.
+
+## Local infrastructure and migrations
+
+- `./infra/scripts/bootstrap-dev-data.sh` repairs missing configured Moving/NMPZ maps without replacing existing maps. It does not initialize the database schema.
+- Compose environment changes require container recreation (`./infra/scripts/compose.sh up -d --force-recreate`), not just restarting the web app.
+- For private detector integration, run sibling `../geoduels-risk-engine` and configure `RISK_ENGINE_URL=http://host.docker.internal:8096` plus `RISK_ENGINE_TOKEN` in Compose. Moderation can run without it.
+- `./backend/scripts/migrate.sh up` uses a pinned Docker migration tool and `MIGRATIONS_DB_URL`; it refuses schemas below 2000, including blank databases. Complete older upgrades using the `v2.0.1` tag. Never bypass the guard against a production database.
+- `./backend/scripts/test-migrations-local.sh` creates and removes its own PostgreSQL container. Its expected terminal version must be updated when adding migrations; it currently asserts 2001 although later migrations exist. A failure at that assertion is not proof the SQL failed.
+- Browser runtime config can override build-time `NEXT_PUBLIC_*` values through `window.__GEODUELS_CONFIG__`. When an environment change appears ineffective, inspect the served `runtime-config.js` as well as the build environment.
+
+For local multi-node routing checks:
+
+```sh
+k3d cluster create geoduels --servers 1 --agents 3 --port "80:80@loadbalancer"
+kubectl create namespace geoduels
+# Fill a local copy of infra/k3s/overlays/k3d/secrets.env.example first.
+kubectl -n geoduels create secret generic geoduels-secrets --from-env-file=/path/to/local-secrets.env
+kubectl apply -k infra/k3s/overlays/k3d
+```
+
+Before applying, migrate host PostgreSQL, make PostgreSQL/Redis reachable via `host.k3d.internal`, and import matching images with `k3d image import -c geoduels ...` or provide registry access. The overlay references `ghcr-creds`; remove its pull-secret patches in a local copy for fully local images. Include optional workers' images or remove those workloads in that copy. PgBouncer needs the direct upstream `PGBOUNCER_POSTGRES_*` values from the secret template. Validate manifest changes with `kustomize build infra/k3s/overlays/k3d`.
+
+## Releases
+
+Production overlays, runtime configuration, secrets, and Flux state live in `../geoduels-prod`. A version tag builds images and opens an ops PR; merging that PR permits Flux rollout. It does **not** execute database migrations. Apply required forward migrations before dependent images and check compatibility before rolling back an image. Historical pre-v2 maintenance belongs to the `v2.0.1` instructions, not the current release.
+
+After rollout, check readiness, browser bootstrap/refresh, queue assignment, websocket reconnect, completion, and saved history. A healthy HTTP process alone does not verify a playable match. Coordinator standby may reject queue work while alive: failover verification must confirm exactly one coordinator accepts queue work after lease expiry.
+
+## Map tools
+
+Generate country datasets from a working Vali template, then validate panoramas and dry-run import:
+
+```sh
+node maps/scripts/generate-vali-country-batch.mjs --template maps/config/country.json --vali-bin /path/to/vali --source-root /path/to/vali/downloaded/countries --output-root maps/datasets/generated/countries
+# GOOGLE_MAPS_API_KEY must be available in the environment.
+node maps/scripts/validate-vali-streetview.mjs --input maps/datasets/generated/countries/FR/france.json --output maps/datasets/generated/countries/FR/france.clean.json
+node maps/scripts/import-country-maps.mjs --manifest maps/datasets/generated/countries/country-maps.manifest.json --report maps/datasets/generated/countries/import-report.json
+```
+
+The generator is sequential and checkpointed. The validator uses Street View metadata, refreshes unavailable panorama IDs from coordinates, and keeps an append-only checkpoint; it needs a key enabled for Street View Static API. **Update manifest paths to cleaned files before import**; validation does not switch them for you.
+
+Import is dry-run by default. For an intended production import, supply `GEODUELS_ADMIN_ACCESS_TOKEN` and add `--api-base https://geoduels.io --import --confirm-production`. Resolve blocked entries or explicitly use `--skip-errors`. Deterministic official map keys make reimport a replacement of current locations, not a new map. Inspect the response report and launch a private match against imported maps.
+
+Thumbnail sources belong under `web/assets/source-map-thumbnails`: countries use ISO alpha-2 filenames (`US.jpg`, `BR_001.jpg`), continents use slugs (`africa.jpg`), generic variants use `variant-1` through `variant-5`. Sources are ignored; generated WebPs and **both** backend/frontend catalogs are committed for independent builds.
+
+```sh
+npm --prefix web run maps:thumbnails
+npm --prefix web run maps:thumbnails:check
+```
+
+Removing a source does not remove its picker entry: delete the generated WebP under `web/public/map-thumbnails` and regenerate catalogs. The check command verifies local sources; a checkout without those ignored originals cannot prove their provenance.
