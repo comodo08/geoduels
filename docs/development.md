@@ -30,8 +30,7 @@ The architecture checker owns exact native-element allowances, geometry exceptio
 - `./infra/scripts/bootstrap-dev-data.sh` repairs missing configured Moving/NMPZ maps without replacing existing maps. It does not initialize the database schema.
 - Compose environment changes require container recreation (`./infra/scripts/compose.sh up -d --force-recreate`), not just restarting the web app.
 - For private detector integration, run sibling `../geoduels-risk-engine` and configure `RISK_ENGINE_URL=http://host.docker.internal:8096` plus `RISK_ENGINE_TOKEN` in Compose. Moderation can run without it.
-- `./backend/scripts/migrate.sh up` uses a pinned Docker migration tool and `MIGRATIONS_DB_URL`; it refuses schemas below 2000, including blank databases. Complete older upgrades using the `v2.0.1` tag. Never bypass the guard against a production database.
-- `./backend/scripts/test-migrations-local.sh` creates and removes its own PostgreSQL container. Its expected terminal version must be updated when adding migrations; it currently asserts 2001 although later migrations exist. A failure at that assertion is not proof the SQL failed.
+- `./backend/scripts/migrate.sh up` uses a pinned Docker migration tool and `MIGRATIONS_DB_URL`. Blank databases apply from version 2000. It refuses existing schemas on versions 1–1999; complete those upgrades using the `v2.0.1` tag. Never bypass the guard against a production database.
 - Browser runtime config can override build-time `NEXT_PUBLIC_*` values through `window.__GEODUELS_CONFIG__`. When an environment change appears ineffective, inspect the served `runtime-config.js` as well as the build environment.
 
 For local multi-node routing checks:
