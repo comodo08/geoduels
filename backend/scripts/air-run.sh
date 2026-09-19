@@ -13,7 +13,7 @@ AIR_VERSION="${AIR_VERSION:-v1.61.7}"
 AIR_BIN="${GOPATH:-/go}/bin/air"
 TMP_DIR="/tmp/${BIN_NAME}-air"
 SERVICE_DIR="${SERVICE_PATH#./}"
-INCLUDE_DIRS="${SERVICE_DIR},pkg"
+INCLUDE_DIRS="${SERVICE_DIR},pkg,internal"
 INCLUDE_FILES="go.mod,go.sum"
 
 if [ ! -x "$AIR_BIN" ]; then

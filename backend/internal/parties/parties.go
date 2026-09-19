@@ -350,7 +350,7 @@ func (s *PGStore) SetPartyMemberTeam(partyID, userID, teamID string) (contracts.
 	if err != nil {
 		return contracts.PartySnapshot{}, err
 	}
-	tag, err := s.db.SetPartyMemberTeam(ctx, db.SetPartyMemberTeamParams{PartyID: partyUUID, UserID: userUUID, TeamID: db.NullGdTeamID{GdTeamID: db.GdTeamID(teamID), Valid: true}})
+	tag, err := s.db.SetPartyMemberTeam(ctx, db.SetPartyMemberTeamParams{PartyID: partyUUID, UserID: userUUID, TeamID: db.GdTeamID(teamID)})
 	if err != nil {
 		return contracts.PartySnapshot{}, err
 	}
@@ -642,7 +642,7 @@ func (s *PGStore) listPartyMembers(ctx context.Context, partyID string) ([]contr
 		member.AvatarURL = row.AvatarUrl
 		member.IsGuest = row.IsGuest
 		member.IsAdmin = row.IsAdmin
-		member.TeamID = anyText(row.TeamID)
+		member.TeamID = string(row.TeamID)
 		member.Role = string(row.Role)
 		member.Ready = row.Ready
 		member.JoinedAt = row.JoinedAt.Time

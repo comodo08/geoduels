@@ -7,21 +7,13 @@ import type { MatchConfig } from "../../matchmaking/lib/queue-client";
 import {
   applyPartyPatch,
   createParty,
-  fetchParty,
   joinParty,
-  kickPartyMember,
-  leaveParty,
-  startParty,
-  streamParty,
-  touchPartyPresence,
-  transferPartyOwner,
-  updatePartySettings,
-  updatePartyTeam,
   type PartySnapshot,
   type PartyMember,
   type PartyTeamId,
   type PartyMode,
 } from "../lib/party-client";
+import { PartySocket } from "../lib/party-socket";
 
 export type PartyRuntimeStatus =
   | "idle"
@@ -54,19 +46,13 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export function jitteredPartyDelay(baseMs = 5000): number {
-  return Math.max(1000, Math.round(baseMs * (0.8 + Math.random() * 0.4)));
-}
-
 export class PartyController extends ObservableStore<PartyRuntimeState> {
   private readonly config: RuntimeConfig;
   private readonly sessionController: SessionController;
   private readonly matchController: MatchController;
   private state: PartyRuntimeState = initialState;
   private streamAbort: AbortController | null = null;
-  private streamSession: AuthSessionSnapshot | null = null;
-  private presenceInterval: number | null = null;
-  private pollInterval: number | null = null;
+  private socket: PartySocket | null = null;
   private reconnectTimeout: number | null = null;
   private reconnectAttempt = 0;
   private handledMatchId = "";
@@ -90,15 +76,11 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
 
   destroy() {
     this.destroyed = true;
-    this.stopPresenceLoop();
-    this.stopPollLoop();
     this.clearReconnectTimer();
     this.abortStream();
   }
 
   reset = () => {
-    this.stopPresenceLoop();
-    this.stopPollLoop();
     this.clearReconnectTimer();
     this.abortStream();
     this.handledMatchId = "";
@@ -132,16 +114,14 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     try {
       const session = await this.playableSession();
       if (!session) return;
-      const snap = await joinParty(this.config, code, session.accessToken);
-      this.assertCurrentUserMember(snap);
+      const admission = await joinParty(this.config, code, session.accessToken);
       this.patchState({
-        partyId: snap.id,
-        inviteCode: snap.inviteCode,
-        snapshot: snap,
-        self: this.currentUserMember(snap),
+        partyId: admission.id,
+        inviteCode: admission.inviteCode,
+        snapshot: null,
+        self: null,
       });
-      this.markExistingMatchHandled(snap);
-      await this.connectToParty(session, snap.id, { waitForSnapshot: true });
+      await this.connectToParty(session, admission.id, { waitForSnapshot: true });
     } catch (error) {
       this.patchState({
         status: "error",
@@ -155,23 +135,21 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     try {
       const session = await this.playableSession();
       if (!session) return false;
-      const snap = await createParty(
+      const admission = await createParty(
         this.config,
         session.accessToken,
         mode,
         matchConfig,
       );
-      this.assertCurrentUserMember(snap);
       this.handledMatchId = "";
       this.patchState({
         status: "admitting",
-        partyId: snap.id,
-        inviteCode: snap.inviteCode,
-        snapshot: snap,
-        self: this.currentUserMember(snap),
+        partyId: admission.id,
+        inviteCode: admission.inviteCode,
+        snapshot: null,
+        self: null,
       });
-      this.markExistingMatchHandled(snap);
-      await this.connectToParty(session, snap.id, { waitForSnapshot: true });
+      await this.connectToParty(session, admission.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
       this.patchState({
@@ -199,18 +177,16 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     try {
       const session = await this.playableSession();
       if (!session) return false;
-      const snap = await joinParty(this.config, code, session.accessToken);
-      this.assertCurrentUserMember(snap);
+      const admission = await joinParty(this.config, code, session.accessToken);
       this.handledMatchId = "";
       this.patchState({
         status: "admitting",
-        partyId: snap.id,
-        inviteCode: snap.inviteCode,
-        snapshot: snap,
-        self: this.currentUserMember(snap),
+        partyId: admission.id,
+        inviteCode: admission.inviteCode,
+        snapshot: null,
+        self: null,
       });
-      this.markExistingMatchHandled(snap);
-      await this.connectToParty(session, snap.id, { waitForSnapshot: true });
+      await this.connectToParty(session, admission.id, { waitForSnapshot: true });
       return this.state.status === "ready" && !!this.state.snapshot;
     } catch (error) {
       this.patchState({
@@ -223,13 +199,9 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
 
   leaveParty = async () => {
     if (!this.state.partyId) return;
-    const partyId = this.state.partyId;
-    const session = this.sessionController.getSessionSnapshot();
     this.patchState({ status: "leaving", error: "" });
     try {
-      if (session) {
-        await leaveParty(this.config, partyId, session.accessToken);
-      }
+      await this.requireSocket().command("leave", {});
       this.reset();
     } catch (error) {
       this.patchState({
@@ -244,13 +216,7 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await kickPartyMember(
-        this.config,
-        this.state.partyId,
-        session.accessToken,
-        userId,
-      );
-      this.patchSnapshot(next);
+      await this.requireSocket().command("kick", { userId });
     } catch (error) {
       this.patchState({
         error: getErrorMessage(error, "Could not kick player"),
@@ -263,13 +229,7 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await transferPartyOwner(
-        this.config,
-        this.state.partyId,
-        session.accessToken,
-        userId,
-      );
-      this.patchSnapshot(next);
+      await this.requireSocket().command("transfer_owner", { userId });
     } catch (error) {
       this.patchState({
         error: getErrorMessage(error, "Could not transfer leader"),
@@ -282,15 +242,7 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const assignment = await startParty(
-        this.config,
-        this.state.partyId,
-        session.accessToken,
-      );
-      this.handledMatchId = assignment.matchId;
-      await this.matchController.resumeResolvedMatch(assignment, {
-        playMatchFoundSfx: true,
-      });
+      await this.requireSocket().command("start", {});
     } catch (error) {
       this.patchState({
         error: getErrorMessage(error, "Could not start party"),
@@ -303,14 +255,7 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await updatePartySettings(
-        this.config,
-        this.state.partyId,
-        session.accessToken,
-        matchConfig,
-        mode,
-      );
-      this.patchSnapshot(next);
+      await this.requireSocket().command("settings", { config: matchConfig, mode });
     } catch (error) {
       this.patchState({
         error: getErrorMessage(error, "Could not update party settings"),
@@ -323,13 +268,7 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !session) return;
     this.patchState({ error: "" });
     try {
-      const next = await updatePartyTeam(
-        this.config,
-        this.state.partyId,
-        session.accessToken,
-        teamId,
-      );
-      this.patchSnapshot(next);
+      await this.requireSocket().command("team", { teamId });
     } catch (error) {
       this.patchState({
         error: getErrorMessage(error, "Could not switch team"),
@@ -353,10 +292,8 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     if (!this.state.partyId || !this.isCurrentUserMember(this.state.snapshot)) {
       return;
     }
-    const session =
-      this.sessionController.getSessionSnapshot() ||
-      (await this.sessionController.ensureFreshSession());
-    if (!session) return;
+    const session = await this.sessionController.ensureFreshSession();
+    if (!session) throw new Error("Session unavailable");
     await this.connectToParty(session, this.state.partyId);
   }
 
@@ -370,7 +307,6 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     const controller = new AbortController();
     const requestId = ++this.connectRequestId;
     this.streamAbort = controller;
-    this.streamSession = session;
     this.patchState({
       status: options?.waitForSnapshot
         ? "admitting"
@@ -392,18 +328,22 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
           }, 10000);
         })
       : Promise.resolve();
-    void streamParty(
+    const socket = new PartySocket(
       this.config,
-      session,
       partyId,
+      session.accessToken,
       controller.signal,
       (event) => {
         if (requestId !== this.connectRequestId) return;
         if (event.type === "party_snapshot") {
           if (readyTimeout) window.clearTimeout(readyTimeout);
+          if (event.party.state === "closed" || event.party.state === "expired") {
+            readyReject?.(new Error("Party is closed"));
+            this.reset();
+            return;
+          }
           this.reconnectAttempt = 0;
-          this.stopPollLoop();
-          this.startPresenceLoop();
+          if (options?.waitForSnapshot) this.markExistingMatchHandled(event.party);
           this.patchSnapshot(event.party, "ready");
           readyResolve?.();
           readyResolve = null;
@@ -414,7 +354,6 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
           const next = applyPartyPatch(this.state.snapshot, event.patch);
           if (next) {
             this.reconnectAttempt = 0;
-            this.startPresenceLoop();
             this.patchSnapshot(next, "ready");
           }
           return;
@@ -436,7 +375,9 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
           readyReject?.(new Error(event.message));
         }
       },
-    )
+    );
+    this.socket = socket;
+    void socket.closed
       .then(() => {
         if (requestId !== this.connectRequestId) return;
         if (readyReject) {
@@ -446,7 +387,6 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
         }
         if (this.state.snapshot && this.state.partyId) {
           this.patchState({ status: "reconnecting" });
-          this.startPollLoop();
           this.scheduleReconnect();
         }
       })
@@ -464,7 +404,6 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
             : new Error("Party connection failed"),
         );
         if (!readyReject && this.state.snapshot && this.state.partyId) {
-          this.startPollLoop();
           this.scheduleReconnect();
         }
       });
@@ -474,48 +413,13 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
   private abortStream() {
     this.streamAbort?.abort();
     this.streamAbort = null;
-    this.streamSession = null;
+    this.socket = null;
+    this.connectRequestId += 1;
   }
 
-  private startPresenceLoop() {
-    if (this.presenceInterval) return;
-    const tick = () => {
-      this.presenceInterval = window.setTimeout(tick, jitteredPartyDelay());
-      const session = this.streamSession || this.sessionController.getSessionSnapshot();
-      const partyId = this.state.partyId;
-      if (!session?.accessToken || !partyId || !this.isCurrentUserMember(this.state.snapshot)) return;
-      void touchPartyPresence(this.config, partyId, session.accessToken).catch(() => {
-        // Presence is advisory; reconnect/polling handles visible recovery.
-      });
-    };
-    tick();
-  }
-
-  private stopPresenceLoop() {
-    if (this.presenceInterval) window.clearTimeout(this.presenceInterval);
-    this.presenceInterval = null;
-  }
-
-  private startPollLoop() {
-    if (this.pollInterval) return;
-    const poll = () => {
-      this.pollInterval = window.setTimeout(poll, jitteredPartyDelay());
-      const code = this.state.inviteCode || this.state.snapshot?.inviteCode || "";
-      if (!code) return;
-      const session = this.streamSession || this.sessionController.getSessionSnapshot();
-      if (!session) return;
-      void fetchParty(this.config, code, session.accessToken)
-        .then((snap) => {
-          if (snap) this.patchSnapshot(snap, this.state.status === "reconnecting" ? "reconnecting" : "ready");
-        })
-        .catch(() => {});
-    };
-    poll();
-  }
-
-  private stopPollLoop() {
-    if (this.pollInterval) window.clearTimeout(this.pollInterval);
-    this.pollInterval = null;
+  private requireSocket() {
+    if (!this.socket) throw new Error("Party connection unavailable");
+    return this.socket;
   }
 
   private clearReconnectTimer() {
@@ -561,12 +465,6 @@ export class PartyController extends ObservableStore<PartyRuntimeState> {
     const session = this.sessionController.getSessionSnapshot();
     if (!snapshot || !session?.userId) return null;
     return snapshot.members.find((member) => member.userId === session.userId) || null;
-  }
-
-  private assertCurrentUserMember(snapshot: PartySnapshot) {
-    if (!this.isCurrentUserMember(snapshot)) {
-      throw new Error("Party admission did not include the current player");
-    }
   }
 
   private markExistingMatchHandled(snapshot: PartySnapshot) {

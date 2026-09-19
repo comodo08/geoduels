@@ -724,16 +724,19 @@ type PartySnapshot struct {
 }
 
 type PartyPatch struct {
-	Revision        int64         `json:"revision"`
-	State           *PartyState   `json:"state,omitempty"`
-	OwnerUserID     *string       `json:"ownerUserId,omitempty"`
-	Mode            *MatchMode    `json:"mode,omitempty"`
-	Config          *MatchConfig  `json:"config,omitempty"`
-	ActiveMatchID   *string       `json:"activeMatchId,omitempty"`
-	LastMatchID     *string       `json:"lastMatchId,omitempty"`
-	StartedMatchID  *string       `json:"startedMatchId,omitempty"`
-	UpsertMembers   []PartyMember `json:"upsertMembers,omitempty"`
-	RemoveMemberIDs []string      `json:"removeMemberIds,omitempty"`
+	Revision         int64         `json:"revision"`
+	State            *PartyState   `json:"state,omitempty"`
+	OwnerUserID      *string       `json:"ownerUserId,omitempty"`
+	Mode             *MatchMode    `json:"mode,omitempty"`
+	MapScope         *string       `json:"mapScope,omitempty"`
+	MapName          *string       `json:"mapName,omitempty"`
+	MapLocationCount *int          `json:"mapLocationCount,omitempty"`
+	Config           *MatchConfig  `json:"config,omitempty"`
+	ActiveMatchID    *string       `json:"activeMatchId,omitempty"`
+	LastMatchID      *string       `json:"lastMatchId,omitempty"`
+	StartedMatchID   *string       `json:"startedMatchId,omitempty"`
+	UpsertMembers    []PartyMember `json:"upsertMembers,omitempty"`
+	RemoveMemberIDs  []string      `json:"removeMemberIds,omitempty"`
 }
 
 type PartyCreateRequest struct {
@@ -748,10 +751,6 @@ type PartyMemberRequest struct {
 
 type PartyTeamRequest struct {
 	TeamID string `json:"teamId"`
-}
-
-type PartyStartResponse struct {
-	Assignment MatchAssignedPayload `json:"assignment"`
 }
 
 type GameplayTicketClaims struct {

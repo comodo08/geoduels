@@ -72,34 +72,7 @@ func (q *matchCoordinator) createParty(c echo.Context) error {
 		q.publishPartyChanged(r.Context(), snap.ID)
 	}
 	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) getParty(c echo.Context) error {
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	code := strings.TrimSpace(c.Param("code"))
-	snap, ok, err := q.parties.GetPartyByInviteCode(code)
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
-	}
-	if !ok {
-		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
-	}
-	isMember := false
-	for _, member := range snap.Members {
-		if member.UserID == userID {
-			isMember = true
-			break
-		}
-	}
-	if !isMember {
-		return httpx.PlainTextError(c, http.StatusForbidden, "party membership required")
-	}
-	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
+	return httpx.JSON(c, http.StatusOK, map[string]string{"id": snap.ID, "inviteCode": snap.InviteCode})
 }
 
 func (q *matchCoordinator) joinParty(c echo.Context) error {
@@ -123,152 +96,43 @@ func (q *matchCoordinator) joinParty(c echo.Context) error {
 	q.touchPartyPresence(snap.ID, userID, "")
 	q.applyPartyPresence(&snap)
 	q.publishPartyChanged(r.Context(), snap.ID)
-	return httpx.JSON(c, http.StatusOK, snap)
+	return httpx.JSON(c, http.StatusOK, map[string]string{"id": snap.ID, "inviteCode": snap.InviteCode})
 }
 
-func (q *matchCoordinator) leaveParty(c echo.Context) error {
-	r := c.Request()
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	id := strings.TrimSpace(c.Param("id"))
-	snap, err := q.parties.LeaveParty(id, userID)
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
-	}
-	q.publishPartyChanged(r.Context(), snap.ID)
-	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) kickPartyMember(c echo.Context) error {
-	r := c.Request()
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	var req contracts.PartyMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
-	}
-	id := strings.TrimSpace(c.Param("id"))
-	snap, err := q.parties.KickPartyMember(id, userID, strings.TrimSpace(req.UserID))
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
-	}
-	q.publishPartyChanged(r.Context(), snap.ID)
-	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) transferPartyOwner(c echo.Context) error {
-	r := c.Request()
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	var req contracts.PartyMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
-	}
-	id := strings.TrimSpace(c.Param("id"))
-	snap, err := q.parties.TransferPartyOwner(id, userID, strings.TrimSpace(req.UserID))
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "party unavailable")
-	}
-	q.publishPartyChanged(r.Context(), snap.ID)
-	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) updatePartyTeam(c echo.Context) error {
-	r := c.Request()
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	var req contracts.PartyTeamRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
-	}
-	id := strings.TrimSpace(c.Param("id"))
-	snap, err := q.parties.SetPartyMemberTeam(id, userID, strings.TrimSpace(req.TeamID))
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, err.Error())
-	}
-	q.publishPartyChanged(r.Context(), snap.ID)
-	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) updatePartySettings(c echo.Context) error {
-	r := c.Request()
-	userID, err := q.requirePlayableUser(c)
-	if err != nil {
-		return err
-	}
-	id := strings.TrimSpace(c.Param("id"))
+func (q *matchCoordinator) setPartySettings(ctx context.Context, id, userID string, req partySettingsRequest) (contracts.PartySnapshot, error) {
 	snap, found, err := q.parties.GetPartyByID(id)
 	if err != nil {
-		return httpx.PlainTextError(c, http.StatusInternalServerError, "party unavailable")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusInternalServerError, "party unavailable")
 	}
 	if !found {
-		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusNotFound, "party not found")
 	}
 	if snap.OwnerUserID != userID {
-		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusForbidden, "forbidden")
 	}
 	if snap.State != contracts.PartyOpen {
-		return httpx.PlainTextError(c, http.StatusConflict, "party settings are locked")
-	}
-	var req struct {
-		Mode   contracts.MatchMode   `json:"mode"`
-		Config contracts.MatchConfig `json:"config"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "invalid payload")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusConflict, "party settings are locked")
 	}
 	if req.Mode != "" && !contracts.IsPrivatePartyMode(req.Mode) {
-		return httpx.PlainTextError(c, http.StatusBadRequest, "unsupported party mode")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusBadRequest, "unsupported party mode")
 	}
 	if req.Mode != "" && req.Mode != snap.Mode {
 		if err := q.parties.SetPartyMode(snap.ID, req.Mode); err != nil {
-			return httpx.PlainTextError(c, http.StatusBadGateway, "party settings unavailable")
+			return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusBadGateway, "party settings unavailable")
 		}
 		snap.Mode = req.Mode
 	}
 	snap, err = q.parties.SetPartyConfig(snap.ID, req.Config)
 	if err != nil {
 		if errors.Is(err, errPartyMapUnavailable) {
-			return httpx.PlainTextError(c, http.StatusUnprocessableEntity, err.Error())
+			return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
 		}
 		observability.Log("error", "update party settings save failed", map[string]any{"userId": userID, "partyId": snap.ID, "mapId": req.Config.MapID, "error": err.Error()})
-		return httpx.PlainTextError(c, http.StatusBadGateway, "party settings unavailable")
+		return contracts.PartySnapshot{}, echo.NewHTTPError(http.StatusBadGateway, "party settings unavailable")
 	}
-	q.publishPartyChanged(r.Context(), snap.ID)
+	q.publishPartyChanged(ctx, snap.ID)
 	q.applyPartyPresence(&snap)
-	return httpx.JSON(c, http.StatusOK, snap)
-}
-
-func (q *matchCoordinator) partyPresence(c echo.Context) error {
-	r := c.Request()
-	claims, _, err := q.requireActiveAccount(c)
-	if err != nil {
-		return err
-	}
-	partyID := strings.TrimSpace(c.Param("id"))
-	snap, ok, err := q.parties.GetPartyByID(partyID)
-	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
-	}
-	if !ok || !partyHasMember(snap, claims.Sub) {
-		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
-	}
-	if q.touchPartyPresence(partyID, claims.Sub, "") {
-		q.publishPartyChanged(r.Context(), partyID)
-	}
-	return httpx.JSON(c, http.StatusOK, map[string]string{"status": "ok"})
+	return snap, nil
 }
 
 func (q *matchCoordinator) partyWS(c echo.Context) error {
@@ -282,19 +146,21 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 	if err != nil {
 		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
 	}
-	if !ok || !partyHasMember(snap, claims.Sub) {
-		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
-	}
 	conn, err := partyUpgrader.Upgrade(c.Response().Writer, r, nil)
 	if err != nil {
 		return nil
 	}
 	defer conn.Close()
+	if !ok || !partyHasMember(snap, claims.Sub) {
+		var writeMu sync.Mutex
+		q.writeQueueMessage(conn, &writeMu, "party_error", map[string]string{"message": "You left this party"})
+		return nil
+	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	connID := strconvTimeID()
-	conn.SetReadLimit(1024)
+	conn.SetReadLimit(16 * 1024)
 	_ = conn.SetReadDeadline(time.Now().Add(70 * time.Second))
 	conn.SetPongHandler(func(string) error {
 		if q.touchPartyPresence(partyID, claims.Sub, connID) {
@@ -302,10 +168,17 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 		}
 		return conn.SetReadDeadline(time.Now().Add(70 * time.Second))
 	})
+	commands := make(chan []byte, 16)
 	go func() {
 		defer cancel()
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			select {
+			case commands <- data:
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -342,6 +215,7 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 	lastPartyFingerprint := partyFingerprint(snap)
 	revision := int64(1)
 
+	lastAssignedMatchID := ""
 	refreshParty := func() bool {
 		next, ok, err := q.parties.GetPartyByID(partyID)
 		if err != nil || !ok {
@@ -364,15 +238,21 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 		if activeMatchID == "" {
 			activeMatchID = next.StartedMatchID
 		}
-		if (next.State == contracts.PartyInMatch || next.State == contracts.PartyStarted) && activeMatchID != "" {
+		if (next.State == contracts.PartyInMatch || next.State == contracts.PartyStarted) && activeMatchID != "" && activeMatchID != lastAssignedMatchID {
 			if assigned, ok, err := q.state.GetAssignmentByMatch(ctx, activeMatchID); err == nil && ok {
 				if payload, ok, err := q.launcher().AssignedPayload(claims.Sub, assigned); err == nil && ok {
-					q.writeQueueMessage(conn, &writeMu, "match_assigned", payload)
-					return false
+					if !q.writeQueueMessage(conn, &writeMu, "match_assigned", payload) {
+						return false
+					}
+					lastAssignedMatchID = activeMatchID
 				}
 			}
 		}
 		return next.State == contracts.PartyOpen || next.State == contracts.PartyInMatch || next.State == contracts.PartyStarted
+	}
+
+	if !refreshParty() {
+		return nil
 	}
 
 	presenceTicker := time.NewTicker(10 * time.Second)
@@ -383,6 +263,41 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
+		case data := <-commands:
+			var command partyCommand
+			if err := json.Unmarshal(data, &command); err != nil || command.RequestID == "" || len(command.RequestID) > 128 {
+				if !q.writeQueueMessage(conn, &writeMu, "party_command_result", partyCommandResult{RequestID: command.RequestID, Error: "invalid command"}) {
+					return nil
+				}
+				continue
+			}
+			commandCtx, commandCancel := context.WithTimeout(ctx, 20*time.Second)
+			_, authErr := q.authenticatedClaims(r)
+			var err error
+			if authErr != nil {
+				err = errors.New("session expired; reconnect to continue")
+			} else {
+				err = q.executePartyCommand(commandCtx, partyID, claims.Sub, command)
+			}
+			commandCancel()
+			result := partyCommandResult{RequestID: command.RequestID, OK: err == nil}
+			if err != nil {
+				result.Error = partyErrorMessage(err)
+			}
+			if !q.writeQueueMessage(conn, &writeMu, "party_command_result", result) {
+				return nil
+			}
+			if authErr != nil {
+				return nil
+			}
+			if err == nil {
+				if command.Type == "leave" {
+					return nil
+				}
+				if !refreshParty() {
+					return nil
+				}
+			}
 		case event, ok := <-partyEvents:
 			if !ok {
 				return nil
@@ -394,10 +309,16 @@ func (q *matchCoordinator) partyWS(c echo.Context) error {
 				return nil
 			}
 		case <-presenceTicker.C:
+			if !refreshParty() {
+				return nil
+			}
 			if q.touchPartyPresence(partyID, claims.Sub, connID) {
 				q.publishPartyChanged(r.Context(), partyID)
 			}
 		case <-pingTicker.C:
+			if _, err := q.authenticatedClaims(r); err != nil {
+				return nil
+			}
 			if !q.writeQueuePing(conn, &writeMu) {
 				return nil
 			}
@@ -419,40 +340,34 @@ func (q *matchCoordinator) requirePlayableUser(c echo.Context) (string, error) {
 	return appClaims.Sub, nil
 }
 
-func (q *matchCoordinator) startParty(c echo.Context) error {
-	r := c.Request()
-	claims, _, err := q.requireActiveAccount(c)
-	if err != nil {
-		return err
-	}
-	partyID := strings.TrimSpace(c.Param("id"))
+func (q *matchCoordinator) startPartyMatch(ctx context.Context, partyID, userID string) (contracts.MatchAssignedPayload, error) {
 	snap, ok, err := q.parties.GetPartyByID(partyID)
 	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadGateway, "party unavailable")
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusBadGateway, "party unavailable")
 	}
 	if !ok {
-		return httpx.PlainTextError(c, http.StatusNotFound, "party not found")
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusNotFound, "party not found")
 	}
-	if snap.OwnerUserID != claims.Sub {
-		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
+	if snap.OwnerUserID != userID {
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusForbidden, "forbidden")
 	}
 	if q.redis != nil {
 		q.applyPartyPresence(&snap)
 		if err := requirePartyPresence(snap); err != nil {
-			return httpx.PlainTextError(c, http.StatusConflict, err.Error())
+			return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusConflict, err.Error())
 		}
 	}
 	found, err := q.partyMatchFound(snap)
 	if err != nil {
-		return httpx.PlainTextError(c, http.StatusConflict, err.Error())
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusConflict, err.Error())
 	}
 	for _, userID := range found.Players {
-		if assigned, ok, err := q.state.GetAssignmentByUser(r.Context(), userID); err == nil && ok {
+		if assigned, ok, err := q.state.GetAssignmentByUser(ctx, userID); err == nil && ok {
 			mode := sessionpolicy.NormalizeMode(assigned.Mode, assigned.MatchID)
-			switch q.launcher().ValidateAssignment(r.Context(), assigned) {
+			switch q.launcher().ValidateAssignment(ctx, assigned) {
 			case matchlaunch.AssignmentValid, matchlaunch.AssignmentPending:
 				if contracts.IsPrivatePartyMode(mode) {
-					return httpx.PlainTextError(c, http.StatusConflict, activePartyMatchConflict(userID, assigned, found.Profiles[userID]))
+					return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusConflict, activePartyMatchConflict(userID, assigned, found.Profiles[userID]))
 				}
 				q.clearSupersededAssignment(context.Background(), assigned)
 			case matchlaunch.AssignmentAbandoned, matchlaunch.AssignmentInvalid:
@@ -460,20 +375,20 @@ func (q *matchCoordinator) startParty(c echo.Context) error {
 			}
 		}
 	}
-	assigned, err := q.launcher().EnsureAssignment(r.Context(), found)
+	assigned, err := q.launcher().EnsureAssignment(ctx, found)
 	if err != nil {
-		return httpx.PlainTextError(c, http.StatusBadGateway, "party start failed")
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusBadGateway, "party start failed")
 	}
 	snap, err = q.parties.MarkPartyInMatch(partyID, found.MatchID)
 	if err != nil {
-		return httpx.PlainTextError(c, http.StatusConflict, "party start failed")
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusConflict, "party start failed")
 	}
-	q.publishPartyChanged(r.Context(), snap.ID)
-	payload, ok, err := q.launcher().AssignedPayload(claims.Sub, assigned)
+	q.publishPartyChanged(ctx, snap.ID)
+	payload, ok, err := q.launcher().AssignedPayload(userID, assigned)
 	if err != nil || !ok {
-		return httpx.PlainTextError(c, http.StatusBadGateway, "unable to issue gameplay ticket")
+		return contracts.MatchAssignedPayload{}, echo.NewHTTPError(http.StatusBadGateway, "unable to issue gameplay ticket")
 	}
-	return httpx.JSON(c, http.StatusOK, contracts.PartyStartResponse{Assignment: payload})
+	return payload, nil
 }
 
 func (q *matchCoordinator) clearSupersededAssignment(ctx context.Context, assigned coordinator.Assignment) {
@@ -784,6 +699,18 @@ func partyPatch(prev, next contracts.PartySnapshot, revision int64) contracts.Pa
 	if prev.Mode != next.Mode {
 		v := next.Mode
 		patch.Mode = &v
+	}
+	if prev.MapScope != next.MapScope {
+		v := next.MapScope
+		patch.MapScope = &v
+	}
+	if prev.MapName != next.MapName {
+		v := next.MapName
+		patch.MapName = &v
+	}
+	if prev.MapLocationCount != next.MapLocationCount {
+		v := next.MapLocationCount
+		patch.MapLocationCount = &v
 	}
 	if prev.Config != next.Config {
 		v := next.Config

@@ -1,6 +1,5 @@
 import type { RuntimeConfig } from "../../../lib/runtime-config";
-import { normalizeHTTPBase, normalizeWSBase } from "../../../lib/runtime-config";
-import type { AuthSessionSnapshot } from "../../auth/session";
+import { normalizeHTTPBase } from "../../../lib/runtime-config";
 import type { MatchConfig } from "../../matchmaking/lib/queue-client";
 import type { PlayerBadgeInfo } from "../../players/components/PlayerBadge";
 
@@ -43,6 +42,9 @@ export type PartyPatch = {
   state?: PartySnapshot["state"];
   ownerUserId?: string;
   mode?: PartyMode;
+  mapScope?: string;
+  mapName?: string;
+  mapLocationCount?: number;
   config?: MatchConfig;
   activeMatchId?: string;
   lastMatchId?: string;
@@ -76,37 +78,13 @@ function partyHTTPBase(config: RuntimeConfig) {
   return normalizeHTTPBase(config.queueURL).replace(/\/$/, "");
 }
 
-function partyWSTarget(config: RuntimeConfig, partyId: string, accessToken: string) {
-  return `${normalizeWSBase(config.queueURL).replace(/\/$/, "")}/parties/${encodeURIComponent(partyId)}/ws?accessToken=${encodeURIComponent(accessToken)}`;
-}
-
-export async function createParty(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel", matchConfig?: MatchConfig): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties`, {
+export async function createParty(config: RuntimeConfig, accessToken: string, mode: PartyMode = "duel", matchConfig?: MatchConfig): Promise<Pick<PartySnapshot, "id" | "inviteCode">> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/v2`, {
     method: "POST",
     headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
     body: JSON.stringify({ mode, config: matchConfig }),
   });
   if (!resp.ok) throw new Error((await resp.text()) || "Party unavailable");
-  return resp.json();
-}
-
-export async function updatePartySettings(config: RuntimeConfig, partyId: string, accessToken: string, matchConfig: MatchConfig, mode?: PartyMode): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/settings`, {
-    method: "PATCH",
-    headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-    body: JSON.stringify({ config: matchConfig, mode }),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not update party settings");
-  return resp.json();
-}
-
-export async function updatePartyTeam(config: RuntimeConfig, partyId: string, accessToken: string, teamId: PartyTeamId): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/team`, {
-    method: "PATCH",
-    headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-    body: JSON.stringify({ teamId }),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not switch team");
   return resp.json();
 }
 
@@ -118,6 +96,9 @@ export function applyPartyPatch(party: PartySnapshot | null, patch: PartyPatch):
     ownerUserId: patch.ownerUserId ?? party.ownerUserId,
     mode: patch.mode ?? party.mode,
     config: patch.config ?? party.config,
+    mapScope: patch.mapScope ?? party.mapScope,
+    mapName: patch.mapName ?? party.mapName,
+    mapLocationCount: patch.mapLocationCount ?? party.mapLocationCount,
     activeMatchId: patch.activeMatchId ?? party.activeMatchId,
     lastMatchId: patch.lastMatchId ?? party.lastMatchId,
     startedMatchId: patch.startedMatchId ?? party.startedMatchId,
@@ -127,119 +108,18 @@ export function applyPartyPatch(party: PartySnapshot | null, patch: PartyPatch):
     const removed = new Set(patch.removeMemberIds || []);
     const members = new Map(next.members.filter((member) => !removed.has(member.userId)).map((member) => [member.userId, member]));
     for (const member of patch.upsertMembers || []) {
-      members.set(member.userId, { ...(members.get(member.userId) || {} as PartyMember), ...member });
+      members.set(member.userId, member);
     }
     next.members = Array.from(members.values());
   }
   return next;
 }
 
-export async function fetchParty(config: RuntimeConfig, code: string, accessToken: string, signal?: AbortSignal): Promise<PartySnapshot | null> {
-  const target = `${partyHTTPBase(config)}/parties/${encodeURIComponent(code)}`;
-  const resp = await fetch(target, { headers: authHeaders(accessToken), signal });
-  if (resp.status === 404) return null;
-  if (!resp.ok) throw new Error("Party unavailable");
-  return resp.json();
-}
-
-export async function touchPartyPresence(config: RuntimeConfig, partyId: string, accessToken: string, signal?: AbortSignal): Promise<void> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/presence`, {
-    method: "POST",
-    headers: authHeaders(accessToken),
-    signal,
-  });
-  if (!resp.ok) throw new Error("Party presence unavailable");
-}
-
-export async function joinParty(config: RuntimeConfig, code: string, accessToken: string): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(code)}/join`, {
+export async function joinParty(config: RuntimeConfig, code: string, accessToken: string): Promise<Pick<PartySnapshot, "id" | "inviteCode">> {
+  const resp = await fetch(`${partyHTTPBase(config)}/parties/v2/${encodeURIComponent(code)}/join`, {
     method: "POST",
     headers: authHeaders(accessToken),
   });
   if (!resp.ok) throw new Error((await resp.text()) || "Could not join party");
   return resp.json();
-}
-
-export async function leaveParty(config: RuntimeConfig, partyId: string, accessToken: string): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/leave`, {
-    method: "POST",
-    headers: authHeaders(accessToken),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not leave party");
-  return resp.json();
-}
-
-export async function kickPartyMember(config: RuntimeConfig, partyId: string, accessToken: string, userId: string): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/kick`, {
-    method: "POST",
-    headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not kick player");
-  return resp.json();
-}
-
-export async function transferPartyOwner(config: RuntimeConfig, partyId: string, accessToken: string, userId: string): Promise<PartySnapshot> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/transfer-owner`, {
-    method: "POST",
-    headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not transfer leader");
-  return resp.json();
-}
-
-export async function startParty(config: RuntimeConfig, partyId: string, accessToken: string): Promise<PartyAssignment> {
-  const resp = await fetch(`${partyHTTPBase(config)}/parties/${encodeURIComponent(partyId)}/start`, {
-    method: "POST",
-    headers: authHeaders(accessToken),
-  });
-  if (!resp.ok) throw new Error((await resp.text()) || "Could not start party");
-  const data = await resp.json();
-  return data.assignment;
-}
-
-export async function streamParty(
-  config: RuntimeConfig,
-  session: AuthSessionSnapshot,
-  partyId: string,
-  signal: AbortSignal,
-  onEvent: (event: PartyEvent) => void,
-) {
-  const target = partyWSTarget(config, partyId, session.accessToken);
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const ws = new WebSocket(target);
-    const cleanup = () => signal.removeEventListener("abort", abort);
-    const settle = (fn: typeof resolve | typeof reject, value?: unknown) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      fn(value as never);
-    };
-    const abort = () => {
-      ws.close();
-      settle(reject, new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    ws.onerror = () => settle(reject, new Error("Party connection failed"));
-    ws.onclose = () => {
-      if (signal.aborted) settle(reject, new DOMException("Aborted", "AbortError"));
-      else settle(resolve);
-    };
-    ws.onmessage = (evt) => {
-      let msg: any;
-      try {
-        msg = JSON.parse(String(evt.data));
-      } catch {
-        settle(reject, new Error("Party connection failed"));
-        return;
-      }
-      const payload = msg?.payload ?? {};
-      if (msg?.type === "party_snapshot") onEvent({ type: "party_snapshot", party: payload as PartySnapshot });
-      if (msg?.type === "party_patch") onEvent({ type: "party_patch", patch: payload as PartyPatch });
-      if (msg?.type === "match_assigned") onEvent({ type: "match_assigned", assignment: payload as PartyAssignment });
-      if (msg?.type === "party_error") onEvent({ type: "party_error", message: payload?.message || "Party unavailable" });
-    };
-  });
 }

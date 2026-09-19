@@ -45,7 +45,6 @@ type PartyPanelProps = {
   startParty: () => Promise<void>;
   switchPartyTeam: (teamId: PartyTeamId) => Promise<void>;
   accessToken?: string;
-  isGuest?: boolean;
 };
 
 const panelMotion = {
@@ -67,10 +66,9 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
   transferPartyOwner,
   userId,
   accessToken = "",
-  isGuest = false,
 }, ref) {
   const [inviteFriendsOpen, setInviteFriendsOpen] = useState(false);
-  const canInviteFriends = !!accessToken && !isGuest && !!party.snapshot?.id;
+  const canInviteFriends = !!accessToken && !!party.snapshot?.id;
   const {
     activeMatchId,
     canStart,
@@ -95,15 +93,6 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
       {...panelMotion}
       className="pointer-events-auto relative flex h-auto w-full max-w-[1180px] flex-col gap-4 md:h-full md:min-h-0"
     >
-      <PartyActions
-        canInviteFriends={canInviteFriends}
-        inviteCopied={inviteCopied}
-        matchInProgress={matchInProgress}
-        onCopyInvite={copyInvite}
-        onInviteFriends={() => setInviteFriendsOpen(true)}
-        onLeave={() => void leaveParty()}
-        party={party}
-      />
       {inviteFriendsOpen && party.snapshot && accessToken ? (
         <InviteFriendsModal
           accessToken={accessToken}
@@ -174,74 +163,62 @@ export const PartyPanel = forwardRef<HTMLDivElement, PartyPanelProps>(function P
               />
             ) : null}
 
-            {party.isOwner && party.snapshot?.state === "open" ? (
-              <Button
-                variant="primary"
-                type="button"
-                onClick={() => void startParty()}
-                disabled={!canStart || party.busy}
-                size="lg"
-                className="min-h-14 w-full text-body"
-              >
-                {party.busy ? <Spinner size="sm" label="Starting match" color="current" /> : <Play size={18} fill="currentColor" />}
-                {mode === "team_duel" ? "Start Team Duel" : mode === "free_for_all" ? "Start FFA" : "Start Duel"}
-              </Button>
-            ) : party.snapshot?.state === "open" ? (
-              <LobbySection className="text-center text-body-sm font-semibold text-content-secondary">
-                Waiting for the leader to start.
-              </LobbySection>
-            ) : null}
+            <div className={`grid items-stretch gap-3 ${party.isOwner || party.snapshot?.state !== "open" ? "grid-cols-4" : "grid-cols-3"}`}>
+              <div className="flex flex-col justify-center">
+                {party.snapshot && !(party.isOwner && matchInProgress) ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void leaveParty()}
+                    disabled={party.busy}
+                    className="h-full w-full"
+                  >
+                    <LogOut size={16} />
+                    Leave
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex flex-col justify-center">
+                {party.inviteCode ? (
+                  <Button type="button" variant="secondary" onClick={copyInvite} className="h-full w-full">
+                    <Copy className="text-status-success" size={16} />
+                    {inviteCopied ? "Copied" : `Copy ${party.inviteCode}`}
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex flex-col justify-center">
+                {canInviteFriends ? (
+                  <Button type="button" variant="secondary" onClick={() => setInviteFriendsOpen(true)} className="h-full w-full">
+                    <UserPlus size={16} />
+                    Invite friends
+                  </Button>
+                ) : null}
+              </div>
+              <div className={`flex min-w-0 flex-col justify-center ${party.isOwner || party.snapshot?.state !== "open" ? "" : "col-span-full"}`}>
+                {party.isOwner && party.snapshot?.state === "open" ? (
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={() => void startParty()}
+                    disabled={!canStart || party.busy}
+                    size="lg"
+                    className="h-full min-h-14 w-full text-body"
+                  >
+                    {party.busy ? <Spinner size="sm" label="Starting match" color="current" /> : <Play size={18} fill="currentColor" />}
+                    Start
+                  </Button>
+                ) : party.snapshot?.state === "open" ? (
+                  <p className="text-center text-body-sm font-semibold text-content-secondary">
+                    Waiting for the leader to start.
+                  </p>
+                ) : null}
+              </div>
+            </div>
 
       </div>
     </motion.div>
   );
 });
-
-function PartyActions({
-  canInviteFriends,
-  inviteCopied,
-  matchInProgress,
-  onCopyInvite,
-  onInviteFriends,
-  onLeave,
-  party,
-}: {
-  canInviteFriends: boolean;
-  inviteCopied: boolean;
-  matchInProgress: boolean;
-  onCopyInvite: () => void;
-  onInviteFriends: () => void;
-  onLeave: () => void;
-  party: PartyView;
-}) {
-  return (
-    <div className="absolute left-1/2 top-0 z-content flex -translate-x-1/2 gap-2">
-        {party.snapshot && !(party.isOwner && matchInProgress) ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onLeave}
-            disabled={party.busy}
-          >
-            <LogOut size={16} />
-            Leave
-          </Button>
-        ) : null}
-        {canInviteFriends ? (
-          <Button type="button" variant="secondary" onClick={onInviteFriends}>
-            <UserPlus size={16} />
-            Invite friends
-          </Button>
-        ) : null}
-        {party.inviteCode ? (
-          <Button type="button" variant="secondary" onClick={onCopyInvite}>
-            <Copy className="text-status-success" size={16} />
-            {inviteCopied ? "Copied" : `Copy ${party.inviteCode}`}
-          </Button>
-        ) : null}
-    </div>
-  );
-}
 
 function PartySettings({
   busy,
@@ -477,10 +454,6 @@ function PartyMemberList({
 
   return (
     <div className="mx-auto flex w-full max-w-[600px] flex-none flex-col gap-3 md:min-h-0 md:flex-1">
-      <div className="mb-1 text-center">
-        <p className="text-label font-strong text-status-success">Players</p>
-        <p className="mt-1 text-body-sm text-content-secondary">{members.length} in party</p>
-      </div>
       <div className={`grid content-start gap-3 overflow-visible md:min-h-0 md:flex-1 md:overflow-y-auto ${fadeAtBottom ? "party-player-list-fade pb-8" : ""}`}>
         {members.map(renderMember)}
       </div>

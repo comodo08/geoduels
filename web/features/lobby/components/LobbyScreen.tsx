@@ -240,7 +240,6 @@ export default function LobbyScreen({
       transferPartyOwner={transferPartyOwner}
       userId={userId}
       accessToken={accessToken}
-      isGuest={isGuest}
     />
   ) : null;
 
