@@ -13,7 +13,6 @@ import type { CustomMap, GameplayMapRole, MapDetails, MapScope, MapSort, MapUpda
 import {
   LobbyInput,
   LobbyPlaceholder,
-  LobbyNotice,
   LobbySectionHeader,
 } from "../lobby-primitives";
 import { MapAdminOperations } from "./MapAdminOperations";
@@ -24,7 +23,6 @@ import { FileInputTrigger } from "../../../../components/ui/FileInputTrigger";
 import styles from "./MapPanels.module.css";
 
 export type MapScopeLabel = { scope: MapScope; label: string };
-type MapActionNotice = { title: string; message: string };
 
 type MapSearchProps = {
   id: string;
@@ -243,7 +241,6 @@ export function MapsPanel({
   mapSearchInput,
   mapSort,
   mapsLoading,
-  mapActionNotice,
   partyActive,
   readyMaps,
   setMapScope,
@@ -259,7 +256,6 @@ export function MapsPanel({
   mapSearchInput: string;
   mapSort: MapSort;
   mapsLoading: boolean;
-  mapActionNotice: MapActionNotice | null;
   partyActive: boolean;
   readyMaps: CustomMap[];
   setMapScope: (scope: MapScope) => void;
@@ -285,13 +281,6 @@ export function MapsPanel({
           </div>
         </header>
         <section className="flex-1 bg-surface-grouped p-5 sm:p-7">
-
-          {mapActionNotice ? (
-            <LobbyNotice title={mapActionNotice.title} tone="success" className="mt-5 rounded-2xl">
-              {mapActionNotice.message}
-            </LobbyNotice>
-          ) : null}
-
           {mapScope === "mine" && !canUploadCustomMaps ? (
             <LobbyPlaceholder className="mt-6">Sign in to create custom maps.</LobbyPlaceholder>
           ) : mapsLoading ? (
@@ -377,7 +366,6 @@ export function MapDetailsPanel({
   favoriteMap,
   isAdmin,
   isModerator,
-  mapActionNotice,
   mapPickerFlow,
   onCancelComment,
   onDeleteComment,
@@ -421,7 +409,6 @@ export function MapDetailsPanel({
   favoriteMap: (input: { mapId: string; favorite: boolean }) => void;
   isAdmin: boolean;
   isModerator: boolean;
-  mapActionNotice: MapActionNotice | null;
   mapPickerFlow: boolean;
   onCancelComment: () => void;
   onDeleteComment: (commentId: string) => void;
@@ -488,11 +475,6 @@ export function MapDetailsPanel({
             </Button>
           ) : null}
         </div>
-        {mapActionNotice ? (
-          <LobbyNotice title={mapActionNotice.title} tone="success" className="rounded-2xl">
-            {mapActionNotice.message}
-          </LobbyNotice>
-        ) : null}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <section
             className="relative min-h-[280px] overflow-hidden rounded-xl bg-cover bg-center"

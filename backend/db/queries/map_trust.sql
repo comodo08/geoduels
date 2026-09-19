@@ -23,11 +23,8 @@ WHERE id=$1 AND owner_user_id=$2 AND archived_at IS NULL;
 -- name: GetQualifiedMapFavorites :one
 SELECT count(DISTINCT mf.user_id)::int AS qualified_favorites,
        count(DISTINCT mf.map_id)::int AS qualified_maps
-FROM map_favorites mf JOIN maps m ON m.id=mf.map_id JOIN users favoriter ON favoriter.id=mf.user_id
-WHERE m.owner_user_id=$1 AND mf.user_id<>$1 AND favoriter.account_type='registered'
-  AND favoriter.created_at <= now()-interval '7 days'
-  AND NOT coalesce(favoriter.banned_at IS NOT NULL AND (favoriter.ban_expires_at IS NULL OR favoriter.ban_expires_at > now()), false)
-  AND favoriter.deleted_at IS NULL;
+FROM map_favorites mf JOIN maps m ON m.id=mf.map_id
+WHERE m.owner_user_id=$1 AND mf.user_id<>$1;
 
 -- name: LockMapUpload :exec
 SELECT pg_advisory_xact_lock(hashtext($1));

@@ -14,8 +14,8 @@ Use Docker, Go 1.26, and Node 22 (matching CI).
 cp infra/compose/.env.example infra/compose/.env
 cp web/.env.local.example web/.env.local
 ./infra/scripts/dev-up.sh
-npm --prefix web ci
-npm --prefix web run dev
+npm ci
+npm run dev
 ```
 
 Open `http://localhost:3000`. Start optional workers with `./infra/scripts/compose.sh up -d moderation-worker discord-worker`; stop with `./infra/scripts/compose.sh down`.

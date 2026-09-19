@@ -24,57 +24,61 @@ const (
 	maxOfficialRegionCodeRunes = 32
 )
 
-// Creator trust tiers. The tier decides the quota limits below; tier values
-// are persisted in gd_users.map_creator_tier.
+// Creator trust tiers. The tier decides quotas and promotion thresholds
+// below; values are persisted in gd_users.map_creator_tier.
 const (
 	mapCreatorTierBase = iota
 	mapCreatorTierTrusted
 	mapCreatorTierEstablished
 )
 
-// Promotion thresholds between tiers.
-const (
-	trustedFavoritesNeeded     = 25
-	trustedAccountAgeDays      = 14
-	establishedFavoritesNeeded = 100
-	establishedMapsNeeded      = 2
-	establishedAccountAgeDays  = 30
-)
-
-type mapCreatorLimits struct {
+// mapCreatorSpec is the full definition of a creator tier: upload quotas
+// and the promotion thresholds required to enter it. Zero on a promotion
+// field means that field is not required.
+type mapCreatorSpec struct {
 	name                     string
 	maxMaps                  int
 	maxActiveLocations       int
+	maxLocationsPerUpload    int
 	maxUploadsPerHour        int
 	maxUploadsPerDay         int
 	maxUploadedLocationsHour int
+	favoritesNeeded          int
+	accountAgeDays           int
 }
 
-func limitsForMapCreatorTier(tier int) mapCreatorLimits {
+func specForMapCreatorTier(tier int) mapCreatorSpec {
 	switch tier {
 	case mapCreatorTierEstablished:
-		return mapCreatorLimits{
+		return mapCreatorSpec{
 			name:                     "established",
 			maxMaps:                  100,
-			maxActiveLocations:       1_000_000,
+			maxActiveLocations:       100_000_000,
+			maxLocationsPerUpload:    1_000_000,
+			maxUploadsPerHour:        10,
+			maxUploadsPerDay:         30,
+			maxUploadedLocationsHour: 5_000_000,
+			favoritesNeeded:          50,
+			accountAgeDays:           30,
+		}
+	case mapCreatorTierTrusted:
+		return mapCreatorSpec{
+			name:                     "trusted",
+			maxMaps:                  25,
+			maxActiveLocations:       2_500_000,
+			maxLocationsPerUpload:    200_000,
 			maxUploadsPerHour:        10,
 			maxUploadsPerDay:         30,
 			maxUploadedLocationsHour: 1_000_000,
-		}
-	case mapCreatorTierTrusted:
-		return mapCreatorLimits{
-			name:                     "trusted",
-			maxMaps:                  25,
-			maxActiveLocations:       500_000,
-			maxUploadsPerHour:        10,
-			maxUploadsPerDay:         30,
-			maxUploadedLocationsHour: 600_000,
+			favoritesNeeded:          5,
+			accountAgeDays:           14,
 		}
 	default:
-		return mapCreatorLimits{
+		return mapCreatorSpec{
 			name:                     "base",
 			maxMaps:                  10,
-			maxActiveLocations:       200_000,
+			maxActiveLocations:       500_000,
+			maxLocationsPerUpload:    100_000,
 			maxUploadsPerHour:        10,
 			maxUploadsPerDay:         30,
 			maxUploadedLocationsHour: 300_000,
@@ -82,19 +86,24 @@ func limitsForMapCreatorTier(tier int) mapCreatorLimits {
 	}
 }
 
-func automaticMapCreatorTier(accountAgeDays, qualifiedFavorites, qualifiedMaps int, restricted bool) int {
+func meetsMapCreatorTier(spec mapCreatorSpec, accountAgeDays, qualifiedFavorites int) bool {
+	return accountAgeDays >= spec.accountAgeDays &&
+		qualifiedFavorites >= spec.favoritesNeeded
+}
+
+func automaticMapCreatorTier(accountAgeDays, qualifiedFavorites int, restricted bool) int {
 	if restricted {
 		return mapCreatorTierBase
 	}
-	if accountAgeDays >= establishedAccountAgeDays && qualifiedFavorites >= establishedFavoritesNeeded && qualifiedMaps >= establishedMapsNeeded {
+	if meetsMapCreatorTier(specForMapCreatorTier(mapCreatorTierEstablished), accountAgeDays, qualifiedFavorites) {
 		return mapCreatorTierEstablished
 	}
-	if accountAgeDays >= trustedAccountAgeDays && qualifiedFavorites >= trustedFavoritesNeeded {
+	if meetsMapCreatorTier(specForMapCreatorTier(mapCreatorTierTrusted), accountAgeDays, qualifiedFavorites) {
 		return mapCreatorTierTrusted
 	}
 	return mapCreatorTierBase
 }
 
 func mapCreatorTierName(tier int) string {
-	return limitsForMapCreatorTier(tier).name
+	return specForMapCreatorTier(tier).name
 }

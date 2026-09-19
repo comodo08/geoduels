@@ -123,11 +123,11 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 	accountAgeDays := max(0, int(time.Since(createdAt).Hours()/24))
 	activeBan := bannedAt != nil && (banExpiresAt == nil || banExpiresAt.After(time.Now()))
 	restricted := accountType != "registered" || activeBan || deletedAt != nil || activeSanction
-	tier := automaticMapCreatorTier(accountAgeDays, qualifiedFavorites, qualifiedMaps, restricted)
+	tier := automaticMapCreatorTier(accountAgeDays, qualifiedFavorites, restricted)
 	if override != nil && !restricted {
 		tier = *override
 	}
-	limits := limitsForMapCreatorTier(tier)
+	spec := specForMapCreatorTier(tier)
 
 	var currentMaps, currentLocations int
 	c, err := q.GetActiveMapCounts(ctx, mustMapUUID(userID))
@@ -141,16 +141,16 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 	}
 
 	quota := contracts.MapUploadQuota{
-		Tier:                     limits.name,
+		Tier:                     spec.name,
 		QualifiedFavorites:       qualifiedFavorites,
 		QualifiedMaps:            qualifiedMaps,
 		AccountAgeDays:           accountAgeDays,
-		MaxMaps:                  limits.maxMaps,
-		MaxActiveLocations:       limits.maxActiveLocations,
-		MaxMapLocations:          limits.maxActiveLocations,
-		MaxUploadsPerHour:        limits.maxUploadsPerHour,
-		MaxUploadsPerDay:         limits.maxUploadsPerDay,
-		MaxUploadedLocationsHour: limits.maxUploadedLocationsHour,
+		MaxMaps:                  spec.maxMaps,
+		MaxActiveLocations:       spec.maxActiveLocations,
+		MaxMapLocations:          spec.maxLocationsPerUpload,
+		MaxUploadsPerHour:        spec.maxUploadsPerHour,
+		MaxUploadsPerDay:         spec.maxUploadsPerDay,
+		MaxUploadedLocationsHour: spec.maxUploadedLocationsHour,
 		CurrentMaps:              currentMaps,
 		CurrentActiveLocations:   currentLocations,
 		RestrictedByModeration:   restricted,
@@ -160,16 +160,17 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 	}
 	switch tier {
 	case mapCreatorTierBase:
-		quota.NextTier = "trusted"
-		quota.FavoritesNeeded = max(0, trustedFavoritesNeeded-qualifiedFavorites)
-		quota.DaysNeeded = max(0, trustedAccountAgeDays-accountAgeDays)
+		applyNextTierProgress(&quota, specForMapCreatorTier(mapCreatorTierTrusted), qualifiedFavorites, accountAgeDays)
 	case mapCreatorTierTrusted:
-		quota.NextTier = "established"
-		quota.FavoritesNeeded = max(0, establishedFavoritesNeeded-qualifiedFavorites)
-		quota.MapsNeeded = max(0, establishedMapsNeeded-qualifiedMaps)
-		quota.DaysNeeded = max(0, establishedAccountAgeDays-accountAgeDays)
+		applyNextTierProgress(&quota, specForMapCreatorTier(mapCreatorTierEstablished), qualifiedFavorites, accountAgeDays)
 	}
 	return quota, nil
+}
+
+func applyNextTierProgress(quota *contracts.MapUploadQuota, next mapCreatorSpec, qualifiedFavorites, accountAgeDays int) {
+	quota.NextTier = next.name
+	quota.FavoritesNeeded = max(0, next.favoritesNeeded-qualifiedFavorites)
+	quota.DaysNeeded = max(0, next.accountAgeDays-accountAgeDays)
 }
 
 func enforceMapUploadQuota(ctx context.Context, tx pgx.Tx, userID, mapID string, incoming int, create bool) error {

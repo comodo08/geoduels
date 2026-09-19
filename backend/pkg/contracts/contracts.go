@@ -981,7 +981,6 @@ type MapUploadQuota struct {
 	AccountAgeDays           int    `json:"accountAgeDays"`
 	NextTier                 string `json:"nextTier,omitempty"`
 	FavoritesNeeded          int    `json:"favoritesNeeded,omitempty"`
-	MapsNeeded               int    `json:"mapsNeeded,omitempty"`
 	DaysNeeded               int    `json:"daysNeeded,omitempty"`
 	MaxMaps                  int    `json:"maxMaps"`
 	MaxActiveLocations       int    `json:"maxActiveLocations"`

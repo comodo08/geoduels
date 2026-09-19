@@ -86,11 +86,6 @@ function useMapBrowserState() {
   };
 }
 
-type MapActionNotice = {
-  title: string;
-  message: string;
-};
-
 type MapRouteSurfaceProps = {
   accessToken: string;
   canUploadCustomMaps: boolean;
@@ -149,7 +144,6 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
   const [commentComposerFocused, setCommentComposerFocused] = useState(false);
   const [expandedCommentIds, setExpandedCommentIds] = useState<Record<string, boolean>>({});
   const [openCommentMenuId, setOpenCommentMenuId] = useState("");
-  const [mapActionNotice, setMapActionNotice] = useState<MapActionNotice | null>(null);
 
   const setMapScope = browser.setMapScope;
 
@@ -188,7 +182,7 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
         thumbnailKey: mapThumbnailKey,
       });
     },
-    onSuccess: (item) => {
+    onSuccess: () => {
       setMapName("");
       setMapDescription("");
       setMapFile(null);
@@ -198,10 +192,6 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
       setMapThumbnailKey("generic/variant-1");
       setMapThumbnailCategory("generic");
       setMapThumbnailSearch("");
-      setMapActionNotice({
-        title: "Map Created",
-        message: `${item.displayName} is ${item.visibility}.`,
-      });
       browser.setMapScope("mine");
       void queryClient.invalidateQueries({ queryKey: ["maps"] });
       void queryClient.invalidateQueries({ queryKey: ["map-upload-quota"] });
@@ -258,10 +248,6 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
     if (!window.confirm(`Delete ${map.displayName}?`)) return;
     mapManagement.archiveMap.mutate(map.id, {
       onSuccess: () => {
-        setMapActionNotice({
-          title: "Map Deleted",
-          message: `${map.displayName} was removed from your maps.`,
-        });
         browser.setMapScope("mine");
         void Router.push({ pathname: "/maps", query: { scope: "mine" } });
       },
@@ -322,7 +308,6 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
           favoriteMap={(input) => favoriteMapMutation.mutate(input)}
           isAdmin={isAdmin}
           isModerator={isModerator}
-          mapActionNotice={mapActionNotice}
           mapPickerFlow={mapPickerFlow}
           onCancelComment={() => {
             setCommentBody("");
@@ -332,22 +317,9 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
           onDeleteMap={deleteMap}
           onPostComment={postMapComment}
           onPostReply={postMapReply}
-          onPublishMap={(itemId) =>
-            mapManagement.publishMap.mutate(itemId, {
-              onSuccess: (item) =>
-                setMapActionNotice({
-                  title: "Map Published",
-                  message: `${item.displayName} is public now.`,
-                }),
-            })
-          }
+          onPublishMap={(itemId) => mapManagement.publishMap.mutate(itemId)}
           onUpdateMap={async (itemId, input) => {
-            const item = await mapManagement.updateMap.mutateAsync({ mapId: itemId, input });
-            setMapActionNotice({
-              title: "Map Updated",
-              message: `${item.displayName} was updated.`,
-            });
-            return item;
+            return mapManagement.updateMap.mutateAsync({ mapId: itemId, input });
           }}
           onLocationFile={(itemId, file) => mapManagement.replaceLocations.mutate({ mapId: itemId, file })}
           onSetMapOfficial={(itemId, official) => mapManagement.setOfficial.mutate({ mapId: itemId, official })}
@@ -387,7 +359,6 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
         mapSearchInput={browser.mapSearchInput}
         mapSort={browser.mapSort}
         mapsLoading={mapsQuery.isLoading}
-        mapActionNotice={mapActionNotice}
         partyActive={partyActive}
         readyMaps={readyMaps}
         setMapScope={browser.setMapScope}

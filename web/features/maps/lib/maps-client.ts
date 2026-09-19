@@ -72,7 +72,6 @@ export type MapUploadQuota = {
   accountAgeDays: number;
   nextTier?: "trusted" | "established";
   favoritesNeeded?: number;
-  mapsNeeded?: number;
   daysNeeded?: number;
   maxMaps: number;
   maxActiveLocations: number;
