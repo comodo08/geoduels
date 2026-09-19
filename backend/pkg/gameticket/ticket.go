@@ -47,6 +47,9 @@ func Validate(secret []byte, tokenStr string) (contracts.GameplayTicketClaims, e
 	if err != nil || !tok.Valid {
 		return contracts.GameplayTicketClaims{}, errors.New("invalid gameplay ticket")
 	}
+	if claims.ExpiresAt == nil {
+		return contracts.GameplayTicketClaims{}, errors.New("invalid gameplay ticket claims")
+	}
 	if claims.Subject == "" || claims.MatchID == "" || claims.Node == "" {
 		return contracts.GameplayTicketClaims{}, errors.New("invalid gameplay ticket claims")
 	}

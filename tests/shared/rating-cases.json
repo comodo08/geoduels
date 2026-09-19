@@ -1,0 +1,1005 @@
+{
+  "fixedNow": "2026-09-19T12:00:00Z",
+  "cases": [
+    {
+      "id": "fresh_equal_win",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "fresh_equal_draw",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "fresh_equal_loss",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_high_beats_low",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_high_loses_to_low",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_draw",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "provisional_beats_established",
+      "selfMMR": 500,
+      "oppMMR": 900,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "provisional_loses_to_much_lower",
+      "selfMMR": 900,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "near_floor_loss",
+      "selfMMR": 505,
+      "oppMMR": 700,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "at_floor_loss",
+      "selfMMR": 500,
+      "oppMMR": 700,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "low_mmr_forgiveness",
+      "selfMMR": 750,
+      "oppMMR": 1400,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "both_inactive_30d",
+      "selfMMR": 900,
+      "oppMMR": 850,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "self_inactive_365d",
+      "selfMMR": 900,
+      "oppMMR": 850,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": 365,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "both_inactive_400d",
+      "selfMMR": 700,
+      "oppMMR": 1300,
+      "selfRD": 150,
+      "oppRD": 130,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "rd_clamped_low",
+      "selfMMR": 800,
+      "oppMMR": 800,
+      "selfRD": 90,
+      "oppRD": 90,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "rd_clamped_high",
+      "selfMMR": 800,
+      "oppMMR": 800,
+      "selfRD": 300,
+      "oppRD": 300,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "max_upset_win_capped",
+      "selfMMR": 500,
+      "oppMMR": 1600,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "max_shock_loss_capped",
+      "selfMMR": 1600,
+      "oppMMR": 500,
+      "selfRD": 110,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "one_never_played_one_resting",
+      "selfMMR": 600,
+      "oppMMR": 1000,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": 14
+    },
+    {
+      "id": "tiny_gap_provisional_protection",
+      "selfMMR": 800,
+      "oppMMR": 600,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_0",
+      "selfMMR": 1428,
+      "oppMMR": 930,
+      "selfRD": 120,
+      "oppRD": 205.1,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_1",
+      "selfMMR": 1285,
+      "oppMMR": 504,
+      "selfRD": 161.1,
+      "oppRD": 207.3,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_2",
+      "selfMMR": 1339,
+      "oppMMR": 1496,
+      "selfRD": 152.5,
+      "oppRD": 171.1,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_3",
+      "selfMMR": 1128,
+      "oppMMR": 1536,
+      "selfRD": 198.3,
+      "oppRD": 197.2,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_4",
+      "selfMMR": 1097,
+      "oppMMR": 1276,
+      "selfRD": 219.6,
+      "oppRD": 145.7,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_5",
+      "selfMMR": 718,
+      "oppMMR": 1310,
+      "selfRD": 201,
+      "oppRD": 112.5,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_6",
+      "selfMMR": 1538,
+      "oppMMR": 948,
+      "selfRD": 129.5,
+      "oppRD": 195.1,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_7",
+      "selfMMR": 712,
+      "oppMMR": 1077,
+      "selfRD": 205.1,
+      "oppRD": 135.7,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_8",
+      "selfMMR": 947,
+      "oppMMR": 850,
+      "selfRD": 137.5,
+      "oppRD": 219.3,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_9",
+      "selfMMR": 625,
+      "oppMMR": 1377,
+      "selfRD": 170.6,
+      "oppRD": 135.1,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_10",
+      "selfMMR": 594,
+      "oppMMR": 1223,
+      "selfRD": 191.7,
+      "oppRD": 158.3,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_11",
+      "selfMMR": 816,
+      "oppMMR": 841,
+      "selfRD": 217.9,
+      "oppRD": 171.2,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_12",
+      "selfMMR": 1304,
+      "oppMMR": 659,
+      "selfRD": 162,
+      "oppRD": 125.1,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_13",
+      "selfMMR": 552,
+      "oppMMR": 1523,
+      "selfRD": 218.4,
+      "oppRD": 123.1,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_14",
+      "selfMMR": 837,
+      "oppMMR": 809,
+      "selfRD": 211.6,
+      "oppRD": 173.4,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_15",
+      "selfMMR": 741,
+      "oppMMR": 1316,
+      "selfRD": 153.4,
+      "oppRD": 179.4,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_16",
+      "selfMMR": 551,
+      "oppMMR": 503,
+      "selfRD": 193.7,
+      "oppRD": 150.3,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_17",
+      "selfMMR": 1349,
+      "oppMMR": 912,
+      "selfRD": 206.8,
+      "oppRD": 121,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_18",
+      "selfMMR": 1333,
+      "oppMMR": 625,
+      "selfRD": 131.9,
+      "oppRD": 217.4,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_19",
+      "selfMMR": 730,
+      "oppMMR": 746,
+      "selfRD": 119.1,
+      "oppRD": 167.4,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_20",
+      "selfMMR": 1249,
+      "oppMMR": 1197,
+      "selfRD": 181,
+      "oppRD": 181.9,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_21",
+      "selfMMR": 972,
+      "oppMMR": 1046,
+      "selfRD": 197.3,
+      "oppRD": 154.5,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_22",
+      "selfMMR": 715,
+      "oppMMR": 1117,
+      "selfRD": 165.9,
+      "oppRD": 170.5,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_23",
+      "selfMMR": 1002,
+      "oppMMR": 1508,
+      "selfRD": 180.7,
+      "oppRD": 161,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_24",
+      "selfMMR": 1335,
+      "oppMMR": 1200,
+      "selfRD": 165,
+      "oppRD": 180.3,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_25",
+      "selfMMR": 788,
+      "oppMMR": 1466,
+      "selfRD": 160.4,
+      "oppRD": 178.5,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_26",
+      "selfMMR": 586,
+      "oppMMR": 621,
+      "selfRD": 111.4,
+      "oppRD": 181.6,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_27",
+      "selfMMR": 692,
+      "oppMMR": 1288,
+      "selfRD": 157.2,
+      "oppRD": 150.9,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_28",
+      "selfMMR": 674,
+      "oppMMR": 778,
+      "selfRD": 204.2,
+      "oppRD": 177.6,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_29",
+      "selfMMR": 509,
+      "oppMMR": 1266,
+      "selfRD": 160.5,
+      "oppRD": 176.8,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_30",
+      "selfMMR": 1082,
+      "oppMMR": 679,
+      "selfRD": 157.8,
+      "oppRD": 162.7,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_31",
+      "selfMMR": 519,
+      "oppMMR": 1021,
+      "selfRD": 123,
+      "oppRD": 194.8,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_32",
+      "selfMMR": 1407,
+      "oppMMR": 567,
+      "selfRD": 196.5,
+      "oppRD": 116.4,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_33",
+      "selfMMR": 1097,
+      "oppMMR": 914,
+      "selfRD": 143.8,
+      "oppRD": 171.1,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_34",
+      "selfMMR": 1020,
+      "oppMMR": 884,
+      "selfRD": 217.2,
+      "oppRD": 132,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_35",
+      "selfMMR": 1126,
+      "oppMMR": 1296,
+      "selfRD": 136.3,
+      "oppRD": 136.2,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_36",
+      "selfMMR": 1096,
+      "oppMMR": 673,
+      "selfRD": 124.5,
+      "oppRD": 166.2,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_37",
+      "selfMMR": 1025,
+      "oppMMR": 1179,
+      "selfRD": 212.2,
+      "oppRD": 181.3,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_38",
+      "selfMMR": 1295,
+      "oppMMR": 1140,
+      "selfRD": 149.1,
+      "oppRD": 190.1,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_39",
+      "selfMMR": 1497,
+      "oppMMR": 1178,
+      "selfRD": 157.7,
+      "oppRD": 178.8,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_40",
+      "selfMMR": 1373,
+      "oppMMR": 1106,
+      "selfRD": 150.1,
+      "oppRD": 129.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_41",
+      "selfMMR": 1488,
+      "oppMMR": 1057,
+      "selfRD": 112.5,
+      "oppRD": 162.9,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_42",
+      "selfMMR": 510,
+      "oppMMR": 1090,
+      "selfRD": 125.5,
+      "oppRD": 199.2,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_43",
+      "selfMMR": 925,
+      "oppMMR": 1470,
+      "selfRD": 194.4,
+      "oppRD": 217.5,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_44",
+      "selfMMR": 944,
+      "oppMMR": 993,
+      "selfRD": 126,
+      "oppRD": 173.7,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_45",
+      "selfMMR": 775,
+      "oppMMR": 1381,
+      "selfRD": 180.9,
+      "oppRD": 217.7,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_46",
+      "selfMMR": 944,
+      "oppMMR": 1124,
+      "selfRD": 166.6,
+      "oppRD": 214,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_47",
+      "selfMMR": 699,
+      "oppMMR": 724,
+      "selfRD": 164.2,
+      "oppRD": 116.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_48",
+      "selfMMR": 1165,
+      "oppMMR": 1149,
+      "selfRD": 149.7,
+      "oppRD": 158.6,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_49",
+      "selfMMR": 763,
+      "oppMMR": 1195,
+      "selfRD": 166.1,
+      "oppRD": 189.5,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_50",
+      "selfMMR": 618,
+      "oppMMR": 873,
+      "selfRD": 157.3,
+      "oppRD": 125,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_51",
+      "selfMMR": 698,
+      "oppMMR": 1291,
+      "selfRD": 130.3,
+      "oppRD": 209.6,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_52",
+      "selfMMR": 1158,
+      "oppMMR": 505,
+      "selfRD": 126.3,
+      "oppRD": 119.3,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_53",
+      "selfMMR": 921,
+      "oppMMR": 885,
+      "selfRD": 175.7,
+      "oppRD": 133.6,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_54",
+      "selfMMR": 1368,
+      "oppMMR": 1535,
+      "selfRD": 173.8,
+      "oppRD": 115.2,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_55",
+      "selfMMR": 1002,
+      "oppMMR": 1444,
+      "selfRD": 181.9,
+      "oppRD": 145.4,
+      "winner": "draw",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_56",
+      "selfMMR": 1482,
+      "oppMMR": 561,
+      "selfRD": 165,
+      "oppRD": 168,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_57",
+      "selfMMR": 1149,
+      "oppMMR": 1181,
+      "selfRD": 146.4,
+      "oppRD": 153.9,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_58",
+      "selfMMR": 519,
+      "oppMMR": 728,
+      "selfRD": 151.9,
+      "oppRD": 191.3,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_59",
+      "selfMMR": 1561,
+      "oppMMR": 742,
+      "selfRD": 167.9,
+      "oppRD": 193.1,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_60",
+      "selfMMR": 863,
+      "oppMMR": 512,
+      "selfRD": 169.7,
+      "oppRD": 189,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_61",
+      "selfMMR": 842,
+      "oppMMR": 1322,
+      "selfRD": 178.9,
+      "oppRD": 184.7,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_62",
+      "selfMMR": 1085,
+      "oppMMR": 1582,
+      "selfRD": 114.3,
+      "oppRD": 154.8,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_63",
+      "selfMMR": 1537,
+      "oppMMR": 580,
+      "selfRD": 110.1,
+      "oppRD": 178.3,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_64",
+      "selfMMR": 707,
+      "oppMMR": 1505,
+      "selfRD": 164.8,
+      "oppRD": 135,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_65",
+      "selfMMR": 1140,
+      "oppMMR": 1076,
+      "selfRD": 152.6,
+      "oppRD": 125.8,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_66",
+      "selfMMR": 619,
+      "oppMMR": 1445,
+      "selfRD": 165.7,
+      "oppRD": 110.4,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_67",
+      "selfMMR": 693,
+      "oppMMR": 1383,
+      "selfRD": 115.4,
+      "oppRD": 111.4,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_68",
+      "selfMMR": 589,
+      "oppMMR": 1497,
+      "selfRD": 150.1,
+      "oppRD": 116.8,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_69",
+      "selfMMR": 1206,
+      "oppMMR": 1509,
+      "selfRD": 131.8,
+      "oppRD": 182.5,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_70",
+      "selfMMR": 660,
+      "oppMMR": 1129,
+      "selfRD": 197.2,
+      "oppRD": 133.5,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_71",
+      "selfMMR": 1544,
+      "oppMMR": 1565,
+      "selfRD": 214.6,
+      "oppRD": 161.5,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_72",
+      "selfMMR": 810,
+      "oppMMR": 772,
+      "selfRD": 204,
+      "oppRD": 149.4,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_73",
+      "selfMMR": 1364,
+      "oppMMR": 985,
+      "selfRD": 112.5,
+      "oppRD": 121,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_74",
+      "selfMMR": 1421,
+      "oppMMR": 897,
+      "selfRD": 202.5,
+      "oppRD": 142,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_75",
+      "selfMMR": 1571,
+      "oppMMR": 1250,
+      "selfRD": 201.1,
+      "oppRD": 216,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_76",
+      "selfMMR": 1369,
+      "oppMMR": 1182,
+      "selfRD": 169.9,
+      "oppRD": 200.9,
+      "winner": "draw",
+      "selfIdleDays": 30,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_77",
+      "selfMMR": 1146,
+      "oppMMR": 1589,
+      "selfRD": 120,
+      "oppRD": 174.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_78",
+      "selfMMR": 912,
+      "oppMMR": 1203,
+      "selfRD": 133.5,
+      "oppRD": 174.9,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_79",
+      "selfMMR": 1176,
+      "oppMMR": 1266,
+      "selfRD": 208.7,
+      "oppRD": 135.9,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    }
+  ]
+}

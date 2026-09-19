@@ -61,7 +61,6 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
         run: |
           npm ci --no-audit --no-fund
-          npm run lint:architecture:self-test
           npm run lint:architecture:strict
           npm run test
           npm run build

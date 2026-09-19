@@ -6,7 +6,8 @@ import { Button } from "../../../components/ui/button";
 import { DangerZoneDisclosure, SettingsGroup } from "../../../components/ui/compositions";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/input";
-import { AsyncState, EntityRow, Notice } from "../../../components/ui/patterns";
+import { AsyncState, EntityRow } from "../../../components/ui/patterns";
+import { useShowAppNoticeOnValue } from "../../../components/ui/AppNotice";
 import { useAccountSettings } from "../hooks/use-account-settings";
 
 export function AccountSettingsModal({
@@ -31,6 +32,7 @@ export function AccountSettings({ profilePath }: { profilePath: string }) {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const state = useAccountSettings(profilePath);
   const { account, accountQuery, deleteMutation, unlinkMutation } = state;
+  useShowAppNoticeOnValue(state.error);
 
   return (
     <>
@@ -81,10 +83,6 @@ export function AccountSettings({ profilePath }: { profilePath: string }) {
             </SettingsGroup>
             {account.isGuest ? <p className="mt-2 px-1 text-body-sm text-content-secondary">Link a sign-in method to keep your progress on every device.</p> : null}
           </section>
-
-          {state.error ? (
-            <Notice tone="danger">{state.error}</Notice>
-          ) : null}
 
           <Button type="button" variant="secondary" onClick={() => void state.signOut()} className="min-h-11 w-full rounded-xl"><LogOut className="h-4 w-4" />Sign out</Button>
 

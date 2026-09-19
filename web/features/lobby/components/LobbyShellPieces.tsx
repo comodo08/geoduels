@@ -1,12 +1,9 @@
 import type React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Github, Heart, Shield, Twitter, UserPlus, Youtube } from "lucide-react";
+import { ArrowUpRight, Github, Heart, Twitter, UserPlus, Youtube } from "lucide-react";
 import MarkdownContent from "../../../components/ui/MarkdownContent";
 import { CardTitle, Eyebrow, HelperText, MutedText } from "../../../components/ui/typography";
 import { formatChangelogDate } from "../lib/lobby-ui";
-import {
-  LobbyNotice,
-} from "./lobby-primitives";
 import { AppCardButton, AppChromeIconLink, AppPanel } from "../../../components/ui/compositions";
 
 export function NewsPanel({
@@ -186,16 +183,4 @@ export function InvitePartyCard({
   );
 }
 
-export function PartyErrorNotice({ message }: { message: string }) {
-  if (!message) return null;
-  return (
-    <div className="mb-4 w-full max-w-[1160px] pointer-events-auto">
-      <LobbyNotice title="Party Error" tone="danger">
-        <span className="flex items-start gap-3 text-left text-body-sm font-semibold leading-body">
-          <Shield className="mt-0.5 shrink-0 text-status-danger" size={18} />
-          <span>{message}</span>
-        </span>
-      </LobbyNotice>
-    </div>
-  );
-}
+

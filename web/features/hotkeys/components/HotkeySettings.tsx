@@ -2,7 +2,8 @@ import { RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { IconButton, Button } from "../../../components/ui/button";
-import { InsetList, Notice, SectionHeader, SettingRow } from "../../../components/ui/patterns";
+import { InsetList, SectionHeader, SettingRow } from "../../../components/ui/patterns";
+import { useAppNotice } from "../../../components/ui/AppNotice";
 import { Kbd } from "../../../components/ui/Kbd";
 import { Switch } from "../../../components/ui/Switch";
 import { Tabs } from "../../../components/ui/Tabs";
@@ -17,7 +18,7 @@ export default function HotkeySettings({ onClose }: { onClose: () => void }) {
   const state = useHotkeys();
   const [tab, setTab] = useState<"Controls" | "Privacy" | "Audio" | "Account">("Controls");
   const [capturing, setCapturing] = useState<HotkeyAction | null>(null);
-  const [notice, setNotice] = useState("");
+  const { show } = useAppNotice();
 
   useEffect(() => {
     if (!capturing) return;
@@ -35,12 +36,12 @@ export default function HotkeySettings({ onClose }: { onClose: () => void }) {
         item.action !== action &&
         state.preferences.bindings[item.action].some((candidate) => bindingKey(candidate) === bindingKey(binding)));
       state.setBinding(action, binding);
-      setNotice(conflict ? `${formatBinding(binding)} was moved from “${conflict.label}”.` : "");
+      if (conflict) show(`${formatBinding(binding)} was moved from “${conflict.label}”.`);
       setCapturing(null);
     };
     window.addEventListener("keydown", capture, true);
     return () => window.removeEventListener("keydown", capture, true);
-  }, [capturing, state]);
+  }, [capturing, show, state]);
 
   return (
     <Dialog title="Settings" onClose={onClose} maxWidthClassName="max-w-2xl">
@@ -52,8 +53,6 @@ export default function HotkeySettings({ onClose }: { onClose: () => void }) {
         aria-label="Settings section"
         className="mb-5"
       />
-      {notice ? <Notice tone="warning" className="mb-4">{notice}</Notice> : null}
-
       {tab === "Privacy" ? (
         <section>
           <SectionHeader title="Social privacy" description="Choose how other registered players can find and contact you." className="mb-3" />

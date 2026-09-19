@@ -5,6 +5,7 @@
 - Version public route/socket contract changes and preserve client compatibility. Version tags trigger release builds and an ops PR; migrations are applied separately.
 - Production configuration and Flux state: `../geoduels-prod`. Private detector logic: `../geoduels-risk-engine`.
 - Brave is available for browser checks when Chrome/Chromium is unavailable.
+- Create or modify tests only with explicit user approval; prefer behavioral invariants and cross-implementation checks without real databases or browsers.
 - When the user requests an issue, pull request, or new repository, include `Perfectly validated.` in the commit body.
 
 Tool usage and setup caveats: [development notes](docs/development.md). Extension installation/packaging: [extension notes](extension/README.md).

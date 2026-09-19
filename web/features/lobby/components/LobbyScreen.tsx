@@ -17,7 +17,6 @@ import {
   InvitePartyCard,
   LegalFooter,
   NewsPanel,
-  PartyErrorNotice,
   SocialLinksCard,
 } from "./LobbyShellPieces";
 import {
@@ -32,6 +31,7 @@ import { useLobbyScreenState, type LobbyPartyView } from "../hooks/useLobbyScree
 import { useMapList } from "../../maps/lib/map-hooks";
 import { getRuntimeConfig } from "../../../lib/runtime-config";
 import { createSeededRandom, featuredMapDay, selectFeaturedOfficialMaps } from "../lib/featured-maps";
+import { useShowAppNoticeOnValue } from "../../../components/ui/AppNotice";
 
 export type { LobbyContentRoute } from "../lib/lobby-ui";
 
@@ -163,6 +163,7 @@ export default function LobbyScreen({
     authLoading, authMigrationRequired, nicknameSaving,
     joinQueue, startSingleplayer, clearSingleplayerError,
   });
+  useShowAppNoticeOnValue(party.error);
   const canUploadCustomMaps = !!accessToken && !isGuest;
   const trendingMapsQuery = useMapList(
     getRuntimeConfig(),
@@ -292,8 +293,6 @@ export default function LobbyScreen({
     />
   );
 
-  const partyErrorNotice =
-    openModal !== "invite" ? <PartyErrorNotice message={party.error} /> : null;
   const showPartyPanel = hasActiveParty && contentRoute === "party";
   const playPanel = (
     <PlayPanel
@@ -372,7 +371,6 @@ export default function LobbyScreen({
       maintenanceOverlay={maintenanceOverlay}
       modalNodes={modalNodes}
       onlinePlayers={onlinePlayers}
-      partyErrorNotice={partyErrorNotice}
       showPartyPanel={showPartyPanel}
       partyPanel={partyPanel}
       mapRouteSurface={mapRouteSurface}

@@ -13,17 +13,16 @@ go test ./...
 go vet ./...
 ```
 
-`go test ./...` alone does not establish database correctness. Finalization integration tests require `FINALIZATION_TEST_POSTGRES_URL`; replay integration requires `REPLAY_TEST_POSTGRES_URL` plus `REPLAY_TEST_MATCH_ID` pointing to a compressed replay fixture. Use a disposable migrated database and synthetic data; finalization tests write records. Run with `-v` to distinguish execution from skips.
+`go test ./...` runs the retained test suite: snapshot privacy, Go/TypeScript rating parity, gameplay match invariants, geographic scoring, and gameplay-ticket policy. The rating parity golden file under `tests/shared/` is produced by the Go suite; regenerate it with `GEODUELS_UPDATE_RATING_GOLDEN=1 go test ./internal/rating` after an intentional rating change and update the TypeScript side to match.
 
 ```sh
-npm --prefix web run lint:architecture:self-test
 npm --prefix web run lint:architecture:strict
 npm --prefix web test
 (cd web && npx tsc --noEmit)
 npm --prefix web run build
 ```
 
-The architecture checker owns exact native-element allowances, geometry exceptions, and size budgets. Document new exceptions beside that contract with a focused self-test, not in a second component catalog.
+The architecture checker owns exact native-element allowances, geometry exceptions, and size budgets. Document new exceptions beside that contract.
 
 ## Local infrastructure and migrations
 

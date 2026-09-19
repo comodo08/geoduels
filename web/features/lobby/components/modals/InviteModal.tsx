@@ -1,5 +1,4 @@
 import { UserPlus } from "lucide-react";
-import { Spinner } from "../../../../components/ui/Spinner";
 import AppModalShell from "../../../../components/ui/AppModalShell";
 import { Button } from "../../../../components/ui/button";
 import {
@@ -28,7 +27,7 @@ export function InviteModal({
   authLoading,
   maintenanceIsActive,
   playPaused,
-  authError,
+  authError: _authError,
   createParty,
   joinParty,
   onClose,
@@ -53,12 +52,13 @@ export function InviteModal({
             })();
           }}
           disabled={inviteActionsDisabled || playPaused}
+          loading={busy}
+          loadingLabel="Joining party"
+          icon={<UserPlus size={18} />}
           className="min-h-12 w-full rounded-xl"
         >
-          {busy ? <Spinner size="sm" label="Joining party" color="current" className="mr-2" /> : <UserPlus className="mr-2" size={18} />}
           Create Party
         </Button>
-        {authError ? <p className="text-center text-body-sm font-semibold text-status-danger">{authError}</p> : null}
 
         <LobbySection className="rounded-2xl">
           <LobbyFieldLabel htmlFor="invite-code-input" className="mb-2 block">

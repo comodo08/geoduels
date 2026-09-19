@@ -1,6 +1,6 @@
 export const INITIAL_MMR = 500;
 export const INITIAL_RATING_RD = 220;
-export const MAX_DUEL_MMR_DELTA = 80;
+export const MAX_DUEL_MMR_DELTA = 40;
 
 const MIN_RANKED_MMR = 500;
 const LOW_MMR_FORGIVENESS_END_MMR = 1000;
@@ -62,6 +62,12 @@ export function calculateDuelEloDeltas(
   };
 }
 
+// Match Go's math.Round semantics (half away from zero); Math.round rounds
+// halves toward + infinity, which diverges on negative fractional deltas.
+function roundHalfAwayFromZero(value: number): number {
+  return Math.sign(value) * Math.round(Math.abs(value));
+}
+
 function calculateGlickoRating(
   rating: number,
   rd: number,
@@ -78,7 +84,7 @@ function calculateGlickoRating(
   const nextRating = rating + Q * nextVariance * g * (score - expected);
 
   return {
-    rating: Math.round(nextRating),
+    rating: roundHalfAwayFromZero(nextRating),
     rd: clampRatingRd(Math.sqrt(nextVariance))
   };
 }
@@ -132,7 +138,7 @@ function applyLowMmrLossForgiveness(current: number, next: number): number {
   if (rangeSize <= 0) return next;
 
   const factor = (current - MIN_RANKED_MMR) / rangeSize;
-  return current + Math.round(delta * factor);
+  return current + roundHalfAwayFromZero(delta * factor);
 }
 
 function applyProvisionalOpponentLossProtection(
@@ -147,7 +153,7 @@ function applyProvisionalOpponentLossProtection(
   const factor = provisionalRdFactor(opponentRd);
   if (factor >= 1) return next;
 
-  return selfMmr + Math.round(delta * factor);
+  return selfMmr + roundHalfAwayFromZero(delta * factor);
 }
 
 function provisionalRdFactor(rd: number): number {

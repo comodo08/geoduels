@@ -1,11 +1,10 @@
 import { Save } from "lucide-react";
-import { Spinner } from "../../../../components/ui/Spinner";
 import { useState } from "react";
 import AppModalShell from "../../../../components/ui/AppModalShell";
 import type { CustomMap, MapUpdateInput } from "../../../maps/lib/maps-client";
 import { MapMetadataFields, thumbnailCategoryFromKey } from "../MapMetadataFields";
 import { Button } from "../../../../components/ui/button";
-import { LobbyNotice } from "../lobby-primitives";
+import { useAppNotice } from "../../../../components/ui/AppNotice";
 
 type MapEditMetadataModalProps = {
   map: CustomMap;
@@ -21,14 +20,13 @@ export function MapEditMetadataModal({ map, onClose, onSave }: MapEditMetadataMo
   const [mapThumbnailKey, setMapThumbnailKey] = useState(map.thumbnailKey);
   const [mapThumbnailCategory, setMapThumbnailCategory] = useState(thumbnailCategoryFromKey(map.thumbnailKey));
   const [mapThumbnailSearch, setMapThumbnailSearch] = useState("");
-  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const { show } = useAppNotice();
   const saveDisabled = saving || !mapName.trim();
 
   const save = async () => {
     if (saveDisabled) return;
     setSaving(true);
-    setError("");
     try {
       await onSave(map.id, {
         displayName: mapName,
@@ -40,7 +38,7 @@ export function MapEditMetadataModal({ map, onClose, onSave }: MapEditMetadataMo
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Map update failed");
+      show(err instanceof Error ? err.message : "Map update failed");
     } finally {
       setSaving(false);
     }
@@ -55,9 +53,7 @@ export function MapEditMetadataModal({ map, onClose, onSave }: MapEditMetadataMo
       contentClassName="space-y-4"
     >
       {map.publishedAt ? (
-        <LobbyNotice title="Published Map" tone="muted">
-          Changes update the public map listing immediately.
-        </LobbyNotice>
+        <p className="text-body-sm text-content-secondary">Changes update the public map listing immediately.</p>
       ) : null}
       <MapMetadataFields
         disabled={saving}
@@ -76,13 +72,11 @@ export function MapEditMetadataModal({ map, onClose, onSave }: MapEditMetadataMo
         mapThumbnailSearch={mapThumbnailSearch}
         setMapThumbnailSearch={setMapThumbnailSearch}
       />
-      {error ? <p className="text-body-sm font-semibold text-status-danger">{error}</p> : null}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>
           Cancel
         </Button>
-        <Button type="button" variant="primary" disabled={saveDisabled} onClick={save}>
-          {saving ? <Spinner size="sm" label="Saving map" color="current" className="mr-2" /> : <Save className="mr-2" size={17} />}
+        <Button type="button" variant="primary" disabled={saveDisabled} onClick={save} loading={saving} loadingLabel="Saving map" icon={<Save size={17} />}>
           Save
         </Button>
       </div>

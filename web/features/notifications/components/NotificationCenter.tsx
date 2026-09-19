@@ -1,6 +1,5 @@
 import { Bell } from "lucide-react";
 import { useState } from "react";
-import { Notice } from "../../../components/ui/patterns";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { CounterBadge } from "../../../components/ui/Badge";
 import { ButtonLink } from "../../../components/ui/button";
@@ -10,6 +9,7 @@ import { ScrollArea } from "../../../components/ui/ScrollArea";
 import { useAuthState } from "../../auth/components/AuthProvider";
 import { NotificationGroup, NotificationItem, notificationDetails, notificationEntriesFromSummary } from "./NotificationItem";
 import { useNotificationActions } from "../hooks/useNotificationActions";
+import { useShowAppNoticeWhen } from "../../../components/ui/AppNotice";
 
 export function NotificationCenter() {
   const auth = useAuthState();
@@ -24,6 +24,7 @@ function ConnectedNotificationCenter({
 }) {
   const [open, setOpen] = useState(false);
   const action = useNotificationActions(session.accessToken);
+  useShowAppNoticeWhen(action.isError, "Could not update the request. Try again.", action.failureCount);
   const notifications = session.bootstrap?.activity.notifications || [];
   const data = {
     incomingRequests: [],
@@ -42,7 +43,6 @@ function ConnectedNotificationCenter({
         </div>
         <ScrollArea className="max-h-[70vh] p-3">
           <div className="grid gap-4">
-            {action.isError ? <Notice tone="danger">Could not update the request. Try again.</Notice> : null}
             {entries.length ? (
               <NotificationGroup title="Recent activity">
                 {entries.map((entry) => (

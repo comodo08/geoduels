@@ -30,6 +30,7 @@ import {
   MapUploadPanel,
 } from "./MapPanels";
 import { MapPickerModal } from "./MapPickerModal";
+import { useAppNotice } from "../../../../components/ui/AppNotice";
 
 const tabPanelMotion = {
   initial: {
@@ -127,6 +128,10 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
 }: MapRouteSurfaceProps, ref) {
   const runtimeConfig = getRuntimeConfig();
   const queryClient = useQueryClient();
+  const { show } = useAppNotice();
+  const noticeError = (fallback: string) => (error: unknown) => {
+    show(error instanceof Error ? error.message : fallback);
+  };
   const canInteractWithMaps = !!accessToken && canUploadCustomMaps;
   const browser = useMapBrowserState();
   const [mapName, setMapName] = useState("");
@@ -251,6 +256,7 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
         browser.setMapScope("mine");
         void Router.push({ pathname: "/maps", query: { scope: "mine" } });
       },
+      onError: noticeError("Could not delete map"),
     });
   };
   const toggleCommentReplies = (commentId: string) => {
@@ -317,13 +323,30 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
           onDeleteMap={deleteMap}
           onPostComment={postMapComment}
           onPostReply={postMapReply}
-          onPublishMap={(itemId) => mapManagement.publishMap.mutate(itemId)}
+          onPublishMap={(itemId) =>
+            mapManagement.publishMap.mutate(itemId, { onError: noticeError("Could not publish map") })
+          }
           onUpdateMap={async (itemId, input) => {
             return mapManagement.updateMap.mutateAsync({ mapId: itemId, input });
           }}
-          onLocationFile={(itemId, file) => mapManagement.replaceLocations.mutate({ mapId: itemId, file })}
-          onSetMapOfficial={(itemId, official) => mapManagement.setOfficial.mutate({ mapId: itemId, official })}
-          onSetMapRole={(itemId, role) => mapManagement.setRole.mutate({ mapId: itemId, role })}
+          onLocationFile={(itemId, file) =>
+            mapManagement.replaceLocations.mutate(
+              { mapId: itemId, file },
+              { onError: noticeError("Could not replace map locations") },
+            )
+          }
+          onSetMapOfficial={(itemId, official) =>
+            mapManagement.setOfficial.mutate(
+              { mapId: itemId, official },
+              { onError: noticeError("Could not update official status") },
+            )
+          }
+          onSetMapRole={(itemId, role) =>
+            mapManagement.setRole.mutate(
+              { mapId: itemId, role },
+              { onError: noticeError("Could not set map role") },
+            )
+          }
           onSetCommentBody={setCommentBody}
           onSetCommentComposerFocused={setCommentComposerFocused}
           onSetOpenCommentMenuId={setOpenCommentMenuId}

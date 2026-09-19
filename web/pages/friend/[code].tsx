@@ -9,7 +9,8 @@ import { PlayerRow } from "../../features/social/components/CompactPlayerRow";
 import { useAuthState } from "../../features/auth/components/AuthProvider";
 import { socialClient } from "../../features/social/lib/social-client";
 import { getRuntimeConfig } from "../../lib/runtime-config";
-import { AsyncState, Notice, PageHeader } from "../../components/ui/patterns";
+import { AsyncState, PageHeader } from "../../components/ui/patterns";
+import { useShowAppNoticeWhen } from "../../components/ui/AppNotice";
 
 export default function FriendCodePage() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function FriendCodePage() {
   const request = useMutation({
     mutationFn: () => socialClient.requestByCode(config, auth.accessToken, code),
   });
+  useShowAppNoticeWhen(request.isError, "Could not send the friend request. Try again.", request.failureCount);
   return (
     <AppShell activeNavRoute="friends">
       <Head><title>Add a friend | GeoDuels</title><meta name="robots" content="noindex" /></Head>
@@ -37,10 +39,9 @@ export default function FriendCodePage() {
           ) : player.data ? (
             <>
               <div className="mt-5"><PlayerRow player={player.data} /></div>
-              <Button variant="primary" className="mt-5 w-full" onClick={() => request.mutate()} disabled={request.isPending || request.isSuccess}>
+              <Button variant="primary" className="mt-5 w-full" onClick={() => request.mutate()} disabled={request.isPending || request.isSuccess} loading={request.isPending}>
                 {request.isSuccess ? "Request sent" : "Send friend request"}
               </Button>
-              {request.isError ? <Notice tone="danger" className="mt-3">Could not send the friend request. Try again.</Notice> : null}
             </>
           ) : <AsyncState className="mt-5" status="loading" message="Loading player" />}
         </AppPanel>

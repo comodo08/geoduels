@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../../components/ui/button';
+import { useShowAppNoticeOnValue } from '../../../components/ui/AppNotice';
 
 type Props = {
   connected: boolean;
@@ -25,6 +26,7 @@ export default function QueueCard({ connected, accessToken, status, joinQueue, c
   const showConnectionError = !connected && queueError.toLowerCase() === 'connection error';
   const primaryLabel = showConnectionError ? 'Connection Error' : isQueueing ? 'Finding Opponent...' : 'PLAY';
   const queueElapsedLabel = formatQueueElapsed(queueStartedAt ? nowMs - queueStartedAt : 0);
+  useShowAppNoticeOnValue(queueError);
 
   useEffect(() => {
     if (!isQueueing) {
@@ -67,7 +69,7 @@ export default function QueueCard({ connected, accessToken, status, joinQueue, c
             <span className="text-status-success">{queueElapsedLabel}</span>
           </Button>
         )}
-        {queueError && <p className="mt-3 text-body-sm font-semibold text-status-danger">{queueError}</p>}
+
       </div>
     </section>
   );

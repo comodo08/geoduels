@@ -8,6 +8,7 @@ import { TooltipProvider } from '../components/ui/Tooltip';
 import { HotkeyProvider } from '../features/hotkeys/components/HotkeyProvider';
 import { AuthProvider } from '../features/auth/components/AuthProvider';
 import { AppActivityProvider } from '../features/app-shell/components/AppActivityProvider';
+import { AppNoticeProvider } from '../components/ui/AppNotice';
 import 'leaflet/dist/leaflet.css';
 import 'easymde/dist/easymde.min.css';
 import '../styles/globals.css';
@@ -47,7 +48,9 @@ export default function App({ Component, pageProps }: AppPropsWithLayout) {
             <AuthProvider>
               <AppActivityProvider>
                 <HotkeyProvider>
-                  {getLayout(<Component {...pageProps} />)}
+                  <AppNoticeProvider>
+                    {getLayout(<Component {...pageProps} />)}
+                  </AppNoticeProvider>
                 </HotkeyProvider>
               </AppActivityProvider>
             </AuthProvider>

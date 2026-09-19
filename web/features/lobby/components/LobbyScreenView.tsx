@@ -23,7 +23,6 @@ export type LobbyScreenViewProps = {
   maintenanceOverlay: ReactNode;
   modalNodes: ReactNode;
   onlinePlayers: number;
-  partyErrorNotice: ReactNode;
   showPartyPanel: boolean;
   partyPanel: ReactNode;
   mapRouteSurface: ReactNode;
@@ -43,7 +42,6 @@ export function LobbyScreenView({
   maintenanceOverlay,
   modalNodes,
   onlinePlayers,
-  partyErrorNotice,
   showPartyPanel,
   partyPanel,
   mapRouteSurface,
@@ -69,8 +67,6 @@ export function LobbyScreenView({
           size="wide"
           className={`relative z-content flex flex-1 flex-col items-center justify-start pointer-events-none ${showPartyPanel ? "min-h-0 overflow-y-auto pb-4 pt-2 md:overflow-hidden sm:pb-6 sm:pt-3" : "pb-28 pt-4 sm:pb-12 sm:pt-8"}`}
         >
-          {partyErrorNotice}
-
           <div
             className={`flex w-full justify-center ${
               showPartyPanel

@@ -1,5 +1,6 @@
 import type React from "react";
 import { forwardRef } from "react";
+import { useShowAppNoticeOnValue } from "../../../components/ui/AppNotice";
 import { CalendarDays, Play } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "../../../components/ui/button";
@@ -145,6 +146,8 @@ function QueueModeCard(props: {
   maintenanceIsActive: boolean;
   primaryButtonLabel: string;
 }) {
+  useShowAppNoticeOnValue(props.queueError);
+  const paused = props.queuePaused || props.playPaused || props.maintenanceIsActive;
   return (
     <AppPanel className="lobby-feature-card relative flex min-h-[180px] w-full flex-col gap-4 rounded-2xl p-4 transition-colors duration-emphasis sm:p-5">
       <div className="pointer-events-none absolute inset-0 bg-status-success/20 opacity-80 transition-opacity duration-emphasis" />
@@ -152,9 +155,8 @@ function QueueModeCard(props: {
         <ModeHeading eyebrow="Ranked" title="Duel" eyebrowClassName="text-status-success" />
 
       <div className="relative z-content flex w-full flex-col">
-        {props.queueError ? <p className="mb-3 text-center text-body-sm font-semibold text-status-danger">{props.queueError}</p> : null}
         <PlayModeActionButton tone="duel" onClick={props.onDuelsPlay} disabled={props.duelDisabled}>
-          {props.queuePaused || props.playPaused || props.maintenanceIsActive ? "Paused" : props.primaryButtonLabel}
+          {paused ? "Paused" : props.primaryButtonLabel}
         </PlayModeActionButton>
       </div>
     </AppPanel>

@@ -211,7 +211,9 @@ func (e *Engine) SubmitGuess(g contracts.GuessPayload) (*contracts.MatchSnapshot
 	if g.RoundID != m.RoundID {
 		return nil, errors.New("round mismatch")
 	}
-	if m.PendingAdvance && e.now().Before(m.IntermissionUntil) {
+	if m.PendingAdvance {
+		// The round is already resolved; ignore guesses between resolution and
+		// the next round actually advancing.
 		return m.snapshot(), nil
 	}
 	p, exists := m.Players[g.UserID]
@@ -731,11 +733,11 @@ func (m *Match) snapshot() *contracts.MatchSnapshot {
 	}
 	msLeft := int64(0)
 	if phase == contracts.PhaseRoundResult {
-		msLeft = maxInt64(0, time.Until(m.IntermissionUntil).Milliseconds())
+		msLeft = maxInt64(0, m.IntermissionUntil.Sub(now).Milliseconds())
 	} else if phase == contracts.PhaseLive && roundPhase == contracts.RoundPhaseIntro {
-		msLeft = maxInt64(0, time.Until(m.RoundStartedAt.Add(roundIntro)).Milliseconds())
+		msLeft = maxInt64(0, m.RoundStartedAt.Add(roundIntro).Sub(now).Milliseconds())
 	} else if phase == contracts.PhaseLive && !m.RoundDeadline.IsZero() {
-		msLeft = maxInt64(0, time.Until(m.RoundDeadline).Milliseconds())
+		msLeft = maxInt64(0, m.RoundDeadline.Sub(now).Milliseconds())
 	}
 	return &contracts.MatchSnapshot{
 		MatchID:         m.ID,

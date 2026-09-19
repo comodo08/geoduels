@@ -1,0 +1,1707 @@
+{
+  "fixedNow": "2026-09-19T12:00:00Z",
+  "cases": [
+    {
+      "id": "fresh_equal_win",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "fresh_equal_draw",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "fresh_equal_loss",
+      "selfMMR": 500,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_high_beats_low",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_high_loses_to_low",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "established_draw",
+      "selfMMR": 1200,
+      "oppMMR": 800,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "provisional_beats_established",
+      "selfMMR": 500,
+      "oppMMR": 900,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "provisional_loses_to_much_lower",
+      "selfMMR": 900,
+      "oppMMR": 500,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "near_floor_loss",
+      "selfMMR": 505,
+      "oppMMR": 700,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "at_floor_loss",
+      "selfMMR": 500,
+      "oppMMR": 700,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "low_mmr_forgiveness",
+      "selfMMR": 750,
+      "oppMMR": 1400,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "both_inactive_30d",
+      "selfMMR": 900,
+      "oppMMR": 850,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "self_inactive_365d",
+      "selfMMR": 900,
+      "oppMMR": 850,
+      "selfRD": 110,
+      "oppRD": 110,
+      "winner": "self",
+      "selfIdleDays": 365,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "both_inactive_400d",
+      "selfMMR": 700,
+      "oppMMR": 1300,
+      "selfRD": 150,
+      "oppRD": 130,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "rd_clamped_low",
+      "selfMMR": 800,
+      "oppMMR": 800,
+      "selfRD": 90,
+      "oppRD": 90,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "rd_clamped_high",
+      "selfMMR": 800,
+      "oppMMR": 800,
+      "selfRD": 300,
+      "oppRD": 300,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "max_upset_win_capped",
+      "selfMMR": 500,
+      "oppMMR": 1600,
+      "selfRD": 220,
+      "oppRD": 220,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "max_shock_loss_capped",
+      "selfMMR": 1600,
+      "oppMMR": 500,
+      "selfRD": 110,
+      "oppRD": 220,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "one_never_played_one_resting",
+      "selfMMR": 600,
+      "oppMMR": 1000,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": 14
+    },
+    {
+      "id": "tiny_gap_provisional_protection",
+      "selfMMR": 800,
+      "oppMMR": 600,
+      "selfRD": 220,
+      "oppRD": 110,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_0",
+      "selfMMR": 1428,
+      "oppMMR": 930,
+      "selfRD": 120,
+      "oppRD": 205.1,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_1",
+      "selfMMR": 1285,
+      "oppMMR": 504,
+      "selfRD": 161.1,
+      "oppRD": 207.3,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_2",
+      "selfMMR": 1339,
+      "oppMMR": 1496,
+      "selfRD": 152.5,
+      "oppRD": 171.1,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_3",
+      "selfMMR": 1128,
+      "oppMMR": 1536,
+      "selfRD": 198.3,
+      "oppRD": 197.2,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_4",
+      "selfMMR": 1097,
+      "oppMMR": 1276,
+      "selfRD": 219.6,
+      "oppRD": 145.7,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_5",
+      "selfMMR": 718,
+      "oppMMR": 1310,
+      "selfRD": 201,
+      "oppRD": 112.5,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_6",
+      "selfMMR": 1538,
+      "oppMMR": 948,
+      "selfRD": 129.5,
+      "oppRD": 195.1,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_7",
+      "selfMMR": 712,
+      "oppMMR": 1077,
+      "selfRD": 205.1,
+      "oppRD": 135.7,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_8",
+      "selfMMR": 947,
+      "oppMMR": 850,
+      "selfRD": 137.5,
+      "oppRD": 219.3,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_9",
+      "selfMMR": 625,
+      "oppMMR": 1377,
+      "selfRD": 170.6,
+      "oppRD": 135.1,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_10",
+      "selfMMR": 594,
+      "oppMMR": 1223,
+      "selfRD": 191.7,
+      "oppRD": 158.3,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_11",
+      "selfMMR": 816,
+      "oppMMR": 841,
+      "selfRD": 217.9,
+      "oppRD": 171.2,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_12",
+      "selfMMR": 1304,
+      "oppMMR": 659,
+      "selfRD": 162,
+      "oppRD": 125.1,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_13",
+      "selfMMR": 552,
+      "oppMMR": 1523,
+      "selfRD": 218.4,
+      "oppRD": 123.1,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_14",
+      "selfMMR": 837,
+      "oppMMR": 809,
+      "selfRD": 211.6,
+      "oppRD": 173.4,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_15",
+      "selfMMR": 741,
+      "oppMMR": 1316,
+      "selfRD": 153.4,
+      "oppRD": 179.4,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_16",
+      "selfMMR": 551,
+      "oppMMR": 503,
+      "selfRD": 193.7,
+      "oppRD": 150.3,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_17",
+      "selfMMR": 1349,
+      "oppMMR": 912,
+      "selfRD": 206.8,
+      "oppRD": 121,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_18",
+      "selfMMR": 1333,
+      "oppMMR": 625,
+      "selfRD": 131.9,
+      "oppRD": 217.4,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_19",
+      "selfMMR": 730,
+      "oppMMR": 746,
+      "selfRD": 119.1,
+      "oppRD": 167.4,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_20",
+      "selfMMR": 1249,
+      "oppMMR": 1197,
+      "selfRD": 181,
+      "oppRD": 181.9,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_21",
+      "selfMMR": 972,
+      "oppMMR": 1046,
+      "selfRD": 197.3,
+      "oppRD": 154.5,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_22",
+      "selfMMR": 715,
+      "oppMMR": 1117,
+      "selfRD": 165.9,
+      "oppRD": 170.5,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_23",
+      "selfMMR": 1002,
+      "oppMMR": 1508,
+      "selfRD": 180.7,
+      "oppRD": 161,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_24",
+      "selfMMR": 1335,
+      "oppMMR": 1200,
+      "selfRD": 165,
+      "oppRD": 180.3,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_25",
+      "selfMMR": 788,
+      "oppMMR": 1466,
+      "selfRD": 160.4,
+      "oppRD": 178.5,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_26",
+      "selfMMR": 586,
+      "oppMMR": 621,
+      "selfRD": 111.4,
+      "oppRD": 181.6,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_27",
+      "selfMMR": 692,
+      "oppMMR": 1288,
+      "selfRD": 157.2,
+      "oppRD": 150.9,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_28",
+      "selfMMR": 674,
+      "oppMMR": 778,
+      "selfRD": 204.2,
+      "oppRD": 177.6,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_29",
+      "selfMMR": 509,
+      "oppMMR": 1266,
+      "selfRD": 160.5,
+      "oppRD": 176.8,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_30",
+      "selfMMR": 1082,
+      "oppMMR": 679,
+      "selfRD": 157.8,
+      "oppRD": 162.7,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_31",
+      "selfMMR": 519,
+      "oppMMR": 1021,
+      "selfRD": 123,
+      "oppRD": 194.8,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_32",
+      "selfMMR": 1407,
+      "oppMMR": 567,
+      "selfRD": 196.5,
+      "oppRD": 116.4,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_33",
+      "selfMMR": 1097,
+      "oppMMR": 914,
+      "selfRD": 143.8,
+      "oppRD": 171.1,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_34",
+      "selfMMR": 1020,
+      "oppMMR": 884,
+      "selfRD": 217.2,
+      "oppRD": 132,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_35",
+      "selfMMR": 1126,
+      "oppMMR": 1296,
+      "selfRD": 136.3,
+      "oppRD": 136.2,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_36",
+      "selfMMR": 1096,
+      "oppMMR": 673,
+      "selfRD": 124.5,
+      "oppRD": 166.2,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_37",
+      "selfMMR": 1025,
+      "oppMMR": 1179,
+      "selfRD": 212.2,
+      "oppRD": 181.3,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_38",
+      "selfMMR": 1295,
+      "oppMMR": 1140,
+      "selfRD": 149.1,
+      "oppRD": 190.1,
+      "winner": "opp",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_39",
+      "selfMMR": 1497,
+      "oppMMR": 1178,
+      "selfRD": 157.7,
+      "oppRD": 178.8,
+      "winner": "opp",
+      "selfIdleDays": 400,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_40",
+      "selfMMR": 1373,
+      "oppMMR": 1106,
+      "selfRD": 150.1,
+      "oppRD": 129.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_41",
+      "selfMMR": 1488,
+      "oppMMR": 1057,
+      "selfRD": 112.5,
+      "oppRD": 162.9,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_42",
+      "selfMMR": 510,
+      "oppMMR": 1090,
+      "selfRD": 125.5,
+      "oppRD": 199.2,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_43",
+      "selfMMR": 925,
+      "oppMMR": 1470,
+      "selfRD": 194.4,
+      "oppRD": 217.5,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_44",
+      "selfMMR": 944,
+      "oppMMR": 993,
+      "selfRD": 126,
+      "oppRD": 173.7,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_45",
+      "selfMMR": 775,
+      "oppMMR": 1381,
+      "selfRD": 180.9,
+      "oppRD": 217.7,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_46",
+      "selfMMR": 944,
+      "oppMMR": 1124,
+      "selfRD": 166.6,
+      "oppRD": 214,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_47",
+      "selfMMR": 699,
+      "oppMMR": 724,
+      "selfRD": 164.2,
+      "oppRD": 116.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_48",
+      "selfMMR": 1165,
+      "oppMMR": 1149,
+      "selfRD": 149.7,
+      "oppRD": 158.6,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_49",
+      "selfMMR": 763,
+      "oppMMR": 1195,
+      "selfRD": 166.1,
+      "oppRD": 189.5,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_50",
+      "selfMMR": 618,
+      "oppMMR": 873,
+      "selfRD": 157.3,
+      "oppRD": 125,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_51",
+      "selfMMR": 698,
+      "oppMMR": 1291,
+      "selfRD": 130.3,
+      "oppRD": 209.6,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_52",
+      "selfMMR": 1158,
+      "oppMMR": 505,
+      "selfRD": 126.3,
+      "oppRD": 119.3,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_53",
+      "selfMMR": 921,
+      "oppMMR": 885,
+      "selfRD": 175.7,
+      "oppRD": 133.6,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_54",
+      "selfMMR": 1368,
+      "oppMMR": 1535,
+      "selfRD": 173.8,
+      "oppRD": 115.2,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_55",
+      "selfMMR": 1002,
+      "oppMMR": 1444,
+      "selfRD": 181.9,
+      "oppRD": 145.4,
+      "winner": "draw",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_56",
+      "selfMMR": 1482,
+      "oppMMR": 561,
+      "selfRD": 165,
+      "oppRD": 168,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_57",
+      "selfMMR": 1149,
+      "oppMMR": 1181,
+      "selfRD": 146.4,
+      "oppRD": 153.9,
+      "winner": "draw",
+      "selfIdleDays": 0,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_58",
+      "selfMMR": 519,
+      "oppMMR": 728,
+      "selfRD": 151.9,
+      "oppRD": 191.3,
+      "winner": "draw",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_59",
+      "selfMMR": 1561,
+      "oppMMR": 742,
+      "selfRD": 167.9,
+      "oppRD": 193.1,
+      "winner": "draw",
+      "selfIdleDays": null,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_60",
+      "selfMMR": 863,
+      "oppMMR": 512,
+      "selfRD": 169.7,
+      "oppRD": 189,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_61",
+      "selfMMR": 842,
+      "oppMMR": 1322,
+      "selfRD": 178.9,
+      "oppRD": 184.7,
+      "winner": "draw",
+      "selfIdleDays": 120,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_62",
+      "selfMMR": 1085,
+      "oppMMR": 1582,
+      "selfRD": 114.3,
+      "oppRD": 154.8,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_63",
+      "selfMMR": 1537,
+      "oppMMR": 580,
+      "selfRD": 110.1,
+      "oppRD": 178.3,
+      "winner": "self",
+      "selfIdleDays": 30,
+      "oppIdleDays": null
+    },
+    {
+      "id": "gen_64",
+      "selfMMR": 707,
+      "oppMMR": 1505,
+      "selfRD": 164.8,
+      "oppRD": 135,
+      "winner": "self",
+      "selfIdleDays": 120,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_65",
+      "selfMMR": 1140,
+      "oppMMR": 1076,
+      "selfRD": 152.6,
+      "oppRD": 125.8,
+      "winner": "opp",
+      "selfIdleDays": null,
+      "oppIdleDays": 400
+    },
+    {
+      "id": "gen_66",
+      "selfMMR": 619,
+      "oppMMR": 1445,
+      "selfRD": 165.7,
+      "oppRD": 110.4,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_67",
+      "selfMMR": 693,
+      "oppMMR": 1383,
+      "selfRD": 115.4,
+      "oppRD": 111.4,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_68",
+      "selfMMR": 589,
+      "oppMMR": 1497,
+      "selfRD": 150.1,
+      "oppRD": 116.8,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_69",
+      "selfMMR": 1206,
+      "oppMMR": 1509,
+      "selfRD": 131.8,
+      "oppRD": 182.5,
+      "winner": "self",
+      "selfIdleDays": 0,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_70",
+      "selfMMR": 660,
+      "oppMMR": 1129,
+      "selfRD": 197.2,
+      "oppRD": 133.5,
+      "winner": "opp",
+      "selfIdleDays": 30,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_71",
+      "selfMMR": 1544,
+      "oppMMR": 1565,
+      "selfRD": 214.6,
+      "oppRD": 161.5,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_72",
+      "selfMMR": 810,
+      "oppMMR": 772,
+      "selfRD": 204,
+      "oppRD": 149.4,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 0
+    },
+    {
+      "id": "gen_73",
+      "selfMMR": 1364,
+      "oppMMR": 985,
+      "selfRD": 112.5,
+      "oppRD": 121,
+      "winner": "self",
+      "selfIdleDays": null,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_74",
+      "selfMMR": 1421,
+      "oppMMR": 897,
+      "selfRD": 202.5,
+      "oppRD": 142,
+      "winner": "self",
+      "selfIdleDays": 3,
+      "oppIdleDays": 30
+    },
+    {
+      "id": "gen_75",
+      "selfMMR": 1571,
+      "oppMMR": 1250,
+      "selfRD": 201.1,
+      "oppRD": 216,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_76",
+      "selfMMR": 1369,
+      "oppMMR": 1182,
+      "selfRD": 169.9,
+      "oppRD": 200.9,
+      "winner": "draw",
+      "selfIdleDays": 30,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_77",
+      "selfMMR": 1146,
+      "oppMMR": 1589,
+      "selfRD": 120,
+      "oppRD": 174.6,
+      "winner": "opp",
+      "selfIdleDays": 3,
+      "oppIdleDays": 120
+    },
+    {
+      "id": "gen_78",
+      "selfMMR": 912,
+      "oppMMR": 1203,
+      "selfRD": 133.5,
+      "oppRD": 174.9,
+      "winner": "self",
+      "selfIdleDays": 400,
+      "oppIdleDays": 3
+    },
+    {
+      "id": "gen_79",
+      "selfMMR": 1176,
+      "oppMMR": 1266,
+      "selfRD": 208.7,
+      "oppRD": 135.9,
+      "winner": "opp",
+      "selfIdleDays": 120,
+      "oppIdleDays": 400
+    }
+  ],
+  "results": [
+    {
+      "id": "fresh_equal_win",
+      "selfDelta": 40,
+      "oppDelta": 0,
+      "selfRD": 195.25306254172625,
+      "oppRD": 195.25306254172625
+    },
+    {
+      "id": "fresh_equal_draw",
+      "selfDelta": 0,
+      "oppDelta": 0,
+      "selfRD": 195.25306254172625,
+      "oppRD": 195.25306254172625
+    },
+    {
+      "id": "fresh_equal_loss",
+      "selfDelta": 0,
+      "oppDelta": 40,
+      "selfRD": 195.25306254172625,
+      "oppRD": 195.25306254172625
+    },
+    {
+      "id": "established_high_beats_low",
+      "selfDelta": 7,
+      "oppDelta": -4,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "established_high_loses_to_low",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "established_draw",
+      "selfDelta": -25,
+      "oppDelta": 25,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "provisional_beats_established",
+      "selfDelta": 40,
+      "oppDelta": -6,
+      "selfRD": 206.85992776225544,
+      "oppRD": 110
+    },
+    {
+      "id": "provisional_loses_to_much_lower",
+      "selfDelta": -6,
+      "oppDelta": 40,
+      "selfRD": 207.59124396674625,
+      "oppRD": 207.59124396674625
+    },
+    {
+      "id": "near_floor_loss",
+      "selfDelta": 0,
+      "oppDelta": 16,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "at_floor_loss",
+      "selfDelta": 0,
+      "oppDelta": 16,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "low_mmr_forgiveness",
+      "selfDelta": -4,
+      "oppDelta": 3,
+      "selfRD": 215.78533198154972,
+      "oppRD": 110
+    },
+    {
+      "id": "both_inactive_30d",
+      "selfDelta": 32,
+      "oppDelta": -22,
+      "selfRD": 116.75267169971114,
+      "oppRD": 116.75267169971114
+    },
+    {
+      "id": "self_inactive_365d",
+      "selfDelta": 40,
+      "oppDelta": -17,
+      "selfRD": 189.28414268920022,
+      "oppRD": 110
+    },
+    {
+      "id": "both_inactive_400d",
+      "selfDelta": -5,
+      "oppDelta": 12,
+      "selfRD": 214.0225445765305,
+      "oppRD": 214.0225445765305
+    },
+    {
+      "id": "rd_clamped_low",
+      "selfDelta": 30,
+      "oppDelta": -18,
+      "selfRD": 110,
+      "oppRD": 110
+    },
+    {
+      "id": "rd_clamped_high",
+      "selfDelta": 40,
+      "oppDelta": -24,
+      "selfRD": 195.25306254172625,
+      "oppRD": 195.25306254172625
+    },
+    {
+      "id": "max_upset_win_capped",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 219.3505135801367,
+      "oppRD": 219.3505135801367
+    },
+    {
+      "id": "max_shock_loss_capped",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 110,
+      "oppRD": 219.60472152738325
+    },
+    {
+      "id": "one_never_played_one_resting",
+      "selfDelta": 40,
+      "oppDelta": -5,
+      "selfRD": 206.8806196663977,
+      "oppRD": 114.21297509747862
+    },
+    {
+      "id": "tiny_gap_provisional_protection",
+      "selfDelta": -24,
+      "oppDelta": 39,
+      "selfRD": 195.24857989728633,
+      "oppRD": 110
+    },
+    {
+      "id": "gen_0",
+      "selfDelta": 6,
+      "oppDelta": -12,
+      "selfRD": 119.68893839363655,
+      "oppRD": 198.6351987254421
+    },
+    {
+      "id": "gen_1",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 160.00036403109513,
+      "oppRD": 217.57729053014427
+    },
+    {
+      "id": "gen_2",
+      "selfDelta": -36,
+      "oppDelta": 40,
+      "selfRD": 151.45231727141007,
+      "oppRD": 158.59622502367543
+    },
+    {
+      "id": "gen_3",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 207.70990481188912,
+      "oppRD": 188.34888852622973
+    },
+    {
+      "id": "gen_4",
+      "selfDelta": 40,
+      "oppDelta": -40,
+      "selfRD": 196.94106347460797,
+      "oppRD": 169.42574342643837
+    },
+    {
+      "id": "gen_5",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 197.33249542128985,
+      "oppRD": 123.90820817977733
+    },
+    {
+      "id": "gen_6",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 128.2183133824166,
+      "oppRD": 191.76549862717584
+    },
+    {
+      "id": "gen_7",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 205.18085891597522,
+      "oppRD": 133.27038431442182
+    },
+    {
+      "id": "gen_8",
+      "selfDelta": -36,
+      "oppDelta": 40,
+      "selfRD": 196.3109100303354,
+      "oppRD": 196.3109100303354
+    },
+    {
+      "id": "gen_9",
+      "selfDelta": -1,
+      "oppDelta": 2,
+      "selfRD": 200.50920145265266,
+      "oppRD": 135.46824754026042
+    },
+    {
+      "id": "gen_10",
+      "selfDelta": -1,
+      "oppDelta": 5,
+      "selfRD": 188.38945900646792,
+      "oppRD": 157.25101027970774
+    },
+    {
+      "id": "gen_11",
+      "selfDelta": 40,
+      "oppDelta": -27,
+      "selfRD": 192.3373342192699,
+      "oppRD": 158.77303690063212
+    },
+    {
+      "id": "gen_12",
+      "selfDelta": -35,
+      "oppDelta": 40,
+      "selfRD": 192.28682260951012,
+      "oppRD": 124.19145268719829
+    },
+    {
+      "id": "gen_13",
+      "selfDelta": 40,
+      "oppDelta": -7,
+      "selfRD": 219.17136887759509,
+      "oppRD": 124.09214735348112
+    },
+    {
+      "id": "gen_14",
+      "selfDelta": 40,
+      "oppDelta": -25,
+      "selfRD": 187.27379320008788,
+      "oppRD": 160.270765072879
+    },
+    {
+      "id": "gen_15",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 213.56309709359573,
+      "oppRD": 176.54454211106014
+    },
+    {
+      "id": "gen_16",
+      "selfDelta": 40,
+      "oppDelta": 0,
+      "selfRD": 195.51730916436847,
+      "oppRD": 195.51730916436847
+    },
+    {
+      "id": "gen_17",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 209.01327434573713,
+      "oppRD": 209.01327434573713
+    },
+    {
+      "id": "gen_18",
+      "selfDelta": 3,
+      "oppDelta": -2,
+      "selfRD": 131.06447272438538,
+      "oppRD": 216.7344886900095
+    },
+    {
+      "id": "gen_19",
+      "selfDelta": 2,
+      "oppDelta": -1,
+      "selfRD": 149.51006826474327,
+      "oppRD": 153.87709159605132
+    },
+    {
+      "id": "gen_20",
+      "selfDelta": -11,
+      "oppDelta": 9,
+      "selfRD": 187.8071784343997,
+      "oppRD": 173.16662010879497
+    },
+    {
+      "id": "gen_21",
+      "selfDelta": -38,
+      "oppDelta": 40,
+      "selfRD": 179.90651709019176,
+      "oppRD": 194.5868775619705
+    },
+    {
+      "id": "gen_22",
+      "selfDelta": 40,
+      "oppDelta": -16,
+      "selfRD": 168.10610066746088,
+      "oppRD": 171.97807460748535
+    },
+    {
+      "id": "gen_23",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 203.58037796723065,
+      "oppRD": 157.53584401024654
+    },
+    {
+      "id": "gen_24",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 154.48173901371618,
+      "oppRD": 166.07307720765203
+    },
+    {
+      "id": "gen_25",
+      "selfDelta": -2,
+      "oppDelta": 5,
+      "selfRD": 158.800225517968,
+      "oppRD": 176.36531966211962
+    },
+    {
+      "id": "gen_26",
+      "selfDelta": -4,
+      "oppDelta": 40,
+      "selfRD": 110,
+      "oppRD": 163.0376598557354
+    },
+    {
+      "id": "gen_27",
+      "selfDelta": 40,
+      "oppDelta": -19,
+      "selfRD": 163.90198850108578,
+      "oppRD": 148.98657137905445
+    },
+    {
+      "id": "gen_28",
+      "selfDelta": 40,
+      "oppDelta": -22,
+      "selfRD": 183.03934934479307,
+      "oppRD": 164.64900003519554
+    },
+    {
+      "id": "gen_29",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 217.18404056769478,
+      "oppRD": 175.18731055153944
+    },
+    {
+      "id": "gen_30",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 153.93507828172505,
+      "oppRD": 207.2255454893407
+    },
+    {
+      "id": "gen_31",
+      "selfDelta": 29,
+      "oppDelta": -35,
+      "selfRD": 121.41004339214666,
+      "oppRD": 211.43038896195043
+    },
+    {
+      "id": "gen_32",
+      "selfDelta": 3,
+      "oppDelta": -1,
+      "selfRD": 194.97359051588404,
+      "oppRD": 217.99652870874274
+    },
+    {
+      "id": "gen_33",
+      "selfDelta": 40,
+      "oppDelta": -31,
+      "selfRD": 167.0040882410239,
+      "oppRD": 160.31421262023616
+    },
+    {
+      "id": "gen_34",
+      "selfDelta": 40,
+      "oppDelta": -20,
+      "selfRD": 191.03889158190248,
+      "oppRD": 126.52887661801476
+    },
+    {
+      "id": "gen_35",
+      "selfDelta": -26,
+      "oppDelta": 26,
+      "selfRD": 129.56479966681673,
+      "oppRD": 129.4800627916465
+    },
+    {
+      "id": "gen_36",
+      "selfDelta": -15,
+      "oppDelta": 40,
+      "selfRD": 123.36164762582105,
+      "oppRD": 161.67288124154632
+    },
+    {
+      "id": "gen_37",
+      "selfDelta": 31,
+      "oppDelta": -31,
+      "selfRD": 191.71240975736973,
+      "oppRD": 191.34462820852167
+    },
+    {
+      "id": "gen_38",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 141.06986204679046,
+      "oppRD": 172.9058383064452
+    },
+    {
+      "id": "gen_39",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 204.24418406323457,
+      "oppRD": 204.24418406323457
+    },
+    {
+      "id": "gen_40",
+      "selfDelta": -33,
+      "oppDelta": 40,
+      "selfRD": 143.97151311806618,
+      "oppRD": 125.14752743247479
+    },
+    {
+      "id": "gen_41",
+      "selfDelta": 8,
+      "oppDelta": -12,
+      "selfRD": 122.8311038964197,
+      "oppRD": 158.02841748544483
+    },
+    {
+      "id": "gen_42",
+      "selfDelta": 40,
+      "oppDelta": -34,
+      "selfRD": 124.27753794358026,
+      "oppRD": 195.3999412936176
+    },
+    {
+      "id": "gen_43",
+      "selfDelta": 40,
+      "oppDelta": -9,
+      "selfRD": 189.22514066651115,
+      "oppRD": 210.38579045634032
+    },
+    {
+      "id": "gen_44",
+      "selfDelta": 7,
+      "oppDelta": -9,
+      "selfRD": 154.16290956708895,
+      "oppRD": 165.44624247533565
+    },
+    {
+      "id": "gen_45",
+      "selfDelta": 40,
+      "oppDelta": -14,
+      "selfRD": 177.62027193341436,
+      "oppRD": 212.2361103945955
+    },
+    {
+      "id": "gen_46",
+      "selfDelta": 40,
+      "oppDelta": -40,
+      "selfRD": 163.79123630258655,
+      "oppRD": 192.36550564336667
+    },
+    {
+      "id": "gen_47",
+      "selfDelta": -16,
+      "oppDelta": 40,
+      "selfRD": 152.06347120282004,
+      "oppRD": 148.0171751979018
+    },
+    {
+      "id": "gen_48",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 139.7468362857801,
+      "oppRD": 147.38412083240735
+    },
+    {
+      "id": "gen_49",
+      "selfDelta": 40,
+      "oppDelta": -20,
+      "selfRD": 161.13064312647006,
+      "oppRD": 208.55955264132
+    },
+    {
+      "id": "gen_50",
+      "selfDelta": 40,
+      "oppDelta": -17,
+      "selfRD": 149.43115102140982,
+      "oppRD": 156.71805948039767
+    },
+    {
+      "id": "gen_51",
+      "selfDelta": 40,
+      "oppDelta": -33,
+      "selfRD": 128.9964723279288,
+      "oppRD": 205.32868410017173
+    },
+    {
+      "id": "gen_52",
+      "selfDelta": -37,
+      "oppDelta": 35,
+      "selfRD": 126.64213375551994,
+      "oppRD": 118.60816569557518
+    },
+    {
+      "id": "gen_53",
+      "selfDelta": 40,
+      "oppDelta": -28,
+      "selfRD": 181.66005172788718,
+      "oppRD": 128.19472407764232
+    },
+    {
+      "id": "gen_54",
+      "selfDelta": 40,
+      "oppDelta": -40,
+      "selfRD": 160.1714241864866,
+      "oppRD": 122.28973629094764
+    },
+    {
+      "id": "gen_55",
+      "selfDelta": 40,
+      "oppDelta": -7,
+      "selfRD": 208.94709232024167,
+      "oppRD": 142.1484759800443
+    },
+    {
+      "id": "gen_56",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 165.30425583945907,
+      "oppRD": 199.4612256152926
+    },
+    {
+      "id": "gen_57",
+      "selfDelta": 4,
+      "oppDelta": -4,
+      "selfRD": 136.9733748069587,
+      "oppRD": 142.87687368876746
+    },
+    {
+      "id": "gen_58",
+      "selfDelta": 23,
+      "oppDelta": -18,
+      "selfRD": 145.5655692461671,
+      "oppRD": 197.1385566507565
+    },
+    {
+      "id": "gen_59",
+      "selfDelta": -10,
+      "oppDelta": 40,
+      "selfRD": 166.91868302381013,
+      "oppRD": 192.46458038163402
+    },
+    {
+      "id": "gen_60",
+      "selfDelta": 31,
+      "oppDelta": -1,
+      "selfRD": 205.099328145514,
+      "oppRD": 179.6286774846763
+    },
+    {
+      "id": "gen_61",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 201.38057671673272,
+      "oppRD": 205.76869597010997
+    },
+    {
+      "id": "gen_62",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 211.15974691705927,
+      "oppRD": 151.60597191433556
+    },
+    {
+      "id": "gen_63",
+      "selfDelta": 1,
+      "oppDelta": 0,
+      "selfRD": 122.7155157680434,
+      "oppRD": 177.8263630544593
+    },
+    {
+      "id": "gen_64",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 196.15733364503436,
+      "oppRD": 144.91670508474914
+    },
+    {
+      "id": "gen_65",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 143.75930874125555,
+      "oppRD": 191.77529480119284
+    },
+    {
+      "id": "gen_66",
+      "selfDelta": 0,
+      "oppDelta": 1,
+      "selfRD": 173.588079136319,
+      "oppRD": 122.8164341909101
+    },
+    {
+      "id": "gen_67",
+      "selfDelta": -1,
+      "oppDelta": 2,
+      "selfRD": 126.98833782895335,
+      "oppRD": 110.93138375860391
+    },
+    {
+      "id": "gen_68",
+      "selfDelta": 40,
+      "oppDelta": -25,
+      "selfRD": 149.68817168413074,
+      "oppRD": 159.44434681887657
+    },
+    {
+      "id": "gen_69",
+      "selfDelta": 40,
+      "oppDelta": -32,
+      "selfRD": 127.9538147671727,
+      "oppRD": 196.03343896883848
+    },
+    {
+      "id": "gen_70",
+      "selfDelta": -5,
+      "oppDelta": 8,
+      "selfRD": 196.58603322761113,
+      "oppRD": 131.1967294529063
+    },
+    {
+      "id": "gen_71",
+      "selfDelta": 40,
+      "oppDelta": -40,
+      "selfRD": 188.59204653599792,
+      "oppRD": 150.80066103758222
+    },
+    {
+      "id": "gen_72",
+      "selfDelta": 40,
+      "oppDelta": -22,
+      "selfRD": 191.18275462290615,
+      "oppRD": 140.96144170200574
+    },
+    {
+      "id": "gen_73",
+      "selfDelta": 8,
+      "oppDelta": -15,
+      "selfRD": 110.5063527489781,
+      "oppRD": 156.96431933857517
+    },
+    {
+      "id": "gen_74",
+      "selfDelta": 12,
+      "oppDelta": -6,
+      "selfRD": 196.975810414423,
+      "oppRD": 149.41408410316512
+    },
+    {
+      "id": "gen_75",
+      "selfDelta": -8,
+      "oppDelta": 40,
+      "selfRD": 204.3289504897082,
+      "oppRD": 204.3289504897082
+    },
+    {
+      "id": "gen_76",
+      "selfDelta": -27,
+      "oppDelta": 40,
+      "selfRD": 166.64603148506714,
+      "oppRD": 197.11816798506575
+    },
+    {
+      "id": "gen_77",
+      "selfDelta": -7,
+      "oppDelta": 18,
+      "selfRD": 119.32613897805939,
+      "oppRD": 196.8289420433135
+    },
+    {
+      "id": "gen_78",
+      "selfDelta": 40,
+      "oppDelta": -8,
+      "selfRD": 201.94967315907897,
+      "oppRD": 166.74455908944898
+    },
+    {
+      "id": "gen_79",
+      "selfDelta": -40,
+      "oppDelta": 40,
+      "selfRD": 196.16707300497103,
+      "oppRD": 196.16707300497103
+    }
+  ]
+}
