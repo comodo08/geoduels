@@ -1,4 +1,4 @@
-import type { RuntimeConfig } from "./runtime-config";
+import { getRuntimeConfig, type RuntimeConfig } from "./runtime-config";
 
 export async function readError(resp: Response, fallback: string) {
   const text = await resp.text();
@@ -13,11 +13,7 @@ export function apiPath(config: Pick<RuntimeConfig, "apiURL">, path: string): st
 }
 
 function serverAPIBase() {
-  return (
-    process.env.API_PROXY_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "http://localhost:3000"
-  );
+  return process.env.API_PROXY_URL || getRuntimeConfig().siteURL;
 }
 
 export function apiFetchPath(config: Pick<RuntimeConfig, "apiURL">, path: string): string {

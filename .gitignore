@@ -5,6 +5,7 @@
 !web/.env.local.example
 infra/k3s/overlays/k3d/secrets.env
 infra/k3s/overlays/prod/secrets.prod.env
+infra/compose/beta.secrets.env
 
 # Node / Next.js
 node_modules/

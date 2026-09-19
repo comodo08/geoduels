@@ -16,7 +16,6 @@ concurrency:
 env:
   REGISTRY: ${{ vars.REGISTRY != '' && vars.REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
   OPS_REPOSITORY: ${{ vars.OPS_REPOSITORY != '' && vars.OPS_REPOSITORY || 'sourcelocation/geoduels-prod' }}
-  PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL != '' && vars.PRODUCTION_SITE_URL || 'https://geoduels.io' }}
 
 jobs:
   release-meta:
@@ -56,14 +55,6 @@ jobs:
           go test ./...
           go vet ./...
 
-      - name: Upload generated sqlc package
-        uses: actions/upload-artifact@v4
-        with:
-          name: sqlc-generated-${{ needs.release-meta.outputs.release_sha }}
-          path: backend/pkg/persistence/sqlc/db
-          if-no-files-found: error
-          retention-days: 1
-
   web-checks:
     name: web-checks
     runs-on: ubuntu-latest
@@ -97,34 +88,6 @@ jobs:
         with:
           ref: ${{ needs.release-meta.outputs.release_sha }}
 
-      - name: Restore generated sqlc package
-        uses: actions/download-artifact@v4
-        with:
-          name: sqlc-generated-${{ needs.release-meta.outputs.release_sha }}
-          path: backend/pkg/persistence/sqlc/db
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.x'
-          cache: true
-          cache-dependency-path: backend/go.sum
-
-      - name: Compile backend services once
-        working-directory: backend
-        env:
-          CGO_ENABLED: '0'
-          GOOS: linux
-          GOARCH: amd64
-        run: |
-          set -euo pipefail
-          mkdir -p dist/release
-          go build -trimpath -o dist/release/api ./services/api
-          go build -trimpath -o dist/release/discord-worker ./services/discord-worker
-          go build -trimpath -o dist/release/match-coordinator ./services/match-coordinator
-          go build -trimpath -o dist/release/gameplay-node ./services/gameplay-node
-          go build -trimpath -o dist/release/moderation-worker ./services/moderation-worker
-          go build -trimpath -o dist/release/realtime-gateway ./services/realtime-gateway
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Login to registry
@@ -134,19 +97,15 @@ jobs:
           echo "${{ github.token }}" | docker login "$REGISTRY_HOST" -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push backend images (amd64)
+        uses: docker/bake-action@v6
         env:
-          RELEASE_TAG: ${{ needs.release-meta.outputs.release_tag }}
-        run: |
-          set -euo pipefail
-          for binary in api discord-worker match-coordinator gameplay-node moderation-worker realtime-gateway; do
-            docker buildx build \
-              --platform linux/amd64 \
-              --file backend/services/Dockerfile.release \
-              --build-arg "BINARY=${binary}" \
-              --tag "${REGISTRY}/geoduels-${binary}:${RELEASE_TAG}-amd64" \
-              --push \
-              backend
-          done
+          TAG: ${{ needs.release-meta.outputs.release_tag }}-amd64
+          PLATFORMS: linux/amd64
+          CACHE_SCOPE: images-ubuntu-latest
+        with:
+          files: docker-bake.hcl
+          targets: backend
+          push: true
 
   build-and-push-web-amd64:
     name: build-and-push-web-amd64
@@ -169,19 +128,17 @@ jobs:
           echo "${{ github.token }}" | docker login "$REGISTRY_HOST" -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push web (amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/bake-action@v6
+        env:
+          TAG: ${{ needs.release-meta.outputs.release_tag }}-amd64
+          PLATFORMS: linux/amd64
+          APP_VERSION: ${{ needs.release-meta.outputs.release_tag }}
+          GIT_SHA: ${{ needs.release-meta.outputs.release_sha }}
+          CACHE_SCOPE: images-ubuntu-latest
         with:
-          context: web
-          file: web/Dockerfile
-          platforms: linux/amd64
+          files: docker-bake.hcl
+          targets: web
           push: true
-          build-args: |
-            NEXT_PUBLIC_APP_VERSION=${{ needs.release-meta.outputs.release_tag }}
-            NEXT_PUBLIC_GIT_SHA=${{ needs.release-meta.outputs.release_sha }}
-            NEXT_PUBLIC_SITE_URL=${{ env.PRODUCTION_SITE_URL }}
-          cache-from: type=gha,scope=geoduels-web-amd64
-          cache-to: type=gha,mode=min,scope=geoduels-web-amd64
-          tags: ${{ env.REGISTRY }}/geoduels-web:${{ needs.release-meta.outputs.release_tag }}-amd64
 
   update-ops-repo:
     name: update-ops-repo

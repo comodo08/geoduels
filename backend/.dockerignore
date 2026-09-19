@@ -1,6 +1,5 @@
-# Local build/test artifacts not needed for image builds. dist/release is
-# deliberately kept in the context: services/Dockerfile.release packages
-# binaries that CI compiles into backend/dist/release.
+# Local build/test artifacts are not needed for source image builds.
+dist/
 tmp/
 *.log
 .DS_Store

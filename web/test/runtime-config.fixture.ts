@@ -2,6 +2,7 @@ import type { RuntimeConfig } from '../lib/runtime-config';
 
 export function createRuntimeConfigFixture(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
   return {
+    siteURL: 'http://localhost:3000',
     queueURL: 'http://localhost:8090',
     realtimeBaseURL: 'http://localhost:8092',
     apiURL: 'http://localhost:8080',

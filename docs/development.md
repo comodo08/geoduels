@@ -24,13 +24,46 @@ npm --prefix web run build
 
 The architecture checker owns exact native-element allowances, geometry exceptions, and size budgets. Document new exceptions beside that contract.
 
+## Container image builds
+
+`docker-bake.hcl` is the image definition. The `default` group builds seven
+images from the service Dockerfiles: `api`, `discord-worker`,
+`match-coordinator`, `moderation-worker`, `realtime-gateway`, `gameplay-node`
+(`backend/services/<name>/Dockerfile`) and `web` (`web/Dockerfile`). Tags are
+`${REGISTRY}/geoduels-<name>:${TAG}` (default registry
+`ghcr.io/sourcelocation`, tag `latest`). Bake variables: `REGISTRY`, `TAG`,
+`PLATFORMS` (default `linux/arm64`), `APP_VERSION` (defaults to `TAG`),
+`GIT_SHA` (default `dev`), and `CACHE_SCOPE` (empty locally; CI sets it for
+GitHub Actions cache).
+
+Each Go Dockerfile runs sqlc generate in the image and cross-compiles from the
+builder’s native platform (`FROM --platform=$BUILDPLATFORM`). The web image
+bakes only `NEXT_PUBLIC_APP_VERSION` and `NEXT_PUBLIC_GIT_SHA`. Public origin
+and API/queue/realtime URLs are runtime env (`web/docker-entrypoint.sh` →
+`public/runtime-config.js`), not Bake args.
+
+CI (`images` job) bakes `default` for `linux/amd64` and `linux/arm64` without
+push. Version tags (`release-prod`) bake and push `backend` and `web` for
+`linux/amd64` only, tagged `<release>-amd64`.
+
+```sh
+# local images (one platform; --load cannot load a multi-platform manifest)
+docker buildx bake --load
+docker buildx bake api --load
+docker buildx bake backend --load
+
+# push (authenticate to REGISTRY first)
+TAG=beta PLATFORMS=linux/arm64 GIT_SHA="$(git rev-parse --short HEAD)" docker buildx bake --push
+```
+
+
 ## Local infrastructure and migrations
 
 - `./infra/scripts/bootstrap-dev-data.sh` repairs missing configured Moving/NMPZ maps without replacing existing maps. It does not initialize the database schema.
 - Compose environment changes require container recreation (`./infra/scripts/compose.sh up -d --force-recreate`), not just restarting the web app.
 - For private detector integration, run sibling `../geoduels-risk-engine` and configure `RISK_ENGINE_URL=http://host.docker.internal:8096` plus `RISK_ENGINE_TOKEN` in Compose. Moderation can run without it.
 - `./backend/scripts/migrate.sh up` uses a pinned Docker migration tool and `MIGRATIONS_DB_URL`. Blank databases apply from version 2000. It refuses existing schemas on versions 1–1999; complete those upgrades using the `v2.0.1` tag. Never bypass the guard against a production database.
-- Browser runtime config can override build-time `NEXT_PUBLIC_*` values through `window.__GEODUELS_CONFIG__`. When an environment change appears ineffective, inspect the served `runtime-config.js` as well as the build environment.
+- Browser runtime config can override `NEXT_PUBLIC_*` values through `window.__GEODUELS_CONFIG__` (written at container start by `web/docker-entrypoint.sh`). Local `next dev` fallbacks live in `web/lib/runtime-config.ts`. Deploy origins and docker-internal hostnames live in Compose env files. Go listen-addrs and TTLs default in `backend/internal/envcfg`. When an environment change appears ineffective, inspect the served `runtime-config.js` as well as the process environment.
 
 For local multi-node routing checks:
 

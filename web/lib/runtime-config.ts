@@ -5,6 +5,7 @@ declare global {
 }
 
 export type WindowRuntimeConfig = {
+  NEXT_PUBLIC_SITE_URL: string;
   NEXT_PUBLIC_QUEUE_URL: string;
   NEXT_PUBLIC_REALTIME_URL: string;
   NEXT_PUBLIC_API_URL: string;
@@ -17,6 +18,7 @@ export type WindowRuntimeConfig = {
 };
 
 export type RuntimeConfig = {
+  siteURL: string;
   queueURL: string;
   realtimeBaseURL: string;
   apiURL: string;
@@ -44,6 +46,13 @@ function splitOrigins(value: string) {
     .filter(Boolean);
 }
 
+// Dynamic process.env[name] so Next does not inline NEXT_PUBLIC_* at image build.
+function envString(name: string): string {
+  if (typeof process === 'undefined' || !process.env) return '';
+  const value = process.env[name];
+  return typeof value === 'string' ? value : '';
+}
+
 function readWindowRuntimeConfig(source?: Partial<WindowRuntimeConfig>) {
   const runtimeSource = source ?? (typeof window !== 'undefined' ? window.__GEODUELS_CONFIG__ : undefined) ?? {};
   const runtimeEntries = Object.entries(runtimeSource).filter(([, value]) => {
@@ -56,22 +65,24 @@ function readWindowRuntimeConfig(source?: Partial<WindowRuntimeConfig>) {
 
 export function createRuntimeConfig(source?: Partial<WindowRuntimeConfig>): RuntimeConfig {
   const defaults: WindowRuntimeConfig = {
-    NEXT_PUBLIC_QUEUE_URL: process.env.NEXT_PUBLIC_QUEUE_URL || 'http://localhost:8090',
-    NEXT_PUBLIC_REALTIME_URL: process.env.NEXT_PUBLIC_REALTIME_URL || 'http://localhost:8092',
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
-    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
-    NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: process.env.NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS || '',
-    NEXT_PUBLIC_DISCORD_CLIENT_ID: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '',
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
-    NEXT_PUBLIC_GOOGLE_EMBED_KEY: process.env.NEXT_PUBLIC_GOOGLE_EMBED_KEY || 'NO_KEY_DEFINED',
+    NEXT_PUBLIC_SITE_URL: envString('NEXT_PUBLIC_SITE_URL') || 'http://localhost:3000',
+    NEXT_PUBLIC_QUEUE_URL: envString('NEXT_PUBLIC_QUEUE_URL') || 'http://localhost:8090',
+    NEXT_PUBLIC_REALTIME_URL: envString('NEXT_PUBLIC_REALTIME_URL') || 'http://localhost:8092',
+    NEXT_PUBLIC_API_URL: envString('NEXT_PUBLIC_API_URL'),
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: envString('NEXT_PUBLIC_GOOGLE_CLIENT_ID'),
+    NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS: envString('NEXT_PUBLIC_GOOGLE_ALLOWED_ORIGINS'),
+    NEXT_PUBLIC_DISCORD_CLIENT_ID: envString('NEXT_PUBLIC_DISCORD_CLIENT_ID'),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: envString('NEXT_PUBLIC_TURNSTILE_SITE_KEY'),
+    NEXT_PUBLIC_GOOGLE_EMBED_KEY: envString('NEXT_PUBLIC_GOOGLE_EMBED_KEY') || 'NO_KEY_DEFINED',
     NEXT_PUBLIC_APP_VERSION:
-      process.env.NEXT_PUBLIC_APP_VERSION || (process.env.NEXT_PUBLIC_GIT_SHA || 'dev').slice(0, 12)
+      envString('NEXT_PUBLIC_APP_VERSION') || (envString('NEXT_PUBLIC_GIT_SHA') || 'dev').slice(0, 12)
   };
   const publicRuntimeConfig = {
     ...defaults,
     ...readWindowRuntimeConfig(source)
   };
   const config: RuntimeConfig = {
+    siteURL: publicRuntimeConfig.NEXT_PUBLIC_SITE_URL.replace(/\/$/, ''),
     queueURL: publicRuntimeConfig.NEXT_PUBLIC_QUEUE_URL,
     realtimeBaseURL: publicRuntimeConfig.NEXT_PUBLIC_REALTIME_URL,
     apiURL: publicRuntimeConfig.NEXT_PUBLIC_API_URL,

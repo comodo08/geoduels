@@ -7,15 +7,14 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_APP_VERSION
 ARG NEXT_PUBLIC_GIT_SHA
-ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 ENV NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA
-ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
 FROM node:22-alpine
+LABEL org.opencontainers.image.source="https://github.com/sourcelocation/geoduels"
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

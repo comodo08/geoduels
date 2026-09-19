@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 WORKDIR /src
 ARG TARGETOS
 ARG TARGETARCH
@@ -15,6 +15,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /out/moderation-worker ./services/moderation-worker
 
 FROM gcr.io/distroless/static-debian12
+LABEL org.opencontainers.image.source="https://github.com/sourcelocation/geoduels"
 COPY --from=build /out/moderation-worker /moderation-worker
 EXPOSE 8093
 ENTRYPOINT ["/moderation-worker"]
