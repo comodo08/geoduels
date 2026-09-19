@@ -11,7 +11,7 @@ import { AsyncState, PageHeader } from "../components/ui/patterns";
 import { Button } from "../components/ui/button";
 import { AppPanel } from "../components/ui/compositions";
 import { requestUserNotifications, markAllUserNotificationsRead, markUserNotificationRead, type UserNotification } from "../features/auth/lib/auth-client";
-import { getRuntimeConfig } from "../lib/runtime-config";
+import { useRuntimeConfig } from "../lib/runtime-config-context";
 
 const PAGE_SIZE = 30;
 type NotificationInbox = InfiniteData<{ notifications: UserNotification[] }, number | undefined>;
@@ -28,7 +28,7 @@ function dateGroup(date: string) {
 
 export default function NotificationsPage() {
   const auth = useAuthState();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const queryClient = useQueryClient();
   const inbox = useInfiniteQuery({
     queryKey: ["notifications", "inbox"],

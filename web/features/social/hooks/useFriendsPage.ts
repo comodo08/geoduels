@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { socialClient } from "../lib/social-client";
 
 export function useFriendsPage(accessToken?: string, enabled = true, partyId?: string) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const scopedPartyId = partyId?.trim() || "";
   return useQuery({
     queryKey: ["social", "friends-page", scopedPartyId],

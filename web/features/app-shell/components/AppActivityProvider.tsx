@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/router";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { formatQueueElapsed } from "../../lobby/lib/lobby-ui";
 import { getHomeRuntime, startHomeRuntime } from "../../home/state/home-runtime";
 import type { AppNavTask } from "./AppNavTasks";
@@ -52,7 +52,8 @@ export function deriveAppActivities({
 
 export function AppActivityProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const runtime = useMemo(() => getHomeRuntime(getRuntimeConfig()), []);
+  const config = useRuntimeConfig();
+  const runtime = useMemo(() => getHomeRuntime(config), [config]);
   const party = useSyncExternalStore(
     runtime.partyController.subscribe,
     runtime.partyController.getState.bind(runtime.partyController),

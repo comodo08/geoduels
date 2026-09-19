@@ -5,7 +5,7 @@ import { AsyncState, InsetList, SectionHeader } from "../../../components/ui/pat
 import { Button } from "../../../components/ui/button";
 import { AppPanel } from "../../../components/ui/compositions";
 import { LobbyInput } from "../../lobby/components/lobby-primitives";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { useFriendsPage } from "../hooks/useFriendsPage";
 import { socialClient } from "../lib/social-client";
 import type { CompactPlayer } from "../types";
@@ -27,7 +27,7 @@ export function FriendsDashboard({
   memberUserIds?: readonly string[];
   partyCard?: React.ReactNode;
 }) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [copied, setCopied] = useState(false);

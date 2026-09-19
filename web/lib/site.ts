@@ -1,5 +1,5 @@
-import { getRuntimeConfig } from './runtime-config';
+import { useRuntimeConfig } from './runtime-config-context';
 
-export function getSiteURL() {
-  return getRuntimeConfig().siteURL;
+export function useSiteURL() {
+  return useRuntimeConfig().siteURL;
 }

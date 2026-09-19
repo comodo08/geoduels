@@ -4,8 +4,8 @@ import MarkdownContent from "../../components/ui/MarkdownContent";
 import { PageShell } from "../../components/ui/PageShell";
 import { requestChangelogPost } from "../../features/changelog/changelog-client";
 import type { ChangelogPost } from "../../features/changelog/types";
-import { createRuntimeConfig } from "../../lib/runtime-config";
-import { getSiteURL } from "../../lib/site";
+import { readServerConfig } from "../../lib/runtime-config.server";
+import { useSiteURL } from "../../lib/site";
 
 type ChangelogPostPageProps = {
   post: ChangelogPost;
@@ -26,7 +26,7 @@ export const getServerSideProps: GetServerSideProps<ChangelogPostPageProps> = as
   const slug = typeof ctx.params?.slug === "string" ? ctx.params.slug : "";
   if (!slug) return { notFound: true };
   try {
-    const post = await requestChangelogPost(createRuntimeConfig(), slug);
+    const post = await requestChangelogPost(readServerConfig(), slug);
     if (!post) return { notFound: true };
     ctx.res.setHeader("Last-Modified", new Date(post.updatedAt).toUTCString());
     return { props: { post } };
@@ -36,7 +36,7 @@ export const getServerSideProps: GetServerSideProps<ChangelogPostPageProps> = as
 };
 
 export default function ChangelogPostPage({ post }: ChangelogPostPageProps) {
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const canonicalURL = `${siteURL}/changelog/${post.slug}`;
   const description = `Read the ${post.title} update notes for GeoDuels.`;
 

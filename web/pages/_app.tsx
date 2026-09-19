@@ -1,4 +1,6 @@
-import type { AppProps } from 'next/app';
+import NextApp, { type AppContext, type AppProps } from 'next/app';
+import type { RuntimeConfig } from '../lib/runtime-config';
+import { RuntimeConfigProvider } from '../lib/runtime-config-context';
 import type { NextPage } from 'next';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Head from 'next/head';
@@ -19,9 +21,10 @@ export type NextPageWithLayout = NextPage & {
 
 type AppPropsWithLayout = AppProps & {
   Component: NextPageWithLayout;
+  runtimeConfig: RuntimeConfig;
 };
 
-export default function App({ Component, pageProps }: AppPropsWithLayout) {
+export default function App({ Component, pageProps, runtimeConfig }: AppPropsWithLayout) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -36,7 +39,7 @@ export default function App({ Component, pageProps }: AppPropsWithLayout) {
   const getLayout = Component.getLayout ?? ((page) => page);
 
   return (
-    <>
+    <RuntimeConfigProvider config={runtimeConfig}>
       <Head>
         <link rel="icon" href="/icon.v1.png" type="image/png" />
         <link rel="shortcut icon" href="/icon.v1.png" type="image/png" />
@@ -57,6 +60,17 @@ export default function App({ Component, pageProps }: AppPropsWithLayout) {
           </QueryClientProvider>
         </TooltipProvider>
       </div>
-    </>
+    </RuntimeConfigProvider>
   );
 }
+
+// Request-time configuration is serialized by Next with the initial page props.
+// This intentionally disables automatic static optimization for these pages.
+App.getInitialProps = async (context: AppContext) => {
+  const props = await NextApp.getInitialProps(context);
+  const runtimeConfig: RuntimeConfig = typeof window === 'undefined'
+    ? (await import('../lib/runtime-config.server')).readServerConfig()
+    : window.__NEXT_DATA__.props.runtimeConfig;
+  if (!runtimeConfig) throw new Error('Missing server-provided application configuration.');
+  return { ...props, runtimeConfig };
+};

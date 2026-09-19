@@ -1,4 +1,4 @@
-import { getRuntimeConfig, type RuntimeConfig } from "./runtime-config";
+import type { RuntimeConfig } from "./runtime-config";
 
 export async function readError(resp: Response, fallback: string) {
   const text = await resp.text();
@@ -10,10 +10,6 @@ export function apiPath(config: Pick<RuntimeConfig, "apiURL">, path: string): st
   const base = config.apiURL.trim();
   if (!base) return normalizedPath;
   return new URL(normalizedPath, base.endsWith("/") ? base : `${base}/`).toString();
-}
-
-function serverAPIBase() {
-  return process.env.API_PROXY_URL || getRuntimeConfig().siteURL;
 }
 
 export function apiFetchPath(config: Pick<RuntimeConfig, "apiURL">, path: string): string {
@@ -28,7 +24,7 @@ export function apiFetchPath(config: Pick<RuntimeConfig, "apiURL">, path: string
   if (typeof window !== "undefined") {
     return browserPath;
   }
-  return new URL(browserPath, serverAPIBase()).toString();
+  throw new Error("Server API requests require an absolute API URL or API_PROXY_URL.");
 }
 
 export function authHeaders(accessToken?: string): HeadersInit | undefined {

@@ -12,7 +12,6 @@ export default class MyDocument extends Document {
           />
         </Head>
         <body>
-          <script src="/runtime-config.js" />
           <Main />
           <NextScript />
         </body>

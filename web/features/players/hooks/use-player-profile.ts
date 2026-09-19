@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { requestPlayerMatches, requestPlayerProfile } from "../lib/player-client";
 import type { PublicPlayerProfile } from "../types";
 
@@ -8,7 +8,7 @@ export function usePlayerProfile(
   initialProfile?: PublicPlayerProfile,
   matchFilter: "all" | "ranked" = "all",
 ) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const profileQuery = useQuery({
     queryKey: ["player-profile", playerId],
     enabled: !!playerId,

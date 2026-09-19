@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import Router from "next/router";
-import { getRuntimeConfig } from "../../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../../lib/runtime-config-context";
 import type { MatchConfig } from "../../../matchmaking/lib/queue-client";
 import {
   createMap,
@@ -126,7 +126,7 @@ export const MapRouteSurface = forwardRef<HTMLDivElement, MapRouteSurfaceProps>(
   userEmail,
   userId,
 }: MapRouteSurfaceProps, ref) {
-  const runtimeConfig = getRuntimeConfig();
+  const runtimeConfig = useRuntimeConfig();
   const queryClient = useQueryClient();
   const { show } = useAppNotice();
   const noticeError = (fallback: string) => (error: unknown) => {
@@ -411,7 +411,7 @@ export function MapPickerController({
   savePartyConfig,
   userId,
 }: MapPickerControllerProps) {
-  const runtimeConfig = getRuntimeConfig();
+  const runtimeConfig = useRuntimeConfig();
   const browser = useMapBrowserState();
   const mapsQuery = useMapList(
     runtimeConfig,

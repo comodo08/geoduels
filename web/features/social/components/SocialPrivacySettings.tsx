@@ -3,13 +3,13 @@ import { InsetList, SettingRow } from "../../../components/ui/patterns";
 import { useAppNotice } from "../../../components/ui/AppNotice";
 import { Switch } from "../../../components/ui/Switch";
 import { CenteredSpinner } from "../../../components/ui/Spinner";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { socialClient } from "../lib/social-client";
 import { useAuthState } from "../../auth/components/AuthProvider";
 
 export function SocialPrivacySettings() {
   const auth = useAuthState();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const queryClient = useQueryClient();
   const { show } = useAppNotice();
   const enabled = auth.isRegistered;

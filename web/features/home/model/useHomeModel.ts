@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RESULT_ANIMATION_CONFIG } from "../../game/lib/round-result-animation-config";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import type { AuthSessionSnapshot } from "../../auth/session";
 import { selectActiveChatConversationId } from "../../chat/lib/chat-scope";
 import {
@@ -55,7 +55,7 @@ export function useHomeModel(options?: {
   onPartyEntered?: (inviteCode: string) => void;
   onPartyLeft?: () => void;
 }): HomeModel {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const authGateway = getAuthGateway(config);
   const runtimeRef = useRef(getHomeRuntime(config));
   const { sessionController, matchController, matchRouteController, gameController, partyController, chatController, sfxController } =

@@ -1,5 +1,4 @@
 import type { RuntimeConfig } from '../../../lib/runtime-config';
-import { getRuntimeConfig } from '../../../lib/runtime-config';
 import { createSfxController } from '../../../lib/audio/browser-sfx-controller';
 import type { SfxController } from '../../../lib/audio/sfx';
 import { SessionController } from '../../auth/controllers/session-controller';
@@ -66,7 +65,7 @@ function createHomeRuntime(config: RuntimeConfig): HomeRuntime {
   return runtime;
 }
 
-export function getHomeRuntime(config = getRuntimeConfig()) {
+export function getHomeRuntime(config: RuntimeConfig) {
   if (typeof window === 'undefined') {
     return createHomeRuntime(config);
   }

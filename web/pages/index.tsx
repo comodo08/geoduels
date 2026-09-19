@@ -1,10 +1,10 @@
 import Head from "next/head";
 import { getLobbyLayout } from "../features/home/page/LobbyApplicationLayout";
-import { getSiteURL } from "../lib/site";
+import { useSiteURL } from "../lib/site";
 import type { NextPageWithLayout } from "./_app";
 
 const HomePage: NextPageWithLayout = function HomePage() {
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const canonicalURL = `${siteURL}/`;
   const title = "GeoDuels | Play";
   const description =

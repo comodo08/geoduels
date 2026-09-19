@@ -1,14 +1,13 @@
 import type { GetServerSideProps } from 'next';
 import { requestChangelogPosts } from '../features/changelog/changelog-client';
-import { createRuntimeConfig } from '../lib/runtime-config';
-import { getSiteURL } from '../lib/site';
+import { readServerConfig } from '../lib/runtime-config.server';
 
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
-  const siteURL = getSiteURL();
+  const siteURL = readServerConfig().siteURL;
   const now = new Date().toISOString();
   let changelogPosts: Array<{ slug: string; updatedAt: string }> = [];
   try {
-    const data = await requestChangelogPosts(createRuntimeConfig());
+    const data = await requestChangelogPosts(readServerConfig());
     changelogPosts = data.posts || [];
   } catch {
     changelogPosts = [];

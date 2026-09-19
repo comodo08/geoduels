@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import {
   requestDiscordStart,
   requestGoogleStart,
@@ -138,7 +138,7 @@ export function deriveAuthState(
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const gateway = getAuthGateway(config);
   const session = useSyncExternalStore(gateway.subscribe.bind(gateway), gateway.getPayload.bind(gateway), gateway.getPayload.bind(gateway));
   const restored = useSyncExternalStore(gateway.subscribe.bind(gateway), gateway.isRestored.bind(gateway), gateway.isRestored.bind(gateway));
@@ -189,7 +189,7 @@ function currentReturnTo() {
   return path.startsWith("/") ? path : "/";
 }
 
-function googleSignInEnabled(config: ReturnType<typeof getRuntimeConfig>) {
+function googleSignInEnabled(config: ReturnType<typeof useRuntimeConfig>) {
   if (!config.googleClientId || typeof window === "undefined") return false;
   if (config.googleAllowedOrigins.length > 0) {
     return config.googleAllowedOrigins.includes(window.location.origin);
@@ -201,7 +201,7 @@ function googleSignInEnabled(config: ReturnType<typeof getRuntimeConfig>) {
 
 function AuthGlobalUi({ children }: { children: ReactNode }) {
   const auth = useAuthState();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const gateway = getAuthGateway(config);
   const [signInOpen, setSignInOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);

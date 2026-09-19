@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { getLobbyLayout } from "../../features/home/page/LobbyApplicationLayout";
-import { getSiteURL } from "../../lib/site";
+import { useSiteURL } from "../../lib/site";
 import type { NextPageWithLayout } from "../_app";
 
 const PartyInviteRoute: NextPageWithLayout = function PartyInviteRoute() {
@@ -11,7 +11,7 @@ const PartyInviteRoute: NextPageWithLayout = function PartyInviteRoute() {
       ? router.query.code
       : "";
   const partyInviteCode = rawCode.trim().toUpperCase();
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const canonicalURL = partyInviteCode
     ? `${siteURL}/party/${encodeURIComponent(partyInviteCode)}`
     : `${siteURL}/`;

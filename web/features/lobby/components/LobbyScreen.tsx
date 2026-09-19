@@ -29,7 +29,7 @@ import { LobbyScreenView } from "./LobbyScreenView";
 import { LobbyScreenModals } from "./LobbyScreenModals";
 import { useLobbyScreenState, type LobbyPartyView } from "../hooks/useLobbyScreenState";
 import { useMapList } from "../../maps/lib/map-hooks";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { createSeededRandom, featuredMapDay, selectFeaturedOfficialMaps } from "../lib/featured-maps";
 import { useShowAppNoticeOnValue } from "../../../components/ui/AppNotice";
 
@@ -166,7 +166,7 @@ export default function LobbyScreen({
   useShowAppNoticeOnValue(party.error);
   const canUploadCustomMaps = !!accessToken && !isGuest;
   const trendingMapsQuery = useMapList(
-    getRuntimeConfig(),
+    useRuntimeConfig(),
     accessToken,
     userId,
     "official",

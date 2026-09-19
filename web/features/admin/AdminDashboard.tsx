@@ -57,7 +57,7 @@ import type { IPBan, ModerationSubjectProfile, ModerationTimelineItem, Player, P
 import type { ChangelogPost, ChangelogPostInput } from "../changelog/types";
 import { useHomeModel } from "../home/model/useHomeModel";
 import type { MaintenanceStatus } from "../matchmaking/lib/queue-client";
-import { getRuntimeConfig } from "../../lib/runtime-config";
+import { useRuntimeConfig } from "../../lib/runtime-config-context";
 
 const SimpleMDE = dynamic(() => import("react-simplemde-editor"), {
   ssr: false,
@@ -74,7 +74,7 @@ const changelogMarkdownOptions = {
 type AdminSurface = "admin" | "moderator";
 
 export default function AdminPage({ surface = "admin" }: { surface?: AdminSurface }) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { view } = useHomeModel({ routeContext: "home", backgroundDataEnabled: false });
@@ -232,7 +232,7 @@ export default function AdminPage({ surface = "admin" }: { surface?: AdminSurfac
 }
 
 function PlayersRoute(props: {
-  config: ReturnType<typeof getRuntimeConfig>;
+  config: ReturnType<typeof useRuntimeConfig>;
   accessToken: string;
   canManageAdmin: boolean;
   basePath?: string;
@@ -301,7 +301,7 @@ function PlayersRoute(props: {
 }
 
 function PlayerDetailRoute(props: {
-  config: ReturnType<typeof getRuntimeConfig>;
+  config: ReturnType<typeof useRuntimeConfig>;
   accessToken: string;
   userId: string;
   canManageAdmin: boolean;
@@ -512,7 +512,7 @@ function formatUTCDate(value?: string) {
 }
 
 function OperationsRoute(props: {
-  config: ReturnType<typeof getRuntimeConfig>;
+  config: ReturnType<typeof useRuntimeConfig>;
   accessToken: string;
   leaf: string;
   canManageAdmin: boolean;
@@ -1030,7 +1030,7 @@ function OperationsRoute(props: {
 }
 
 function EnforcementRoute(props: {
-  config: ReturnType<typeof getRuntimeConfig>;
+  config: ReturnType<typeof useRuntimeConfig>;
   accessToken: string;
   canViewEnforcement: boolean;
 }) {
@@ -1084,7 +1084,7 @@ function EnforcementRoute(props: {
 }
 
 function AccessRoute(props: {
-  config: ReturnType<typeof getRuntimeConfig>;
+  config: ReturnType<typeof useRuntimeConfig>;
   accessToken: string;
   canManageAdmin: boolean;
   refreshAdminData: () => Promise<void>;

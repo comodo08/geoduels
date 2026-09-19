@@ -336,7 +336,17 @@ function toSnapshot(payload: AuthSessionPayload | null): AuthSessionSnapshot | n
 let gateway: AuthGateway | null = null;
 let gatewayConfig: RuntimeConfig | null = null;
 
+const serverGateways = new WeakMap<RuntimeConfig, AuthGateway>();
+
 export function getAuthGateway(config: RuntimeConfig) {
+  if (typeof window === 'undefined') {
+    let serverGateway = serverGateways.get(config);
+    if (!serverGateway) {
+      serverGateway = new AuthGateway(config);
+      serverGateways.set(config, serverGateway);
+    }
+    return serverGateway;
+  }
   if (!gateway || gatewayConfig !== config) {
     gateway?.dispose();
     gateway = new AuthGateway(config);

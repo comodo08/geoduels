@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import {
   requestUpdateNickname,
   requestUpdateSelectedBadge,
@@ -7,7 +7,7 @@ import {
 import { getAuthGateway } from "../../auth/auth-gateway";
 
 export function useProfileOwnerActions(accessToken: string) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const queryClient = useQueryClient();
   const refresh = () => Promise.all([
     getAuthGateway(config).bootstrap({ force: true }),

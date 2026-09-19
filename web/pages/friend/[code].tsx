@@ -8,7 +8,7 @@ import { AppPanel } from "../../components/ui/compositions";
 import { PlayerRow } from "../../features/social/components/CompactPlayerRow";
 import { useAuthState } from "../../features/auth/components/AuthProvider";
 import { socialClient } from "../../features/social/lib/social-client";
-import { getRuntimeConfig } from "../../lib/runtime-config";
+import { useRuntimeConfig } from "../../lib/runtime-config-context";
 import { AsyncState, PageHeader } from "../../components/ui/patterns";
 import { useShowAppNoticeWhen } from "../../components/ui/AppNotice";
 
@@ -16,7 +16,7 @@ export default function FriendCodePage() {
   const router = useRouter();
   const code = String(router.query.code || "").trim().toUpperCase();
   const auth = useAuthState();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const player = useQuery({
     queryKey: ["social", "friend-code", code],
     enabled: !!code && auth.isRegistered,

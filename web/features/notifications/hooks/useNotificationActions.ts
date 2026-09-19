@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { getHomeRuntime } from "../../home/state/home-runtime";
 import { socialClient } from "../../social/lib/social-client";
 import type { NotificationAction } from "../components/NotificationItem";
@@ -10,7 +10,7 @@ export function useNotificationActions(
   accessToken?: string,
   joinParty?: (inviteCode: string) => Promise<boolean>,
 ) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const queryClient = useQueryClient();
   const router = useRouter();
   const admitParty =

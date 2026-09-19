@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../../components/ui/button";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { socialClient } from "../lib/social-client";
 import type { CompactPlayer, RelationshipState } from "../types";
 
@@ -16,7 +16,7 @@ export function RelationshipActions({
   requestId?: string;
 }) {
   const queryClient = useQueryClient();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const mutation = useMutation({
     mutationFn: async (action: string) => {
       if (action === "add") return socialClient.sendRequest(config, accessToken, player.userId);

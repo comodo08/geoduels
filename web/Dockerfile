@@ -23,8 +23,5 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/.next/standalone ./
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
 EXPOSE 3000
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "server.js"]

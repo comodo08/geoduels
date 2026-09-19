@@ -7,8 +7,8 @@ import { PageShell } from "../../components/ui/PageShell";
 import { DocumentPanel } from "../../components/ui/compositions";
 import { requestChangelogPosts } from "../../features/changelog/changelog-client";
 import type { ChangelogPost } from "../../features/changelog/types";
-import { createRuntimeConfig } from "../../lib/runtime-config";
-import { getSiteURL } from "../../lib/site";
+import { readServerConfig } from "../../lib/runtime-config.server";
+import { useSiteURL } from "../../lib/site";
 
 type ChangelogIndexProps = {
   posts: ChangelogPost[];
@@ -27,7 +27,7 @@ function formatDate(value: string) {
 
 export const getServerSideProps: GetServerSideProps<ChangelogIndexProps> = async () => {
   try {
-    const data = await requestChangelogPosts(createRuntimeConfig());
+    const data = await requestChangelogPosts(readServerConfig());
     return { props: { posts: data.posts || [] } };
   } catch {
     return { props: { posts: [] } };
@@ -35,7 +35,7 @@ export const getServerSideProps: GetServerSideProps<ChangelogIndexProps> = async
 };
 
 export default function ChangelogIndexPage({ posts }: ChangelogIndexProps) {
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const title = "GeoDuels Changelog";
   const description =
     "Read GeoDuels release notes, gameplay updates, new features, and fixes.";

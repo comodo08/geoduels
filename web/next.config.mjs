@@ -19,15 +19,6 @@ const createNextConfig = (phase) => ({
   async headers() {
     return [
       {
-        source: "/runtime-config.js",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-store"
-          }
-        ]
-      },
-      {
         source: "/:path*.v:version(\\d+).:ext(jpg|jpeg|png|webp|avif|svg|ico|ogg|mp3|woff|woff2)",
         headers: [
           {

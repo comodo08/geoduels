@@ -24,8 +24,8 @@ docker compose -f backend/dev.yaml up -d postgres redis
 ./backend/scripts/migrate.sh up
 docker compose -f backend/dev.yaml up -d
 
-npm ci
-npm run dev
+npm --prefix web ci
+npm --prefix web run dev
 ```
 
 Open `http://localhost:3000`. On startup the gameplay node imports the bundled sample dataset for any required playable map that is not configured yet (`DEV_MAP_DATASET` in `backend/dev.yaml`; it never replaces existing maps). Start optional workers with `docker compose -f backend/dev.yaml up -d moderation-worker discord-worker`; stop everything with `docker compose -f backend/dev.yaml down`.

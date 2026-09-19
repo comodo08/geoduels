@@ -15,8 +15,8 @@ import HomePageOverlays from "../../features/home/page/HomePageOverlays";
 import { useHomeModel } from "../../features/home/model/useHomeModel";
 import { useMatchRouteSession } from "../../features/matchmaking/hooks/use-match-route-session";
 import { getMatchReturnDestination } from "../../features/matchmaking/lib/match-return";
-import { getRuntimeConfig } from "../../lib/runtime-config";
-import { getSiteURL } from "../../lib/site";
+import { useRuntimeConfig } from "../../lib/runtime-config-context";
+import { useSiteURL } from "../../lib/site";
 import { getTeamPresentation } from "../../lib/team-presentation";
 import {
   normalizeEntityRouteId,
@@ -156,9 +156,9 @@ export default function MatchPage() {
     routeMatchId: routeMatchId || null,
     routeContext: "match",
   });
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const routeSession = useMatchRouteSession(routeMatchId || null);
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const canonicalURL = routeMatchId
     ? `${siteURL}/match/${encodeURIComponent(toPublicEntityId(routeMatchId))}`
     : `${siteURL}/`;

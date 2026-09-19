@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { getSiteURL } from "../../../lib/site";
+import { useSiteURL } from "../../../lib/site";
 
 type LobbyRoutePageProps = {
   title: string;
@@ -12,7 +12,7 @@ export default function LobbyRoutePage({
   description,
   canonicalPath,
 }: LobbyRoutePageProps) {
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const canonicalURL = `${siteURL}${canonicalPath}`;
 
   return (

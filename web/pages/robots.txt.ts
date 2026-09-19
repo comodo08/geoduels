@@ -1,8 +1,8 @@
+import { readServerConfig } from '../lib/runtime-config.server';
 import type { GetServerSideProps } from 'next';
-import { getSiteURL } from '../lib/site';
 
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
-  const siteURL = getSiteURL();
+  const siteURL = readServerConfig().siteURL;
 
   res.setHeader('Content-Type', 'text/plain');
   res.write(`User-agent: *\nAllow: /\n\nSitemap: ${siteURL}/sitemap.xml\n`);

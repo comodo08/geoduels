@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import { useState } from "react";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import {
   requestDeleteAccount,
   requestDiscordStart,
@@ -20,7 +20,7 @@ type AccountData = {
 };
 
 export function useAccountSettings(profilePath: string) {
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
   const router = useRouter();
   const queryClient = useQueryClient();
   const auth = useAuthState();

@@ -6,7 +6,7 @@ import { AppShell } from "../../app-shell/components/AppShell";
 import { AppContentRail } from "../../app-shell/components/AppContentRail";
 import { AppPanel } from "../../../components/ui/compositions";
 import { CenteredSpinner } from "../../../components/ui/Spinner";
-import { getSiteURL } from "../../../lib/site";
+import { useSiteURL } from "../../../lib/site";
 import { useProfileEditor } from "../hooks/use-profile-editor";
 import { usePlayerProfile } from "../hooks/use-player-profile";
 import { useAuthState } from "../../auth/components/AuthProvider";
@@ -105,7 +105,7 @@ function ProfileMetadata({
   profile: PublicPlayerProfile;
   path: string;
 }) {
-  const siteURL = getSiteURL();
+  const siteURL = useSiteURL();
   const winRate = profile.gamesPlayed
     ? Math.round((profile.wins / profile.gamesPlayed) * 100)
     : 0;

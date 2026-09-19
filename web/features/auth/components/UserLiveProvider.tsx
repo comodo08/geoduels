@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { getRuntimeConfig } from "../../../lib/runtime-config";
+import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import { getAuthGateway } from "../auth-gateway";
 import { requestUserNotifications } from "../lib/auth-client";
 import { connectUserLive, type LiveEvent } from "../lib/user-live-client";
@@ -10,7 +10,7 @@ import { useAuthState } from "./AuthProvider";
 export function UserLiveProvider({ children }: { children: React.ReactNode }) {
   const auth = useAuthState();
   const queryClient = useQueryClient();
-  const config = getRuntimeConfig();
+  const config = useRuntimeConfig();
 
   useEffect(() => {
     if (!auth.canUseSocial || !auth.accessToken) return;
