@@ -1,3 +1,5 @@
+name: geoduels
+
 services:
   postgres:
     image: postgres:16
@@ -25,34 +27,20 @@ services:
     ports:
       - "6379:6379"
 
-  dev-data-bootstrap:
-    image: golang:1.26
-    working_dir: /app
-    profiles: ["tools"]
-    volumes:
-      - ./backend:/app:ro
-      - ./maps/datasets:/datasets:ro
-      - go-build-cache:/root/.cache/go-build
-      - go-mod-cache:/go/pkg/mod
-    command: ["go", "run", "./tools/bootstrap-dev-data", "-dataset", "/datasets/a-source-world.sample.json"]
-    environment:
-      - POSTGRES_URL=${DOCKER_POSTGRES_URL:-postgres://geoduels:geoduels@postgres:5432/geoduels?sslmode=disable}
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   gameplay-node:
     image: golang:1.26
     working_dir: /app
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
+      - ../maps/datasets:/datasets:ro
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/gameplay-node", "gameplay-node"]
     environment:
       - AIR_VERSION=v1.61.7
+      - DEV_MAP_DATASET=/datasets/a-source-world.sample.json
       - GAMEPLAY_NODE_ADDR=:8091
       - GAMEPLAY_NODE_ID=game-1
       - GAMEPLAY_PUBLIC_ROUTE=game-1
@@ -78,7 +66,7 @@ services:
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/match-coordinator", "match-coordinator"]
@@ -106,7 +94,7 @@ services:
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/realtime-gateway", "realtime-gateway"]
@@ -128,7 +116,7 @@ services:
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/api", "api"]
@@ -169,7 +157,7 @@ services:
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/moderation-worker", "moderation-worker"]
@@ -192,7 +180,7 @@ services:
     init: true
     stop_grace_period: 5s
     volumes:
-      - ./backend:/app
+      - .:/app
       - go-build-cache:/root/.cache/go-build
       - go-mod-cache:/go/pkg/mod
     command: ["sh", "./scripts/air-run.sh", "./services/discord-worker", "discord-worker"]

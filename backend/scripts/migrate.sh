@@ -12,11 +12,12 @@ if [ $# -lt 1 ]; then
 fi
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CHECKOUT_ROOT="$(cd -- "$REPO_ROOT/.." && pwd)"
 DEFAULT_MIGRATIONS_DB_URL="postgres://geoduels:geoduels@127.0.0.1:5432/geoduels?sslmode=disable"
 MIGRATIONS_DB_URL="${MIGRATIONS_DB_URL:-$DEFAULT_MIGRATIONS_DB_URL}"
 MIGRATION_PATH="$REPO_ROOT/db/migrations"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$CHECKOUT_ROOT")}"
+# dev.yaml pins the compose project name to geoduels; the default URL reaches
+# its postgres over the compose network by service name.
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-geoduels}"
 COMPOSE_NETWORK="${COMPOSE_NETWORK:-${COMPOSE_PROJECT_NAME}_default}"
 
 docker_run_args=(--rm)

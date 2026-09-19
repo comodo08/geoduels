@@ -23,6 +23,7 @@ import (
 
 	"geoduels/internal/envcfg"
 	"geoduels/internal/httpx"
+	"geoduels/internal/maps"
 	"geoduels/internal/matches"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
@@ -101,6 +102,14 @@ func main() {
 		log.Fatal(err)
 	}
 	store := matches.NewPGStore(db.Pool())
+	mapStore := maps.NewPGStore(db.Pool())
+	// Dev-only: import the bundled sample dataset when a required playable
+	// map is missing; production nodes leave DEV_MAP_DATASET unset.
+	if datasetPath := envcfg.Get("DEV_MAP_DATASET", ""); datasetPath != "" {
+		if err := mapStore.EnsurePlayableMaps(datasetPath); err != nil {
+			log.Fatal(err)
+		}
+	}
 	singleplayerTTL := envcfg.Duration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
 	if err := store.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)

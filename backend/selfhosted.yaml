@@ -1,8 +1,8 @@
 # Self-hosted production-style stack for the beta server (no k3s/Flux).
 # All services bind to the host loopback only; nginx (NPM) on the same host is
 # the single public entrypoint. Run with:
-#   docker compose --env-file infra/compose/beta.secrets.env \
-#     -p geoduels-beta -f infra/compose/docker-compose.beta.yml up -d
+#   docker compose --env-file backend/beta.secrets.env \
+#     -f backend/selfhosted.yaml up -d
 services:
   postgres:
     image: postgres:16
@@ -242,7 +242,7 @@ services:
     image: migrate/migrate:v4.18.3
     profiles: ["tools"]
     volumes:
-      - ./backend/db/migrations:/migrations:ro
+      - ./db/migrations:/migrations:ro
     command:
       - -path=/migrations
       - -database

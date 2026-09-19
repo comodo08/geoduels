@@ -59,8 +59,8 @@ TAG=beta PLATFORMS=linux/arm64 GIT_SHA="$(git rev-parse --short HEAD)" docker bu
 
 ## Local infrastructure and migrations
 
-- `./infra/scripts/bootstrap-dev-data.sh` repairs missing configured Moving/NMPZ maps without replacing existing maps. It does not initialize the database schema.
-- Compose environment changes require container recreation (`./infra/scripts/compose.sh up -d --force-recreate`), not just restarting the web app.
+- The gameplay node imports missing required playable maps from the bundled sample dataset on startup when `DEV_MAP_DATASET` is set (`maps.PGStore.EnsurePlayableMaps`); it never replaces existing maps and does not initialize the database schema. See [Running GeoDuels yourself](../README.md#running-geoduels-yourself).
+- Compose environment changes require container recreation (`docker compose -f backend/dev.yaml up -d --force-recreate`), not just restarting the web app.
 - For private detector integration, run sibling `../geoduels-risk-engine` and configure `RISK_ENGINE_URL=http://host.docker.internal:8096` plus `RISK_ENGINE_TOKEN` in Compose. Moderation can run without it.
 - `./backend/scripts/migrate.sh up` uses a pinned Docker migration tool and `MIGRATIONS_DB_URL`. Blank databases apply from version 2000. It refuses existing schemas on versions 1–1999; complete those upgrades using the `v2.0.1` tag. Never bypass the guard against a production database.
 - Browser runtime config can override `NEXT_PUBLIC_*` values through `window.__GEODUELS_CONFIG__` (written at container start by `web/docker-entrypoint.sh`). Local `next dev` fallbacks live in `web/lib/runtime-config.ts`. Deploy origins and docker-internal hostnames live in Compose env files. Go listen-addrs and TTLs default in `backend/internal/envcfg`. When an environment change appears ineffective, inspect the served `runtime-config.js` as well as the process environment.
@@ -70,12 +70,12 @@ For local multi-node routing checks:
 ```sh
 k3d cluster create geoduels --servers 1 --agents 3 --port "80:80@loadbalancer"
 kubectl create namespace geoduels
-# Fill a local copy of infra/k3s/overlays/k3d/secrets.env.example first.
+# Fill a local copy of k3s/overlays/k3d/secrets.env.example first.
 kubectl -n geoduels create secret generic geoduels-secrets --from-env-file=/path/to/local-secrets.env
-kubectl apply -k infra/k3s/overlays/k3d
+kubectl apply -k k3s/overlays/k3d
 ```
 
-Before applying, migrate host PostgreSQL, make PostgreSQL/Redis reachable via `host.k3d.internal`, and import matching images with `k3d image import -c geoduels ...` or provide registry access. The overlay references `ghcr-creds`; remove its pull-secret patches in a local copy for fully local images. Include optional workers' images or remove those workloads in that copy. PgBouncer needs the direct upstream `PGBOUNCER_POSTGRES_*` values from the secret template. Validate manifest changes with `kustomize build infra/k3s/overlays/k3d`.
+Before applying, migrate host PostgreSQL, make PostgreSQL/Redis reachable via `host.k3d.internal`, and import matching images with `k3d image import -c geoduels ...` or provide registry access. The overlay references `ghcr-creds`; remove its pull-secret patches in a local copy for fully local images. Include optional workers' images or remove those workloads in that copy. PgBouncer needs the direct upstream `PGBOUNCER_POSTGRES_*` values from the secret template. Validate manifest changes with `kustomize build k3s/overlays/k3d`.
 
 ## Releases
 
