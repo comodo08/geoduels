@@ -2,6 +2,8 @@ import { avatarImage } from "../lib/avatar";
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
+import '../lib/leaflet-grouped-tiles';
+import '../lib/leaflet-fluid-zoom';
 import type { TeamPing } from '../features/game/model/types';
 
 // Leaflet consumes JS color/opacity values rather than Tailwind classes. Keep
@@ -230,17 +232,17 @@ function WrappedResultLayer({
     [result.actualLocation.lat, result.actualLocation.lng]
   );
 
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
+  useEffect(() => {
+    const bump = () => setViewportVersion((value) => value + 1);
+    map.on('moveend', bump);
+    map.on('zoomend', bump);
+    map.on('resize', bump);
+    return () => {
+      map.off('moveend', bump);
+      map.off('zoomend', bump);
+      map.off('resize', bump);
+    };
+  }, [map]);
 
   const layout = useMemo(() => {
     const container = map.getContainer();
@@ -259,6 +261,20 @@ function WrappedResultLayer({
       players
     };
   }, [map, result, viewportVersion]);
+
+  const playerIcons = useMemo(() => {
+    const icons: Record<string, L.DivIcon> = {};
+    for (const [id] of Object.entries(result.players)) {
+      if (!hasVisibleGuess(result.players[id])) continue;
+      icons[id] = createAvatarMarkerIcon({
+        avatarUrl: resultPlayerAvatars?.[id],
+        fallback: resultPlayerFallbacks?.[id],
+        borderColor: resultPlayerBorderColors?.[id],
+        size: 38
+      });
+    }
+    return icons;
+  }, [result, resultPlayerAvatars, resultPlayerFallbacks, resultPlayerBorderColors]);
 
   return (
     <>
@@ -282,12 +298,7 @@ function WrappedResultLayer({
         <Marker
           key={`${id}-guess`}
           position={[displayedLatLng.lat, displayedLatLng.lng]}
-          icon={createAvatarMarkerIcon({
-            avatarUrl: resultPlayerAvatars?.[id],
-            fallback: resultPlayerFallbacks?.[id],
-            borderColor: resultPlayerBorderColors?.[id],
-            size: 38
-          })}
+          icon={playerIcons[id]}
         />
       ))}
     </>
@@ -310,17 +321,17 @@ function WrappedResultsLayer({
   const map = useMap();
   const [viewportVersion, setViewportVersion] = useState(0);
 
-  useMapEvents({
-    move() {
-      setViewportVersion((value) => value + 1);
-    },
-    zoom() {
-      setViewportVersion((value) => value + 1);
-    },
-    resize() {
-      setViewportVersion((value) => value + 1);
-    }
-  });
+  useEffect(() => {
+    const bump = () => setViewportVersion((value) => value + 1);
+    map.on('moveend', bump);
+    map.on('zoomend', bump);
+    map.on('resize', bump);
+    return () => {
+      map.off('moveend', bump);
+      map.off('zoomend', bump);
+      map.off('resize', bump);
+    };
+  }, [map]);
 
   const layout = useMemo(() => {
     const container = map.getContainer();
@@ -345,17 +356,37 @@ function WrappedResultsLayer({
     });
   }, [map, results, viewportVersion]);
 
+  const actualIcons = useMemo(
+    () =>
+      results.map((round, roundIndex) =>
+        createActualLocationIcon(round.actualLocation.lat, round.actualLocation.lng, roundIndex + 1)
+      ),
+    [results]
+  );
+
+  const playerIcons = useMemo(() => {
+    const icons: Record<string, L.DivIcon> = {};
+    results.forEach((round, roundIndex) => {
+      for (const [id] of Object.entries(round.players)) {
+        if (!hasVisibleGuess(round.players[id])) continue;
+        icons[`${roundIndex}-${id}`] = createAvatarMarkerIcon({
+          avatarUrl: resultPlayerAvatars?.[id],
+          fallback: resultPlayerFallbacks?.[id],
+          borderColor: resultPlayerBorderColors?.[id],
+          size: 30
+        });
+      }
+    });
+    return icons;
+  }, [results, resultPlayerAvatars, resultPlayerFallbacks, resultPlayerBorderColors]);
+
   return (
     <>
       {layout.map((round) => (
         <Marker
           key={`actual-${round.roundIndex}`}
           position={[round.actualLatLng.lat, round.actualLatLng.lng]}
-          icon={createActualLocationIcon(
-            round.actualLocation.lat,
-            round.actualLocation.lng,
-            round.roundIndex + 1
-          )}
+          icon={actualIcons[round.roundIndex]}
           zIndexOffset={4000}
           title={`Round ${round.roundIndex + 1}: Open actual location in Google Maps`}
         />
@@ -377,12 +408,7 @@ function WrappedResultsLayer({
           <Marker
             key={`${player.id}-${player.roundIndex}`}
             position={[player.displayedLatLng.lat, player.displayedLatLng.lng]}
-            icon={createAvatarMarkerIcon({
-              avatarUrl: resultPlayerAvatars?.[player.id],
-              fallback: resultPlayerFallbacks?.[player.id],
-              borderColor: resultPlayerBorderColors?.[player.id],
-              size: 30
-            })}
+            icon={playerIcons[`${player.roundIndex}-${player.id}`]}
           />
         ))
       )}
@@ -539,6 +565,17 @@ export default function GuessMap({
       size: 38 / 1.25
     });
   }, [guessAvatarUrl, guessAvatarFallback]);
+  const teammateIcons = useMemo(() => {
+    const icons: Record<string, L.DivIcon> = {};
+    for (const [userId] of Object.entries(teammateGuesses)) {
+      icons[userId] = createAvatarMarkerIcon({
+        avatarUrl: playerAvatars[userId],
+        fallback: playerFallbacks[userId] || '?',
+        size: 38 / 1.25
+      });
+    }
+    return icons;
+  }, [teammateGuesses, playerAvatars, playerFallbacks]);
 
   return (
     <MapContainer
@@ -551,7 +588,8 @@ export default function GuessMap({
       attributionControl={false}
       zoomControl={interactive}
       dragging={interactive}
-      scrollWheelZoom={interactive}
+      scrollWheelZoom={false}
+      fluidWheelZoom={interactive}
       doubleClickZoom={interactive}
       touchZoom={interactive}
       boxZoom={interactive}
@@ -560,13 +598,14 @@ export default function GuessMap({
       <TileLayer
         url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=en&scale=2"
         subdomains={['0', '1', '2', '3']}
+        updateWhenZooming={false}
       />
       <SafeMapUnmount />
       <InvalidateOnResize />
       {mode === 'guess' && (guessSubmitted ? onPing : onGuess) ? <ClickCapture onClick={(guessSubmitted ? onPing : onGuess)!} /> : null}
       {mode === 'guess' && guess ? <Marker position={[guess.lat, guess.lng]} icon={guessMarkerIcon} /> : null}
       {mode === 'guess' ? Object.entries(teammateGuesses).map(([userId, point]) => (
-        <Marker key={`teammate-${userId}`} position={[point.lat, point.lng]} icon={createAvatarMarkerIcon({ avatarUrl: playerAvatars[userId], fallback: playerFallbacks[userId] || '?', size: 38 / 1.25 })} />
+        <Marker key={`teammate-${userId}`} position={[point.lat, point.lng]} icon={teammateIcons[userId]} />
       )) : null}
       {mode === 'guess' ? teamPings.map((ping) => (
         <TeamPingMarker key={ping.id} ping={ping} avatarUrl={playerAvatars[ping.senderUserId]}/>

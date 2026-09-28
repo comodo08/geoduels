@@ -579,6 +579,15 @@ img {
   cursor: crosshair !important;
 }
 
+body.leaflet-dragging .minimap-interactive .leaflet-map-pane,
+body.leaflet-dragging .minimap-interactive .leaflet-tile-pane,
+body.leaflet-dragging .minimap-interactive .leaflet-layer,
+body.leaflet-dragging .minimap-interactive .leaflet-overlay-pane,
+body.leaflet-dragging .minimap-interactive .leaflet-marker-pane,
+.minimap-interactive .leaflet-zoom-animated {
+  will-change: transform;
+}
+
 .team-ping-avatar {
  position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;opacity:.58;object-fit:cover;
  box-shadow:0 0 0 2px rgb(var(--gd-accent-pink) / .65);animation:team-ping-enter .2s ease-out both;
