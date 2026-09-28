@@ -30,15 +30,6 @@ WHERE id IN (
     LIMIT $1
 );
 
--- name: DeleteDiscordSyncOutbox :execresult
-DELETE FROM discord_sync_outbox
-WHERE id IN (
-    SELECT id FROM discord_sync_outbox
-    WHERE processed_at < now() - interval '7 days'
-    ORDER BY processed_at
-    LIMIT $1
-);
-
 -- name: DeleteExpiredReplays :execresult
 WITH expired AS (
     SELECT match_id FROM match_history
@@ -85,15 +76,6 @@ WHERE match_id IN (
     SELECT match_id FROM match_sessions
     WHERE state = 'ended' AND ended_at < now() - interval '1 hour'
     ORDER BY ended_at
-    LIMIT $1
-);
-
--- name: DeleteNotificationOutbox :execresult
-DELETE FROM notification_outbox
-WHERE id IN (
-    SELECT id FROM notification_outbox
-    WHERE sent_at < now() - interval '24 hours'
-    ORDER BY sent_at
     LIMIT $1
 );
 

@@ -12,43 +12,41 @@ select count(*)::int as total_matches,
        count(*) filter (where h.mode = $2 and h.winner_user_id is not null and h.winner_user_id <> $1)::int as losses
 from match_history h join match_players p on p.match_id = h.match_id where p.user_id = $1;
 
--- name: GrantRoleLog :exec
-insert into moderation_log(subject_user_id,actor_user_id,action,reason,metadata) values(sqlc.arg(subject_user_id),nullif(sqlc.arg(actor_user_id),'')::uuid,'role_granted',nullif(sqlc.arg(reason),''),jsonb_build_object('role',sqlc.arg(role)::text));
+-- name: GetStaffRoles :many
+SELECT role::text FROM user_roles WHERE user_id=$1 ORDER BY role;
 
--- name: GrantUserRole :execresult
-update users set is_admin=case when sqlc.arg(role)='admin' then true else is_admin end, is_moderator=case when sqlc.arg(role) in ('admin','moderator') then true else is_moderator end where id=sqlc.arg(user_id);
+-- name: LockStaffUser :one
+SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE;
 
--- name: HasTeamRole :one
-select is_admin or is_moderator from users where id=$1;
+-- name: InsertStaffRole :exec
+INSERT INTO user_roles(user_id,role,granted_by,reason)
+VALUES(sqlc.arg(user_id),sqlc.arg(role)::staff_role,nullif(sqlc.arg(actor_user_id),'')::uuid,sqlc.arg(reason))
+ON CONFLICT(user_id,role) DO NOTHING;
+
+-- name: DeleteStaffRole :exec
+DELETE FROM user_roles WHERE user_id=sqlc.arg(user_id) AND role=sqlc.arg(role)::staff_role;
 
 -- name: ListUserRoles :many
-select u.id, coalesce(nullif(u.display_name, ''), u.id::text) AS display_name, coalesce(u.email, '') AS email,
- case when u.is_admin then 'admin' else 'moderator' end AS role,
- last_grant.actor_user_id AS actor_user_id, coalesce(last_grant.created_at, u.created_at) AS granted_at,
- null::timestamptz AS revoked_at, coalesce(last_grant.reason, '') AS last_reason
-from users u left join lateral (select actor_user_id, created_at, reason from moderation_log where subject_user_id=u.id and action='role_granted' order by created_at desc,id desc limit 1) last_grant on true
-where u.is_admin or u.is_moderator order by u.is_admin desc, coalesce(last_grant.created_at,u.created_at) desc;
-
--- name: RevokeRoleLog :exec
-insert into moderation_log(subject_user_id,actor_user_id,action,reason,metadata) values(sqlc.arg(subject_user_id),nullif(sqlc.arg(actor_user_id),'')::uuid,'role_revoked',nullif(sqlc.arg(reason),''),jsonb_build_object('role',sqlc.arg(role)::text));
-
--- name: RevokeUserRole :execresult
-update users set is_admin=case when sqlc.arg(role)='admin' then false else is_admin end, is_moderator=case when sqlc.arg(role)='admin' then false when is_admin then true else false end where id=sqlc.arg(user_id);
+SELECT u.id, coalesce(nullif(u.display_name,''),u.id::text) AS display_name,
+ coalesce(u.email,'') AS email, ur.role::text AS role,
+ ur.granted_by AS actor_user_id, ur.granted_at, ur.reason AS last_reason
+FROM user_roles ur JOIN users u ON u.id=ur.user_id
+WHERE u.deleted_at IS NULL ORDER BY ur.granted_at DESC, u.id, ur.role;
 
 -- name: SearchAdminPlayers :many
 select
     u.id as user_id,
-    coalesce(u.email, '') as email,
-    coalesce(nullif(u.display_name, ''), ui.provider_name, u.id::text) as display_name,
+    case when sqlc.arg(include_sensitive)::boolean then coalesce(u.email, '') else '' end as email,
+    gd_display_name(u.display_name,ui.provider_name,u.id) as display_name,
     coalesce(u.avatar_url, ui.avatar_url, '') as avatar_url,
     coalesce(r.mmr, sqlc.arg(default_mmr)::int) as mmr,
     coalesce(us.games_played, 0) as games_played,
     coalesce(us.wins, 0) as wins,
     coalesce(rs.games_played, 0) as ranked_games_played,
-    coalesce(u.account_type = 'guest', false) as is_guest,
-    coalesce(u.is_admin, false) as is_admin,
-    coalesce(u.is_moderator, false) as is_moderator,
-    coalesce(u.banned_at is not null and (u.ban_expires_at is null or u.ban_expires_at > now()), false) as is_banned,
+    gd_is_guest(u.id) as is_guest,
+    gd_is_admin(u.id) as is_admin,
+    gd_is_judge(u.id) as is_moderator,
+    gd_is_banned(u.id) as is_banned,
     coalesce(u.ban_reason, '') as ban_reason,
     u.banned_at,
     u.ban_expires_at,
@@ -58,7 +56,7 @@ select
     u.report_muted_at,
     coalesce(u.report_mute_reason, '') as report_mute_reason,
     u.report_mute_expires_at,
-    coalesce(latest_session.ip_address, '') as last_ip_address
+    case when sqlc.arg(include_sensitive)::boolean then coalesce(latest_session.ip_address, '') else '' end as last_ip_address
 from users u
 left join lateral (
     select provider_name, avatar_url

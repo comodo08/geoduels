@@ -48,10 +48,10 @@ type matchCoordinator struct {
 	store           matchstore.Store
 	state           *coordinator.Store
 	db              *persistence.DB
-	accounts        accounts.Store
+	accounts        *accounts.Service
 	profiles        profiles.Store
 	matches         matches.Store
-	parties         parties.Store
+	parties         *parties.Service
 	chat            chat.Store
 	mapsStore       *maps.PGStore
 	redis           *redis.Client
@@ -86,16 +86,19 @@ func main() {
 	}
 	pool := persist.Pool()
 	mapsStore := maps.NewPGStore(pool)
-	matchStore := matches.NewPGStore(pool)
+	matchStore := matches.NewPGStore(pool, nil)
 	partyStore := parties.NewPGStore(pool, mapsStore)
+	partyService := parties.NewService(partyStore)
+	accountsStore := accounts.NewPGStore(pool, nil)
+	accountsService := accounts.NewService(accountsStore)
 	singleplayerTTL := envcfg.Duration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
 	if err := matchStore.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		log.Fatal(err)
 	}
-	if err := partyStore.ExpireOpenParties(); err != nil {
+	if err := partyService.ExpireOpenParties(); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := partyStore.ReopenEndedParties(); err != nil {
+	if _, err := partyService.ReopenEndedParties(); err != nil {
 		log.Fatal(err)
 	}
 	appSecret, err := envcfg.RequiredSecret("APP_AUTH_SECRET", 32)
@@ -115,10 +118,10 @@ func main() {
 		store:      store,
 		state:      coordinator.NewStore(rdb, envcfg.Duration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
 		db:         persist,
-		accounts:   accounts.NewPGStore(pool),
+		accounts:   accountsService,
 		profiles:   profiles.NewPGStore(pool),
 		matches:    matchStore,
-		parties:    partyStore,
+		parties:    partyService,
 		chat:       chat.NewPGStore(pool),
 		mapsStore:  mapsStore,
 		redis:      rdb,
@@ -317,7 +320,7 @@ func (q *matchCoordinator) queue(c echo.Context) error {
 	if identity.NicknameRequired {
 		return httpx.PlainTextError(c, http.StatusForbidden, "nickname required")
 	}
-	if identity.AccountType == "guest" {
+	if identity.IsGuest {
 		return httpx.PlainTextError(c, http.StatusForbidden, "account required")
 	}
 	userID := claims.Sub
@@ -506,7 +509,7 @@ func (q *matchCoordinator) heartbeat(c echo.Context) error {
 	if identity.NicknameRequired {
 		return httpx.PlainTextError(c, http.StatusForbidden, "nickname required")
 	}
-	if identity.AccountType == "guest" {
+	if identity.IsGuest {
 		return httpx.PlainTextError(c, http.StatusForbidden, "account required")
 	}
 	q.touchPresence(claims.Sub)

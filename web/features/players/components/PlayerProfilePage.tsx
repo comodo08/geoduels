@@ -90,7 +90,12 @@ export function PlayerProfilePage({
               owner={owner}
               socialActions={<ProfileSocialActions profile={profile} />}
             />
-            <ProfileBadges profile={profile} editor={editor} owner={owner} />
+            <ProfileBadges
+              profile={profile}
+              editor={editor}
+              owner={owner}
+              ownerBadges={owner ? auth.badges : undefined}
+            />
             <ProfileHistory
               matches={matches}
               query={matchesQuery}

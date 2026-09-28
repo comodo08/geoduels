@@ -43,19 +43,17 @@ func main() {
 
 func add(a, b storage.StorageCleanupResult) storage.StorageCleanupResult {
 	return storage.StorageCleanupResult{
-		ReplaysCompressed:  a.ReplaysCompressed + b.ReplaysCompressed,
-		ExpiredReplays:     a.ExpiredReplays + b.ExpiredReplays,
-		RuntimeMatches:     a.RuntimeMatches + b.RuntimeMatches,
-		MatchSessions:      a.MatchSessions + b.MatchSessions,
-		MatchPlans:         a.MatchPlans + b.MatchPlans,
-		ChatMessages:       a.ChatMessages + b.ChatMessages,
-		ChatConversations:  a.ChatConversations + b.ChatConversations,
-		AuthSessions:       a.AuthSessions + b.AuthSessions,
-		Parties:            a.Parties + b.Parties,
-		MapUploadEvents:    a.MapUploadEvents + b.MapUploadEvents,
-		MapDailyUsers:      a.MapDailyUsers + b.MapDailyUsers,
-		UserNotifications:  a.UserNotifications + b.UserNotifications,
-		NotificationOutbox: a.NotificationOutbox + b.NotificationOutbox,
-		DiscordSyncOutbox:  a.DiscordSyncOutbox + b.DiscordSyncOutbox,
+		ReplaysCompressed: a.ReplaysCompressed + b.ReplaysCompressed,
+		ExpiredReplays:    a.ExpiredReplays + b.ExpiredReplays,
+		RuntimeMatches:    a.RuntimeMatches + b.RuntimeMatches,
+		MatchSessions:     a.MatchSessions + b.MatchSessions,
+		MatchPlans:        a.MatchPlans + b.MatchPlans,
+		ChatMessages:      a.ChatMessages + b.ChatMessages,
+		ChatConversations: a.ChatConversations + b.ChatConversations,
+		AuthSessions:      a.AuthSessions + b.AuthSessions,
+		Parties:           a.Parties + b.Parties,
+		MapUploadEvents:   a.MapUploadEvents + b.MapUploadEvents,
+		MapDailyUsers:     a.MapDailyUsers + b.MapDailyUsers,
+		UserNotifications: a.UserNotifications + b.UserNotifications,
 	}
 }

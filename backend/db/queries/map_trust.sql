@@ -3,7 +3,7 @@ SELECT count(*)::int AS current_maps, coalesce(sum(location_count),0)::int AS cu
 FROM maps WHERE owner_user_id=$1 AND archived_at IS NULL;
 
 -- name: GetMapTrustUser :one
-SELECT account_type, created_at, banned_at, ban_expires_at, deleted_at,
+SELECT gd_is_registered(users.id) AS has_identity, created_at, banned_at, ban_expires_at, deleted_at,
        map_creator_tier_override, report_muted_at, report_mute_expires_at
 FROM users WHERE id=$1;
 

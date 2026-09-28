@@ -39,7 +39,7 @@ export function SignalsRoute(props: { config: RuntimeConfig; accessToken: string
             {signals.map((signal) => (
               <tr key={signal.id}>
                 <td className="px-4 py-3">
-				  <Link className="font-strong text-content-primary hover:text-status-success" href={`/moderator/subjects/${encodeURIComponent(toPublicEntityId(signal.subjectUserId))}`}>
+				  <Link className="font-strong text-content-primary hover:text-status-success" href={`/admin/judge/subjects/${encodeURIComponent(toPublicEntityId(signal.subjectUserId))}`}>
                     {signal.subjectName || signal.subjectUserId}
                   </Link>
                   <p className="text-body-sm text-content-secondary">{signal.subjectUserId}</p>

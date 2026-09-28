@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"encoding/json"
+	"geoduels/pkg/staff"
 	"strings"
 	"time"
 
@@ -578,13 +579,14 @@ type MatchSessionResponse struct {
 }
 
 type AuthUser struct {
-	ID          string `json:"id"`
-	Email       string `json:"email,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-	AvatarURL   string `json:"avatar_url,omitempty"`
-	IsGuest     bool   `json:"isGuest"`
-	IsAdmin     bool   `json:"isAdmin,omitempty"`
-	IsModerator bool   `json:"isModerator,omitempty"`
+	Roles       staff.Roles `json:"roles"`
+	ID          string      `json:"id"`
+	Email       string      `json:"email,omitempty"`
+	DisplayName string      `json:"display_name,omitempty"`
+	AvatarURL   string      `json:"avatar_url,omitempty"`
+	IsGuest     bool        `json:"isGuest"`
+	IsAdmin     bool        `json:"isAdmin,omitempty"`
+	IsModerator bool        `json:"isModerator,omitempty"`
 }
 
 type LeaderboardEntrySummary struct {
@@ -617,23 +619,25 @@ type AuthSessionPayload struct {
 }
 
 type BootstrapViewer struct {
-	ID                string       `json:"id"`
-	Email             string       `json:"email,omitempty"`
-	DisplayName       string       `json:"displayName"`
-	AvatarURL         string       `json:"avatarUrl,omitempty"`
-	AccountType       string       `json:"accountType"`
-	MMR               int          `json:"mmr"`
-	RatingRD          float64      `json:"ratingRd,omitempty"`
-	GamesPlayed       int          `json:"gamesPlayed"`
-	Wins              int          `json:"wins"`
-	RankedGamesPlayed int          `json:"rankedGamesPlayed"`
-	RankedWins        int          `json:"rankedWins"`
-	IsAdmin           bool         `json:"isAdmin,omitempty"`
-	IsModerator       bool         `json:"isModerator,omitempty"`
-	IsBanned          bool         `json:"isBanned,omitempty"`
-	BanReason         string       `json:"banReason,omitempty"`
-	LinkedProviders   []string     `json:"linkedProviders,omitempty"`
-	SelectedBadge     *PlayerBadge `json:"selectedBadge,omitempty"`
+	Roles             staff.Roles   `json:"roles"`
+	ID                string        `json:"id"`
+	Email             string        `json:"email,omitempty"`
+	DisplayName       string        `json:"displayName"`
+	AvatarURL         string        `json:"avatarUrl,omitempty"`
+	AccountType       string        `json:"accountType"`
+	MMR               int           `json:"mmr"`
+	RatingRD          float64       `json:"ratingRd,omitempty"`
+	GamesPlayed       int           `json:"gamesPlayed"`
+	Wins              int           `json:"wins"`
+	RankedGamesPlayed int           `json:"rankedGamesPlayed"`
+	RankedWins        int           `json:"rankedWins"`
+	IsAdmin           bool          `json:"isAdmin,omitempty"`
+	IsModerator       bool          `json:"isModerator,omitempty"`
+	IsBanned          bool          `json:"isBanned,omitempty"`
+	BanReason         string        `json:"banReason,omitempty"`
+	LinkedProviders   []string      `json:"linkedProviders,omitempty"`
+	Badges            []PlayerBadge `json:"badges,omitempty"`
+	SelectedBadge     *PlayerBadge  `json:"selectedBadge,omitempty"`
 }
 
 type BootstrapPreferences struct {
@@ -811,6 +815,17 @@ type PlannedRound struct {
 	Location   LocationPoint `json:"location"`
 }
 
+// AdminBadgeDefinition is a grantable badge offered to staff.
+type AdminBadgeDefinition struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	ImageURL    string `json:"imageUrl"`
+	Rarity      string `json:"rarity,omitempty"`
+	MaxLevel    int    `json:"maxLevel"`
+}
+
 type AdminPlayerSummary struct {
 	UserID            string              `json:"userId"`
 	Email             string              `json:"email,omitempty"`
@@ -935,6 +950,9 @@ type MapPersonalBest struct {
 }
 
 type CustomMap struct {
+	MOTWCount        int              `json:"motwCount"`
+	MOTWCurrent      bool             `json:"motwCurrent"`
+	MOTWLastAt       *time.Time       `json:"motwLastAt,omitempty"`
 	ID               string           `json:"id"`
 	MapKey           string           `json:"mapKey"`
 	OwnerUserID      string           `json:"ownerUserId,omitempty"`
@@ -1089,6 +1107,7 @@ const (
 )
 
 type ChatMessage struct {
+	SenderTeamID      string          `json:"senderTeamId,omitempty"`
 	ID                string          `json:"id"`
 	ConversationID    string          `json:"conversationId,omitempty"`
 	MatchID           string          `json:"matchId"`

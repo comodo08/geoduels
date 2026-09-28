@@ -11,9 +11,12 @@ SELECT coalesce(team_id, '') FROM match_participants WHERE match_id=$1 AND user_
 INSERT INTO chat_conversations (id, scope_kind, scope_id) VALUES (sqlc.arg(conversation_id), sqlc.arg(scope_kind)::gd_chat_scope, sqlc.arg(scope_id)::uuid) ON CONFLICT (id) DO NOTHING;
 
 -- name: InsertMessage :exec
-INSERT INTO chat_messages (id, conversation_id, team_match_id, sender_user_id, sender_display_name, kind, body, emote, audience, team_id, created_at)
-VALUES (sqlc.arg(message_id), sqlc.arg(conversation_id), sqlc.narg(team_match_id), sqlc.arg(sender_user_id), sqlc.arg(sender_display_name), sqlc.arg(kind), sqlc.arg(body), sqlc.arg(emote), sqlc.arg(audience), sqlc.narg(team_id), sqlc.arg(created_at)) ON CONFLICT (id) DO NOTHING;
+INSERT INTO chat_messages (id, conversation_id, team_match_id, sender_user_id, sender_display_name, kind, body, emote, audience, team_id, sender_team_id, created_at)
+VALUES (sqlc.arg(message_id), sqlc.arg(conversation_id), sqlc.narg(team_match_id), sqlc.arg(sender_user_id), sqlc.arg(sender_display_name), sqlc.arg(kind), sqlc.arg(body), sqlc.arg(emote), sqlc.arg(audience), sqlc.narg(team_id), sqlc.narg(sender_team_id), sqlc.arg(created_at)) ON CONFLICT (id) DO NOTHING;
 
 -- name: ListMessages :many
-SELECT m.id, c.scope_kind || ':' || c.scope_id::text AS conversation_id, m.team_match_id AS match_id, m.sender_user_id, m.sender_display_name, m.kind AS kind, coalesce(m.body, '') AS body, coalesce(m.emote, '') AS emote, m.audience AS audience, m.team_id AS team_id, m.created_at
-FROM chat_messages m JOIN chat_conversations c ON c.id=m.conversation_id WHERE m.conversation_id=sqlc.arg(conversation_id) AND (sqlc.arg(viewer_user_id)='' OR m.audience='all' OR EXISTS (SELECT 1 FROM match_participants mp WHERE mp.match_id=m.team_match_id AND mp.user_id=nullif(sqlc.arg(viewer_user_id),'')::uuid AND mp.team_id::text=m.team_id::text)) ORDER BY m.created_at ASC LIMIT sqlc.arg(row_limit);
+SELECT m.id, c.scope_kind || ':' || c.scope_id::text AS conversation_id, m.team_match_id AS match_id, m.sender_user_id, m.sender_display_name, m.kind AS kind, coalesce(m.body, '') AS body, coalesce(m.emote, '') AS emote, m.audience AS audience, m.team_id AS team_id, m.sender_team_id, m.created_at
+FROM chat_messages m JOIN chat_conversations c ON c.id=m.conversation_id WHERE m.conversation_id=sqlc.arg(conversation_id) AND (sqlc.arg(viewer_user_id)='' OR sqlc.arg(reveal_team)::boolean OR m.audience='all' OR EXISTS (SELECT 1 FROM match_participants mp WHERE mp.match_id=m.team_match_id AND mp.user_id=nullif(sqlc.arg(viewer_user_id),'')::uuid AND mp.team_id::text=m.team_id::text)) ORDER BY m.created_at ASC LIMIT sqlc.arg(row_limit);
+
+-- name: MatchEnded :one
+SELECT EXISTS(SELECT 1 FROM match_sessions WHERE match_id=sqlc.arg(match_id)::uuid AND state='ended');

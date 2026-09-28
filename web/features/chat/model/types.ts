@@ -6,6 +6,7 @@ export type ChatMessage = {
   conversationId?: string;
   matchId: string;
   senderUserId: string;
+  senderTeamId?: string;
   senderDisplayName: string;
   kind: "text" | "emote";
   audience?: ChatAudience;

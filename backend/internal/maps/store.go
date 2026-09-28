@@ -90,11 +90,25 @@ func ResolveMapIdentity(ctx context.Context, q db.DBTX, identifier string) (stri
 }
 
 func mapFromQueryRow(r db.ListMapsRow) contracts.CustomMap {
-	return mapFromParts(r.ID, r.MapKey, r.OwnerUserID, r.AuthorDisplayName, r.DisplayName, r.Description, r.Visibility, r.Status, r.Difficulty, r.ThumbnailVariant, r.ThumbnailKey, r.LocationCount, r.IsSystem, r.IsOfficial, r.PublishedAt, r.PlayCount, r.FavoriteCount, r.CommentCount, r.TrendingScore, r.Favorited, r.OfficialRegion, r.ModeMoving, r.ModeNoMove, r.ModeNmpz, r.CreatedAt, r.UpdatedAt, r.BestScore, r.BestMatchID, r.AchievedAt)
+	item := mapFromParts(r.ID, r.MapKey, r.OwnerUserID, r.AuthorDisplayName, r.DisplayName, r.Description, r.Visibility, r.Status, r.Difficulty, r.ThumbnailVariant, r.ThumbnailKey, r.LocationCount, r.IsSystem, r.IsOfficial, r.PublishedAt, r.PlayCount, r.FavoriteCount, r.CommentCount, r.TrendingScore, r.Favorited, r.OfficialRegion, r.ModeMoving, r.ModeNoMove, r.ModeNmpz, r.CreatedAt, r.UpdatedAt, r.BestScore, r.BestMatchID, r.AchievedAt)
+	item.MOTWCount = int(r.MotwCount)
+	item.MOTWCurrent = r.MotwCurrent
+	if r.MotwLastAt.Valid {
+		v := r.MotwLastAt.Time
+		item.MOTWLastAt = &v
+	}
+	return item
 }
 
 func mapFromGetRow(r db.GetMapRow) contracts.CustomMap {
-	return mapFromParts(r.ID, r.MapKey, r.OwnerUserID, r.AuthorDisplayName, r.DisplayName, r.Description, r.Visibility, r.Status, r.Difficulty, r.ThumbnailVariant, r.ThumbnailKey, r.LocationCount, r.IsSystem, r.IsOfficial, r.PublishedAt, r.PlayCount, r.FavoriteCount, r.CommentCount, r.TrendingScore, r.Favorited, r.OfficialRegion, r.ModeMoving, r.ModeNoMove, r.ModeNmpz, r.CreatedAt, r.UpdatedAt, r.BestScore, r.BestMatchID, r.AchievedAt)
+	item := mapFromParts(r.ID, r.MapKey, r.OwnerUserID, r.AuthorDisplayName, r.DisplayName, r.Description, r.Visibility, r.Status, r.Difficulty, r.ThumbnailVariant, r.ThumbnailKey, r.LocationCount, r.IsSystem, r.IsOfficial, r.PublishedAt, r.PlayCount, r.FavoriteCount, r.CommentCount, r.TrendingScore, r.Favorited, r.OfficialRegion, r.ModeMoving, r.ModeNoMove, r.ModeNmpz, r.CreatedAt, r.UpdatedAt, r.BestScore, r.BestMatchID, r.AchievedAt)
+	item.MOTWCount = int(r.MotwCount)
+	item.MOTWCurrent = r.MotwCurrent
+	if r.MotwLastAt.Valid {
+		v := r.MotwLastAt.Time
+		item.MOTWLastAt = &v
+	}
+	return item
 }
 
 func mapFromParts(id any, key, owner, author any, name, desc string, vis db.GdMapVisibility, status db.GdMapStatus, diff db.GdMapDifficulty, thumbVariant int32, thumbKey string, count int32, system pgtype.Bool, official any, published pgtype.Timestamptz, plays, favs, comments int32, trend float64, favorited bool, region []byte, moving, noMove, nmpz bool, created, updated pgtype.Timestamptz, best pgtype.Int2, match any, achieved pgtype.Timestamptz) contracts.CustomMap {

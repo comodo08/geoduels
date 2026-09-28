@@ -1,3 +1,4 @@
+import type { StaffRole } from "../roles";
 import type { RuntimeConfig } from "../../../lib/runtime-config";
 import { apiFetch, authHeaders, mergeHeaders, readError } from "../../../lib/http";
 import type { LeaderboardSummary } from "../controllers/session-controller";
@@ -17,6 +18,7 @@ export type AuthSessionPayload = {
     email?: string;
     display_name?: string;
     avatar_url?: string;
+    roles?: StaffRole[];
     isGuest?: boolean;
     isAdmin?: boolean;
     isModerator?: boolean;
@@ -24,6 +26,7 @@ export type AuthSessionPayload = {
 };
 
 export type BootstrapViewer = {
+  roles?: StaffRole[];
   id: string;
   email?: string;
   displayName: string;
@@ -40,6 +43,7 @@ export type BootstrapViewer = {
   isBanned?: boolean;
   banReason?: string;
   linkedProviders?: string[];
+  badges?: unknown[] | null;
   selectedBadge?: unknown | null;
 };
 

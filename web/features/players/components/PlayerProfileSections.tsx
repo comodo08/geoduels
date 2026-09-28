@@ -162,41 +162,25 @@ export function ProfileBadges({
   profile,
   editor,
   owner,
+  ownerBadges,
 }: {
   profile: PublicPlayerProfile;
   editor: Editor;
   owner: boolean;
+  ownerBadges?: PublicPlayerProfile["badges"];
 }) {
+  const catalog =
+    owner && ownerBadges?.length ? ownerBadges : profile.badges;
+  const pendingBadgeId = editor.badgeMutation.isPending
+    ? editor.badgeMutation.variables
+    : undefined;
+  const selectedBadgeId =
+    pendingBadgeId !== undefined ? pendingBadgeId : profile.selectedBadge?.id;
+
   return (
     <AppPanel className="rounded-2xl p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-heading-sm font-strong text-content-primary">Earned badges</h2>
-        {owner ? (
-          editor.choosingBadge ? (
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={editor.cancelBadge}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={editor.saveBadge}
-                disabled={editor.badgeMutation.isPending}
-              >
-                {editor.badgeMutation.isPending ? (
-                  <Spinner size="sm" label="Saving badge" color="current" />
-                ) : null}
-                Save
-              </Button>
-            </div>
-          ) : (
-            <Button
-              onClick={() => editor.setChoosingBadge(true)}
-            >
-              Choose displayed badge
-            </Button>
-          )
-        ) : null}
+        <h2 className="text-heading-sm font-strong text-content-primary">Badges</h2>
       </div>
       <MutationError
         mutation={editor.badgeMutation}
@@ -204,12 +188,11 @@ export function ProfileBadges({
         className="mb-3"
       />
       <ProfileBadgeCollection
-        badges={profile.badges || []}
-        editing={editor.choosingBadge}
-        selectedBadgeId={
-          editor.choosingBadge ? editor.badgeId : profile.selectedBadge?.id
-        }
-        onSelect={editor.setBadgeId}
+        badges={catalog || []}
+        interactive={owner}
+        selectedBadgeId={selectedBadgeId}
+        onSelect={editor.selectBadge}
+        pending={editor.badgeMutation.isPending}
       />
     </AppPanel>
   );

@@ -1,3 +1,4 @@
+import { avatarSource, defaultAvatars, type AvatarKind } from "../../../lib/avatar";
 import { useEffect, useState } from 'react';
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   avatarColor?: string;
+  kind?: AvatarKind;
 };
 
 const sizeClass: Record<NonNullable<Props['size']>, string> = {
@@ -24,7 +26,8 @@ export default function AvatarBadge({
   opponent = false,
   size = 'md',
   className = '',
-  avatarColor
+  avatarColor,
+  kind = "player"
 }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -43,17 +46,7 @@ export default function AvatarBadge({
       className={`relative grid place-items-center overflow-hidden rounded-full border border-border-strong ${base} ${sizeClass[size]} ${className}`}
       style={avatarColor ? { backgroundColor: avatarColor } : undefined}
     >
-      {avatarUrl && !imgFailed ? (
-        // Using img keeps this simple for remote avatar URLs.
-        <img
-          src={avatarUrl}
-          alt={alt}
-          className="h-full w-full object-cover"
-          onError={() => setImgFailed(true)}
-        />
-      ) : (
-        <span className={`font-strong ${avatarColor ? 'text-content-on-action font-hud' : 'text-content-inverse'}`}>{fallback.slice(0, 1).toUpperCase()}</span>
-      )}
+      <img src={imgFailed ? defaultAvatars[kind] : avatarSource(avatarUrl,kind)} alt={alt} className="h-full w-full object-cover" onError={()=>setImgFailed(true)} />
     </div>
   );
 }

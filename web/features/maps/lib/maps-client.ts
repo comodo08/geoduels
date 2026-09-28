@@ -2,6 +2,9 @@ import type { RuntimeConfig } from "../../../lib/runtime-config";
 import { apiFetch, authHeaders, expectJSON, mergeHeaders } from "../../../lib/http";
 
 export type CustomMap = {
+  motwCount?: number;
+  motwCurrent?: boolean;
+  motwLastAt?: string;
   id: string;
   mapKey?: string;
   ownerUserId?: string;
@@ -36,7 +39,7 @@ export type CustomMap = {
 };
 export type MapVisibility = CustomMap["visibility"];
 
-export type MapScope = "official" | "community" | "favorites" | "mine";
+export type MapScope = "official" | "community" | "favorites" | "mine" | "awarded";
 export type MapSort = "trending" | "popular" | "new";
 export type MapCountryStat = { country: string; locationCount: number };
 export type MapComment = {
@@ -93,11 +96,11 @@ export async function listMaps(config: RuntimeConfig, accessToken: string | unde
   if (input.sort) params.set("sort", input.sort);
   const search = input.search?.trim();
   if (search) params.set("search", search);
-  return expectJSON(await apiFetch(config, `/v1/maps?${params}`, { headers: authHeaders(accessToken) }), "Map request failed");
+  return expectJSON(await apiFetch(config, `/v2/maps?${params}`, { headers: authHeaders(accessToken) }), "Map request failed");
 }
 
 export async function getMap(config: RuntimeConfig, accessToken: string | undefined, mapId: string): Promise<MapDetails> {
-  return expectJSON(await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}`, { headers: authHeaders(accessToken) }), "Map request failed");
+  return expectJSON(await apiFetch(config, `/v2/maps/${encodeURIComponent(mapId)}`, { headers: authHeaders(accessToken) }), "Map request failed");
 }
 
 export async function getMapUploadQuota(config: RuntimeConfig, accessToken: string): Promise<MapUploadQuota> {

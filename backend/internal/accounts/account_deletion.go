@@ -3,87 +3,96 @@ package accounts
 import (
 	"context"
 	"errors"
-	db "geoduels/pkg/persistence/sqlc/db"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"strings"
-	"time"
+
+	db "geoduels/pkg/persistence/sqlc/db"
 )
 
 func deletionUUID(s string) (pgtype.UUID, error) { var u pgtype.UUID; return u, u.Scan(s) }
-func (s *PGStore) DeleteAccount(userID string) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return errors.New("userID required")
+
+// DeletionUser is the primitive ban-state read used before deleting an account.
+func (s *PGStore) DeletionUser(ctx context.Context, userID string) (bool, string, error) {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return false, "", err
 	}
-	ctx, c := context.WithTimeout(context.Background(), 4*time.Second)
-	defer c()
-	tx, e := s.pool.Begin(ctx)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback(ctx)
-	q := db.New(tx)
-	id, e := deletionUUID(userID)
-	if e != nil {
-		return e
-	}
-	u, e := q.GetDeletionUser(ctx, id)
-	if e != nil {
-		if errors.Is(e, pgx.ErrNoRows) {
-			return errors.New("user not found")
+	u, err := s.q().GetDeletionUser(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, "", errors.New("user not found")
 		}
-		return e
+		return false, "", err
 	}
-	if banned, ok := u.IsBanned.(bool); ok && banned {
-		r := strings.TrimSpace(u.BanReason)
-		if r == "" {
-			r = "account deleted while banned"
-		}
-		if e = db.New(tx).BanUserOAuthIdentities(ctx, db.BanUserOAuthIdentitiesParams{BannedUserID: id, Reason: r}); e != nil {
-			return e
-		}
-	}
-	if e = q.RevokeDeletionSessions(ctx, id); e != nil {
-		return e
-	}
-	xs, e := q.ListDeletionDiscordIdentities(ctx, db.ListDeletionDiscordIdentitiesParams{UserID: id, Provider: db.GdOauthProvider(IdentityProviderDiscord)})
-	if e != nil {
-		return e
-	}
-	for _, x := range xs {
-		if e = EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionCleanupRoles, x); e != nil {
-			return e
-		}
-	}
-	if e = q.ArchiveDeletionIdentities(ctx, id); e != nil {
-		return e
-	}
-	if e = q.DeleteDeletionIdentities(ctx, id); e != nil {
-		return e
-	}
-	if _, e = q.AnonymizeDeletedUser(ctx, id); e != nil {
-		return e
-	}
-	return tx.Commit(ctx)
+	banned, _ := u.IsBanned.(bool)
+	return banned, u.BanReason, nil
 }
-func (s *PGStore) DeleteGuestAccountsOlderThan(ttl time.Duration, limit int) (int, error) {
-	if ttl <= 0 || limit <= 0 {
-		return 0, nil
+
+func (s *PGStore) BanUserOAuthIdentities(ctx context.Context, userID, reason string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
 	}
-	ctx, c := context.WithTimeout(context.Background(), 30*time.Second)
-	defer c()
-	tx, e := s.pool.Begin(ctx)
-	if e != nil {
-		return 0, e
+	return s.q().BanUserOAuthIdentities(ctx, db.BanUserOAuthIdentitiesParams{BannedUserID: id, Reason: reason})
+}
+
+func (s *PGStore) RevokeDeletionSessions(ctx context.Context, userID string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
 	}
-	defer tx.Rollback(ctx)
-	xs, e := db.New(tx).DeleteOldGuestAccounts(ctx, db.DeleteOldGuestAccountsParams{TtlSeconds: ttl.Seconds(), AccountLimit: int32(limit)})
-	if e != nil {
-		return 0, e
+	return s.q().RevokeDeletionSessions(ctx, id)
+}
+
+func (s *PGStore) ListDeletionDiscordIdentities(ctx context.Context, userID string) ([]string, error) {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return nil, err
 	}
-	if e = tx.Commit(ctx); e != nil {
-		return 0, e
+	return s.q().ListDeletionDiscordIdentities(ctx, db.ListDeletionDiscordIdentitiesParams{UserID: id, Provider: db.GdOauthProvider(IdentityProviderDiscord)})
+}
+
+func (s *PGStore) ArchiveDeletionIdentities(ctx context.Context, userID string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
 	}
-	return len(xs), nil
+	return s.q().ArchiveDeletionIdentities(ctx, id)
+}
+
+func (s *PGStore) DeleteDeletionIdentities(ctx context.Context, userID string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().DeleteDeletionIdentities(ctx, id)
+}
+
+func (s *PGStore) DeleteAccountRoles(ctx context.Context, userID string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().DeleteAccountRoles(ctx, id)
+}
+
+func (s *PGStore) AnonymizeDeletedUser(ctx context.Context, userID string) error {
+	id, err := deletionUUID(userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.q().AnonymizeDeletedUser(ctx, id)
+	return err
+}
+
+// DeleteOldGuestAccounts prunes stale guests; the service owns the TTL/batch
+// bounds and returns only the count.
+func (s *PGStore) DeleteOldGuestAccounts(ctx context.Context, ttl time.Duration, limit int) (int, error) {
+	rows, err := s.q().DeleteOldGuestAccounts(ctx, db.DeleteOldGuestAccountsParams{TtlSeconds: ttl.Seconds(), AccountLimit: int32(limit)})
+	if err != nil {
+		return 0, err
+	}
+	return len(rows), nil
 }

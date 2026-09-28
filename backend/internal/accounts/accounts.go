@@ -2,26 +2,16 @@ package accounts
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
-	"fmt"
-	"geoduels/internal/storekit"
-	"geoduels/pkg/entityid"
-	"math/big"
-	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"geoduels/pkg/contentfilter"
+	"geoduels/internal/storekit"
 	db "geoduels/pkg/persistence/sqlc/db"
+	"geoduels/pkg/staff"
 )
-
-var ErrNicknameTaken = errors.New("nickname already taken")
-
-var ErrOAuthEmailConflict = errors.New("verified email is linked to multiple accounts")
 
 func accountNullableText(value any) pgtype.Text {
 	var result pgtype.Text
@@ -29,513 +19,39 @@ func accountNullableText(value any) pgtype.Text {
 	return result
 }
 
-func chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType string) (string, bool) {
-	if existingProviderUserID != "" {
-		return existingProviderUserID, false
-	}
-	if existingEmailUserID != "" {
-		return existingEmailUserID, existingEmailAccountType == "guest"
-	}
-	if linkUserID != "" && linkAccountType != "" {
-		return linkUserID, linkAccountType == "guest"
-	}
-	return entityid.New(), false
-}
-
-func chooseGoogleIdentityUser(existingGoogleUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType string) (string, bool) {
-	return chooseProviderIdentityUser(existingGoogleUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType)
-}
-
-func providerUsesAccountEmail(provider string) bool {
-	return provider == IdentityProviderGoogle || provider == IdentityProviderDiscord
-}
-
-func isSyntheticOAuthEmail(email string) bool {
-	email = strings.TrimSpace(strings.ToLower(email))
-	return strings.HasSuffix(email, "@oauth.invalid") || strings.HasSuffix(email, ".oauth.invalid")
-}
-
-func providerAccountEmail(provider, email string) any {
-	email = strings.TrimSpace(email)
-	if providerUsesAccountEmail(provider) && email != "" && !isSyntheticOAuthEmail(email) {
-		return email
-	}
-	return nil
-}
-
-func lockOAuthEmail(ctx context.Context, tx pgx.Tx, email string) error {
-	if email == "" || isSyntheticOAuthEmail(email) {
-		return nil
-	}
-	// Account discovery and canonical-email claims must be serialized together.
-	// A transaction-scoped advisory lock works through PgBouncer transaction pools.
-	return db.New(tx).LockOAuthEmail(ctx, email)
-}
-
-func findUserByVerifiedEmail(ctx context.Context, tx pgx.Tx, email string) (string, string, error) {
-	if email == "" || isSyntheticOAuthEmail(email) {
-		return "", "", nil
-	}
-	rows, err := db.New(tx).FindUserByVerifiedEmail(ctx, email)
-	if err != nil {
-		return "", "", err
-	}
-	var userID, accountType string
-	if len(rows) > 0 {
-		userID, accountType = rows[0].ID.String(), string(rows[0].AccountType)
-	}
-	if len(rows) > 1 {
-		return "", "", ErrOAuthEmailConflict
-	}
-	return userID, accountType, nil
-}
-
-func (s *PGStore) UpsertGoogleIdentity(googleSub, email, googleName, avatarURL, linkUserID string) (Identity, error) {
-	return s.UpsertProviderIdentity(IdentityProviderGoogle, googleSub, email, googleName, avatarURL, linkUserID)
-}
-
-func (s *PGStore) UpsertProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (Identity, error) {
-	provider = strings.TrimSpace(strings.ToLower(provider))
-	if provider == "" {
-		return Identity{}, errors.New("provider required")
-	}
-	if providerUserID == "" {
-		return Identity{}, errors.New("provider subject required")
-	}
-	if email == "" {
-		email = providerUserID + "@oauth.invalid"
-	}
-	if providerName == "" {
-		providerName = providerUserID
-	}
-	providerIdentityBanned, _, err := s.IsProviderIdentityBanned(provider, providerUserID)
-	if err != nil {
-		return Identity{}, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Identity{}, err
-	}
-	defer tx.Rollback(ctx)
-	seasonID, err := storekit.ActiveSeasonID(ctx, tx)
-	if err != nil {
-		return Identity{}, err
-	}
-	if providerUsesAccountEmail(provider) {
-		if err := lockOAuthEmail(ctx, tx, email); err != nil {
-			return Identity{}, err
-		}
-	}
-
-	var existingProviderUserID string
-	writeQ := db.New(tx)
-	existingProviderUUID, findErr := writeQ.FindProviderIdentityUser(ctx, db.FindProviderIdentityUserParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
-	if findErr == nil {
-		existingProviderUserID = existingProviderUUID.String()
-	}
-	if findErr != nil && !errors.Is(findErr, pgx.ErrNoRows) {
-		return Identity{}, findErr
-	}
-	// A provider ban prevents account creation/evasion, but an identity that is
-	// still attached to its banned account may authenticate into that account.
-	if providerIdentityBanned && existingProviderUserID == "" {
-		return Identity{}, errors.New("provider identity banned")
-	}
-	var previousLinkedProviderUserID string
-	if provider == IdentityProviderDiscord && linkUserID != "" {
-		linkUUID, parseErr := profileUUID(linkUserID)
-		if parseErr != nil {
-			return Identity{}, parseErr
-		}
-		previousLinkedProviderUserID, err = writeQ.FindProviderUserIdentity(ctx, db.FindProviderUserIdentityParams{UserID: linkUUID, Provider: db.GdOauthProvider(provider)})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, err
-		}
-	}
-	var existingEmailUserID string
-	var existingEmailAccountType string
-	if providerUsesAccountEmail(provider) && existingProviderUserID == "" {
-		existingEmailUserID, existingEmailAccountType, err = findUserByVerifiedEmail(ctx, tx, email)
-		if err != nil {
-			return Identity{}, err
-		}
-	}
-	var linkAccountType string
-	if existingProviderUserID == "" && existingEmailUserID == "" && linkUserID != "" {
-		linkUUID, parseErr := profileUUID(linkUserID)
-		if parseErr != nil {
-			return Identity{}, parseErr
-		}
-		accountType, accountErr := writeQ.GetUserAccountType(ctx, linkUUID)
-		if accountErr == nil {
-			linkAccountType = string(accountType)
-		}
-		if accountErr != nil && !errors.Is(accountErr, pgx.ErrNoRows) {
-			return Identity{}, accountErr
-		}
-	}
-	userID, _ := chooseProviderIdentityUser(existingProviderUserID, existingEmailUserID, existingEmailAccountType, linkUserID, linkAccountType)
-	userEmail := providerAccountEmail(provider, email)
-	userUUID, err := profileUUID(userID)
-	if err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.UpsertRegisteredUser(ctx, db.UpsertRegisteredUserParams{ID: userUUID, Email: accountNullableText(userEmail), DisplayName: providerName, AvatarUrl: accountNullableText(storekit.Nullable(avatarURL))}); err != nil {
-		return Identity{}, err
-	}
-	identityParams := db.UpsertIdentityByProviderSubjectParams{UserID: userUUID, Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID, Email: accountNullableText(email), ProviderName: accountNullableText(providerName), AvatarUrl: accountNullableText(storekit.Nullable(avatarURL))}
-	if existingProviderUserID != "" {
-		if err := writeQ.UpsertIdentityByProviderSubject(ctx, identityParams); err != nil {
-			return Identity{}, err
-		}
-	} else {
-		if err := writeQ.UpsertIdentityByUserProvider(ctx, db.UpsertIdentityByUserProviderParams(identityParams)); err != nil {
-			return Identity{}, err
-		}
-	}
-	if err := recordUserIdentityHistory(ctx, tx, userID, provider, providerUserID, email, providerName); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.EnsureAccountRank(ctx, db.EnsureAccountRankParams{UserID: userUUID, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID, Mmr: int32(initialMMR)}); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.EnsureAccountStats(ctx, userUUID); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.EnsureAccountRankedStats(ctx, db.EnsureAccountRankedStatsParams{UserID: userUUID, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID}); err != nil {
-		return Identity{}, err
-	}
-	if provider == IdentityProviderDiscord {
-		if previousLinkedProviderUserID != "" && previousLinkedProviderUserID != providerUserID {
-			if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionCleanupRoles, previousLinkedProviderUserID); err != nil {
-				return Identity{}, err
-			}
-		}
-		if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionSync, providerUserID); err != nil {
-			return Identity{}, err
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Identity{}, err
-	}
-	return s.GetIdentity(userID)
-}
-
-func (s *PGStore) LinkProviderIdentity(provider, providerUserID, email, providerName, avatarURL, linkUserID string) (Identity, error) {
-	provider = strings.TrimSpace(strings.ToLower(provider))
-	providerUserID = strings.TrimSpace(providerUserID)
-	linkUserID = strings.TrimSpace(linkUserID)
-	if provider == "" {
-		return Identity{}, errors.New("provider required")
-	}
-	if providerUserID == "" {
-		return Identity{}, errors.New("provider subject required")
-	}
-	if linkUserID == "" {
-		return Identity{}, errors.New("link user required")
-	}
-	if email == "" {
-		email = providerUserID + "@oauth.invalid"
-	}
-	if providerName == "" {
-		providerName = providerUserID
-	}
-	if banned, _, err := s.IsProviderIdentityBanned(provider, providerUserID); err != nil {
-		return Identity{}, err
-	} else if banned {
-		return Identity{}, errors.New("provider identity banned")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Identity{}, err
-	}
-	defer tx.Rollback(ctx)
-	seasonID, err := storekit.ActiveSeasonID(ctx, tx)
-	if err != nil {
-		return Identity{}, err
-	}
-	if providerUsesAccountEmail(provider) {
-		if err := lockOAuthEmail(ctx, tx, email); err != nil {
-			return Identity{}, err
-		}
-	}
-	writeQ := db.New(tx)
-	linkUUID, err := profileUUID(linkUserID)
-	if err != nil {
-		return Identity{}, errors.New("link user not found")
-	}
-
-	_, err = writeQ.GetUserAccountType(ctx, linkUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, errors.New("link user not found")
-		}
-		return Identity{}, err
-	}
-
-	var existingProviderUserID string
-	existingProviderUUID, err := writeQ.FindProviderIdentityUser(ctx, db.FindProviderIdentityUserParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
-	if err == nil {
-		existingProviderUserID = existingProviderUUID.String()
-	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return Identity{}, err
-	}
-	if existingProviderUserID != "" && existingProviderUserID != linkUserID {
-		return Identity{}, errors.New("provider identity already linked")
-	}
-	var previousLinkedProviderUserID string
-	if provider == IdentityProviderDiscord {
-		previousLinkedProviderUserID, err = writeQ.FindProviderUserIdentity(ctx, db.FindProviderUserIdentityParams{UserID: linkUUID, Provider: db.GdOauthProvider(provider)})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, err
-		}
-	}
-	if providerUsesAccountEmail(provider) && email != "" && !isSyntheticOAuthEmail(email) {
-		existingEmailUserID, _, err := findUserByVerifiedEmail(ctx, tx, email)
-		if err != nil && !errors.Is(err, ErrOAuthEmailConflict) {
-			return Identity{}, err
-		}
-		if errors.Is(err, ErrOAuthEmailConflict) {
-			return Identity{}, errors.New("provider identity already linked")
-		}
-		if existingEmailUserID != "" && existingEmailUserID != linkUserID {
-			return Identity{}, errors.New("provider identity already linked")
-		}
-	}
-
-	userEmail := providerAccountEmail(provider, email)
-	if err := writeQ.PromoteLinkedUser(ctx, db.PromoteLinkedUserParams{ID: linkUUID, Email: accountNullableText(userEmail), DisplayName: providerName, AvatarUrl: accountNullableText(storekit.Nullable(avatarURL))}); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.UpsertIdentityByUserProvider(ctx, db.UpsertIdentityByUserProviderParams{UserID: linkUUID, Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID, Email: accountNullableText(email), ProviderName: accountNullableText(providerName), AvatarUrl: accountNullableText(storekit.Nullable(avatarURL))}); err != nil {
-		return Identity{}, err
-	}
-	if err := recordUserIdentityHistory(ctx, tx, linkUserID, provider, providerUserID, email, providerName); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.EnsureAccountRank(ctx, db.EnsureAccountRankParams{UserID: linkUUID, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID, Mmr: int32(initialMMR)}); err != nil {
-		return Identity{}, err
-	}
-	if err := writeQ.EnsureAccountRankedStats(ctx, db.EnsureAccountRankedStatsParams{UserID: linkUUID, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID}); err != nil {
-		return Identity{}, err
-	}
-	if provider == IdentityProviderDiscord {
-		if previousLinkedProviderUserID != "" && previousLinkedProviderUserID != providerUserID {
-			if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionCleanupRoles, previousLinkedProviderUserID); err != nil {
-				return Identity{}, err
-			}
-		}
-		if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionSync, providerUserID); err != nil {
-			return Identity{}, err
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Identity{}, err
-	}
-	return s.GetIdentity(linkUserID)
-}
-
-func (s *PGStore) GoogleIdentityExists(googleSub string) (bool, error) {
-	return s.ProviderIdentityExists(IdentityProviderGoogle, googleSub)
-}
-
-func (s *PGStore) ProviderIdentityExists(provider, providerUserID string) (bool, error) {
-	provider = strings.TrimSpace(strings.ToLower(provider))
-	if provider == "" || strings.TrimSpace(providerUserID) == "" {
-		return false, errors.New("provider and subject required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	exists, err := s.db.ProviderIdentityExists(ctx, db.ProviderIdentityExistsParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
-}
-
-func (s *PGStore) IsProviderIdentityBanned(provider, providerUserID string) (bool, string, error) {
-	provider = strings.TrimSpace(strings.ToLower(provider))
-	providerUserID = strings.TrimSpace(providerUserID)
-	if provider == "" || providerUserID == "" {
-		return false, "", errors.New("provider and subject required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	reason, err := s.db.ProviderIdentityBanned(ctx, db.ProviderIdentityBannedParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, "", nil
-		}
-		return false, "", err
-	}
-	return true, reason, nil
-}
-
-func recordUserIdentityHistory(ctx context.Context, tx pgx.Tx, userID, provider, providerUserID, email, providerName string) error {
-	u, err := profileUUID(userID)
-	if err != nil {
-		return err
-	}
-	return db.New(tx).RecordUserIdentityHistory(ctx, db.RecordUserIdentityHistoryParams{UserID: u, Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID, Email: pgtype.Text{String: email, Valid: true}, ProviderName: pgtype.Text{String: providerName, Valid: true}})
-}
-
-func EnqueueDiscordSyncTx(ctx context.Context, tx pgx.Tx, action, discordUserID string) error {
-	action = strings.TrimSpace(action)
-	discordUserID = strings.TrimSpace(discordUserID)
-	if action == "" || discordUserID == "" {
-		return nil
-	}
-	return db.New(tx).EnqueueDiscordSync(ctx, db.EnqueueDiscordSyncParams{Action: db.GdDiscordSyncAction(action), DiscordUserID: discordUserID})
-}
-
-func EnqueueDiscordSyncForUserTx(ctx context.Context, tx pgx.Tx, userID string) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return nil
-	}
-	u, err := profileUUID(userID)
-	if err != nil {
-		return err
-	}
-	discordUserIDs, err := db.New(tx).ListDiscordIdentities(ctx, db.ListDiscordIdentitiesParams{UserID: u, Provider: db.GdOauthProvider(IdentityProviderDiscord)})
-	if err != nil {
-		return err
-	}
-	for _, discordUserID := range discordUserIDs {
-		if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionSync, discordUserID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *PGStore) UnlinkProviderIdentity(userID, provider string) (Identity, error) {
-	userID = strings.TrimSpace(userID)
-	provider = strings.TrimSpace(strings.ToLower(provider))
-	if userID == "" || provider == "" {
-		return Identity{}, errors.New("user and provider required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Identity{}, err
-	}
-	defer tx.Rollback(ctx)
-	userUUID, err := profileUUID(userID)
-	if err != nil {
-		return Identity{}, err
-	}
-	q := db.New(tx)
-	providerCount, err := q.CountUserProviders(ctx, userUUID)
-	if err != nil {
-		return Identity{}, err
-	}
-	if providerCount <= 1 {
-		return Identity{}, errors.New("cannot unlink the last sign-in method")
-	}
-	var unlinkedProviderUserID string
-	if provider == IdentityProviderDiscord {
-		unlinkedProviderUserID, err = q.FindProviderUserIdentity(ctx, db.FindProviderUserIdentityParams{UserID: userUUID, Provider: db.GdOauthProvider(provider)})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, err
-		}
-	}
-	affected, err := q.DeleteUserProvider(ctx, db.DeleteUserProviderParams{UserID: userUUID, Provider: db.GdOauthProvider(provider)})
-	if err != nil {
-		return Identity{}, err
-	}
-	if affected == 0 {
-		return Identity{}, errors.New("provider is not linked")
-	}
-	if err := q.MarkIdentityHistoryDeleted(ctx, db.MarkIdentityHistoryDeletedParams{UserID: userUUID, Provider: db.GdOauthProvider(provider)}); err != nil {
-		return Identity{}, err
-	}
-	if provider == IdentityProviderGoogle {
-		if err := q.ClearUserEmailWithoutGoogle(ctx, userUUID); err != nil {
-			return Identity{}, err
-		}
-	}
-	if provider == IdentityProviderDiscord {
-		if err := EnqueueDiscordSyncTx(ctx, tx, DiscordSyncActionCleanupRoles, unlinkedProviderUserID); err != nil {
-			return Identity{}, err
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Identity{}, err
-	}
-	return s.GetIdentity(userID)
-}
-
-func (s *PGStore) CreateGuestIdentity() (Identity, error) {
-	userID := entityid.New()
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Identity{}, err
-	}
-	defer tx.Rollback(ctx)
-	seasonID, err := storekit.ActiveSeasonID(ctx, tx)
-	if err != nil {
-		return Identity{}, err
-	}
-	id, err := profileUUID(userID)
-	if err != nil {
-		return Identity{}, err
-	}
-	q := s.db.WithTx(tx)
-	if err := q.UpsertUser(ctx, db.UpsertUserParams{ID: id, DisplayName: "Guest"}); err != nil {
-		return Identity{}, err
-	}
-	if err := q.EnsureUserRank(ctx, db.EnsureUserRankParams{UserID: id, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID, Mmr: int32(initialMMR)}); err != nil {
-		return Identity{}, err
-	}
-	if err := q.EnsureUserStats(ctx, id); err != nil {
-		return Identity{}, err
-	}
-	if err := q.EnsureRankedStats(ctx, db.EnsureRankedStatsParams{UserID: id, Mode: db.GdMatchMode(modeDuel), SeasonID: seasonID}); err != nil {
-		return Identity{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Identity{}, err
-	}
-	return s.GetIdentity(userID)
-}
-
-func (s *PGStore) GetIdentity(sub string) (Identity, error) {
+// GetIdentity is the identity read primitive. It returns the account view
+// callers expect, including staff roles and linked providers.
+func (s *PGStore) GetIdentity(ctx context.Context, sub string) (Identity, error) {
 	if sub == "" {
 		return Identity{}, errors.New("subject required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
 	u, err := profileUUID(sub)
 	if err != nil {
 		return Identity{}, err
 	}
-	r, err := s.db.GetIdentity(ctx, u)
-	var out Identity
-	if err := err; err != nil {
+	r, err := s.q().GetIdentity(ctx, u)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Identity{}, errors.New("identity not found")
 		}
 		return Identity{}, err
 	}
+	out := Identity{}
 	out.Sub = storekit.UUIDVal(r.UserID)
 	out.Email = r.Email
 	out.GoogleName = r.ProviderName
 	out.AvatarURL = r.AvatarUrl
 	out.NicknameRequired, _ = r.NeedsNickname.(bool)
-	out.DisplayName = r.DisplayName.String
-	out.AccountType = string(r.AccountType)
+	out.DisplayName = r.DisplayName
+	out.IsGuest = !r.HasIdentity
 	out.IsAdmin = r.IsAdmin
 	out.IsModerator = r.IsModerator
-	out.IsBanned, _ = r.IsBanned.(bool)
+	roles, err := s.q().GetStaffRoles(ctx, u)
+	if err != nil {
+		return Identity{}, err
+	}
+	out.Roles = staff.FromStrings(roles)
+	out.IsBanned = r.IsBanned
 	out.BanReason = r.BanReason
 	out.ProviderName = out.GoogleName
 	out.LinkedProviders, _ = s.userProviders(ctx, sub)
@@ -549,7 +65,7 @@ func (s *PGStore) userProviders(ctx context.Context, userID string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	providers, err := s.db.ListIdentityProviders(ctx, u)
+	providers, err := s.q().ListIdentityProviders(ctx, u)
 	if err != nil {
 		return nil, err
 	}
@@ -560,29 +76,214 @@ func (s *PGStore) userProviders(ctx context.Context, userID string) ([]string, e
 	return out, nil
 }
 
-func containsString(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
+func (s *PGStore) ProviderIdentityExists(ctx context.Context, provider, providerUserID string) (bool, error) {
+	exists, err := s.q().ProviderIdentityExists(ctx, db.ProviderIdentityExistsParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
+	if err != nil {
+		return false, err
 	}
-	return false
+	return exists, nil
 }
 
-func (s *PGStore) SetNickname(sub, displayName string) error {
-	if sub == "" {
-		return errors.New("subject required")
+func (s *PGStore) ProviderIdentityBanned(ctx context.Context, provider, providerUserID string) (bool, string, error) {
+	reason, err := s.q().ProviderIdentityBanned(ctx, db.ProviderIdentityBannedParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, "", nil
+		}
+		return false, "", err
 	}
-	if displayName == "" {
-		return errors.New("display name required")
+	return true, reason, nil
+}
+
+func (s *PGStore) FindProviderIdentityUser(ctx context.Context, provider, providerUserID string) (string, error) {
+	u, err := s.q().FindProviderIdentityUser(ctx, db.FindProviderIdentityUserParams{Provider: db.GdOauthProvider(provider), ProviderUserID: providerUserID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
+	if err != nil {
+		return "", err
+	}
+	return storekit.UUIDVal(u), nil
+}
+
+func (s *PGStore) FindProviderUserIdentity(ctx context.Context, provider, userID string) (string, error) {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return "", err
+	}
+	id, err := s.q().FindProviderUserIdentity(ctx, db.FindProviderUserIdentityParams{UserID: u, Provider: db.GdOauthProvider(provider)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (s *PGStore) UserIdentityPresence(ctx context.Context, userID string) (IdentityPresence, error) {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return IdentityPresence{}, err
+	}
+	hasIdentity, err := s.q().GetUserIdentityPresence(ctx, u)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return IdentityPresence{}, nil
+	}
+	if err != nil {
+		return IdentityPresence{}, err
+	}
+	return IdentityPresence{Found: true, HasIdentity: hasIdentity}, nil
+}
+
+func (s *PGStore) FindUsersByVerifiedEmail(ctx context.Context, email string) ([]VerifiedEmailUser, error) {
+	rows, err := s.q().FindUserByVerifiedEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VerifiedEmailUser, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, VerifiedEmailUser{UserID: storekit.UUIDVal(row.ID), HasIdentity: row.HasIdentity})
+	}
+	return out, nil
+}
+
+func (s *PGStore) LockOAuthEmail(ctx context.Context, email string) error {
+	return s.q().LockOAuthEmail(ctx, email)
+}
+
+func (s *PGStore) UpsertRegisteredUser(ctx context.Context, userID, email, displayName, avatarURL string) error {
+	id, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().UpsertRegisteredUser(ctx, db.UpsertRegisteredUserParams{
+		ID:          id,
+		Email:       accountNullableText(storekit.Nullable(email)),
+		DisplayName: displayName,
+		AvatarUrl:   accountNullableText(storekit.Nullable(avatarURL)),
+	})
+}
+
+func (s *PGStore) PromoteLinkedUser(ctx context.Context, userID, email, displayName, avatarURL string) error {
+	id, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().PromoteLinkedUser(ctx, db.PromoteLinkedUserParams{
+		ID:          id,
+		Email:       accountNullableText(storekit.Nullable(email)),
+		DisplayName: displayName,
+		AvatarUrl:   accountNullableText(storekit.Nullable(avatarURL)),
+	})
+}
+
+func (s *PGStore) UpsertIdentityByProviderSubject(ctx context.Context, userID, provider, providerUserID, email, providerName, avatarURL string) error {
+	id, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().UpsertIdentityByProviderSubject(ctx, db.UpsertIdentityByProviderSubjectParams{
+		UserID:         id,
+		Provider:       db.GdOauthProvider(provider),
+		ProviderUserID: providerUserID,
+		Email:          accountNullableText(email),
+		ProviderName:   accountNullableText(providerName),
+		AvatarUrl:      accountNullableText(storekit.Nullable(avatarURL)),
+	})
+}
+
+func (s *PGStore) UpsertIdentityByUserProvider(ctx context.Context, userID, provider, providerUserID, email, providerName, avatarURL string) error {
+	id, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().UpsertIdentityByUserProvider(ctx, db.UpsertIdentityByUserProviderParams{
+		UserID:         id,
+		Provider:       db.GdOauthProvider(provider),
+		ProviderUserID: providerUserID,
+		Email:          accountNullableText(email),
+		ProviderName:   accountNullableText(providerName),
+		AvatarUrl:      accountNullableText(storekit.Nullable(avatarURL)),
+	})
+}
+
+func (s *PGStore) RecordIdentityHistory(ctx context.Context, userID, provider, providerUserID, email, providerName string) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().RecordUserIdentityHistory(ctx, db.RecordUserIdentityHistoryParams{
+		UserID:         u,
+		Provider:       db.GdOauthProvider(provider),
+		ProviderUserID: providerUserID,
+		Email:          pgtype.Text{String: email, Valid: true},
+		ProviderName:   pgtype.Text{String: providerName, Valid: true},
+	})
+}
+
+func (s *PGStore) EnsureAccountRank(ctx context.Context, userID, mode, seasonID string, mmr int) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureAccountRank(ctx, db.EnsureAccountRankParams{UserID: u, Mode: db.GdMatchMode(mode), SeasonID: seasonID, Mmr: int32(mmr)})
+}
+
+func (s *PGStore) EnsureAccountStats(ctx context.Context, userID string) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureAccountStats(ctx, u)
+}
+
+func (s *PGStore) EnsureAccountRankedStats(ctx context.Context, userID, mode, seasonID string) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureAccountRankedStats(ctx, db.EnsureAccountRankedStatsParams{UserID: u, Mode: db.GdMatchMode(mode), SeasonID: seasonID})
+}
+
+func (s *PGStore) UpsertUser(ctx context.Context, userID, displayName string) error {
+	id, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().UpsertUser(ctx, db.UpsertUserParams{ID: id, DisplayName: displayName})
+}
+
+func (s *PGStore) EnsureUserRank(ctx context.Context, userID, mode, seasonID string, mmr int) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureUserRank(ctx, db.EnsureUserRankParams{UserID: u, Mode: db.GdMatchMode(mode), SeasonID: seasonID, Mmr: int32(mmr)})
+}
+
+func (s *PGStore) EnsureUserStats(ctx context.Context, userID string) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureUserStats(ctx, u)
+}
+
+func (s *PGStore) EnsureRankedStats(ctx context.Context, userID, mode, seasonID string) error {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return err
+	}
+	return s.q().EnsureRankedStats(ctx, db.EnsureRankedStatsParams{UserID: u, Mode: db.GdMatchMode(mode), SeasonID: seasonID})
+}
+
+func (s *PGStore) SetNickname(ctx context.Context, sub, displayName string) error {
 	u, err := profileUUID(sub)
 	if err != nil {
 		return err
 	}
-	tag, err := s.db.SetNickname(ctx, db.SetNicknameParams{ID: u, DisplayName: displayName})
+	tag, err := s.q().SetNickname(ctx, db.SetNicknameParams{ID: u, DisplayName: displayName})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_claimed_nickname_unique" {
@@ -596,85 +297,61 @@ func (s *PGStore) SetNickname(sub, displayName string) error {
 	return nil
 }
 
-func (s *PGStore) SuggestNickname(sub, displayName string) (string, error) {
-	base := contentfilter.NicknameSuggestionBase(displayName)
-	if _, err := contentfilter.ValidateNickname(base); err != nil {
-		base = "Player"
+func (s *PGStore) CountUserProviders(ctx context.Context, userID string) (int, error) {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return 0, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	available := func(candidate string) (bool, error) {
-		var taken bool
-		u, err := profileUUID(sub)
-		if err != nil {
-			return false, err
-		}
-		taken, err = s.db.NicknameTaken(ctx, db.NicknameTakenParams{ID: u, Lower: candidate})
-		return !taken, err
-	}
-	if ok, err := available(base); err != nil {
-		return "", err
-	} else if ok {
-		return base, nil
-	}
-	prefix := base
-	if len(prefix) > contentfilter.MaxNicknameLength-4 {
-		prefix = prefix[:contentfilter.MaxNicknameLength-4]
-	}
-	for range 32 {
-		value, err := rand.Int(rand.Reader, big.NewInt(9000))
-		if err != nil {
-			return "", err
-		}
-		candidate := fmt.Sprintf("%s%04d", prefix, value.Int64()+1000)
-		if ok, err := available(candidate); err != nil {
-			return "", err
-		} else if ok {
-			return candidate, nil
-		}
-	}
-	return "", errors.New("nickname suggestion unavailable")
+	count, err := s.q().CountUserProviders(ctx, u)
+	return int(count), err
 }
 
-func (s *PGStore) SetUserAdmin(userID string, isAdmin bool) error {
-	return s.setUserRole(userID, "admin", isAdmin)
-}
-
-func (s *PGStore) SetUserModerator(userID string, isModerator bool) error {
-	return s.setUserRole(userID, "moderator", isModerator)
-}
-
-func (s *PGStore) setUserRole(userID, role string, enabled bool) error {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return errors.New("user id required")
+func (s *PGStore) DeleteUserProvider(ctx context.Context, userID, provider string) (int, error) {
+	u, err := profileUUID(userID)
+	if err != nil {
+		return 0, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
+	affected, err := s.q().DeleteUserProvider(ctx, db.DeleteUserProviderParams{UserID: u, Provider: db.GdOauthProvider(provider)})
+	return int(affected), err
+}
+
+func (s *PGStore) MarkIdentityHistoryDeleted(ctx context.Context, userID, provider string) error {
+	u, err := profileUUID(userID)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
-	uid, err := profileUUID(userID)
+	return s.q().MarkIdentityHistoryDeleted(ctx, db.MarkIdentityHistoryDeletedParams{UserID: u, Provider: db.GdOauthProvider(provider)})
+}
+
+func (s *PGStore) ClearUserEmailWithoutGoogle(ctx context.Context, userID string) error {
+	u, err := profileUUID(userID)
 	if err != nil {
 		return err
 	}
-	q := s.db.WithTx(tx)
-	if enabled {
-		if _, err := q.GrantUserRole(ctx, db.GrantUserRoleParams{UserID: uid, Role: role}); err != nil {
-			return err
-		}
-		if err := q.GrantRoleLog(ctx, db.GrantRoleLogParams{SubjectUserID: uid, Role: role, Reason: role + " toggle"}); err != nil {
-			return err
-		}
-	} else {
-		if _, err := q.RevokeUserRole(ctx, db.RevokeUserRoleParams{UserID: uid, Role: role}); err != nil {
-			return err
-		}
-		if err := q.RevokeRoleLog(ctx, db.RevokeRoleLogParams{SubjectUserID: uid, Role: role, Reason: role + " toggle"}); err != nil {
-			return err
-		}
+	return s.q().ClearUserEmailWithoutGoogle(ctx, u)
+}
+
+func (s *PGStore) NicknameTaken(ctx context.Context, sub, candidate string) (bool, error) {
+	u, err := profileUUID(sub)
+	if err != nil {
+		return false, err
 	}
-	return tx.Commit(ctx)
+	return s.q().NicknameTaken(ctx, db.NicknameTakenParams{ID: u, Lower: candidate})
+}
+
+// EnqueueDiscordSync queues a Discord role sync in the current transaction.
+func (s *PGStore) EnqueueDiscordSync(ctx context.Context, action, discordUserID string) error {
+	if s.jobs == nil {
+		return nil
+	}
+	tx, err := s.requireTx()
+	if err != nil {
+		return err
+	}
+	return s.jobs.EnqueueDiscordSync(ctx, tx, action, discordUserID)
+}
+
+// ActiveSeasonID resolves the active ranked season for account bootstrap.
+func (s *PGStore) ActiveSeasonID(ctx context.Context) (string, error) {
+	return storekit.ActiveSeasonID(ctx, s.q())
 }

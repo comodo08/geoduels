@@ -1,5 +1,7 @@
 package accounts
 
+import "geoduels/pkg/staff"
+
 const (
 	IdentityProviderGoogle  = "google"
 	IdentityProviderDiscord = "discord"
@@ -9,6 +11,7 @@ const (
 )
 
 type Identity struct {
+	Roles                 staff.Roles
 	Sub                   string
 	Email                 string
 	GoogleName            string
@@ -16,7 +19,7 @@ type Identity struct {
 	AvatarURL             string
 	NicknameRequired      bool
 	DisplayName           string
-	AccountType           string
+	IsGuest               bool
 	LinkedProviders       []string
 	AuthMigrationRequired bool
 	RecoveryAvailable     bool
@@ -24,4 +27,8 @@ type Identity struct {
 	IsModerator           bool
 	IsBanned              bool
 	BanReason             string
+}
+
+func (i Identity) StaffActor() staff.Actor {
+	return staff.Actor{ID: i.Sub, Roles: i.Roles, Banned: i.IsBanned}
 }

@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"geoduels/internal/storekit"
 	"strings"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 
 	"geoduels/internal/badges"
 	mapsdomain "geoduels/internal/maps"
+	"geoduels/internal/storekit"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/entityid"
 	db "geoduels/pkg/persistence/sqlc/db"
@@ -22,96 +21,14 @@ import (
 
 var ErrPartyMapUnavailable = errors.New("selected map is not accessible or ready")
 
-func (s *PGStore) CreateParty(ownerUserID string, mode contracts.MatchMode, mapScope string, ttl time.Duration) (contracts.PartySnapshot, error) {
-	ownerUserID = strings.TrimSpace(ownerUserID)
-	if ownerUserID == "" {
-		return contracts.PartySnapshot{}, errors.New("owner required")
-	}
-	if mode == "" {
-		mode = contracts.ModeDuel
-	}
-	if !contracts.IsPrivatePartyMode(mode) {
-		return contracts.PartySnapshot{}, errors.New("unsupported party mode")
-	}
-	if strings.TrimSpace(mapScope) == "" {
-		mapScope = "world"
-	}
-	if ttl <= 0 {
-		ttl = 2 * time.Hour
-	}
-	mapID, err := s.maps.ResolveGameplayMapID(contracts.ModeDuel, contracts.RulesetMoving, "")
-	if err != nil {
-		return contracts.PartySnapshot{}, fmt.Errorf("resolve party map: %w", err)
-	}
-	expiresAt := time.Now().Add(ttl)
-	for attempt := 0; attempt < 5; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		tx, err := s.pool.Begin(ctx)
-		if err != nil {
-			cancel()
-			return contracts.PartySnapshot{}, fmt.Errorf("begin create party tx: %w", err)
-		}
-		inviteCode := newPartyCode()
-		partyID := newPartyID()
-		partyUUID, parseErr := profileUUID(partyID)
-		if parseErr != nil {
-			_ = tx.Rollback(ctx)
-			cancel()
-			return contracts.PartySnapshot{}, parseErr
-		}
-		ownerUUID, parseErr := profileUUID(ownerUserID)
-		if parseErr != nil {
-			_ = tx.Rollback(ctx)
-			cancel()
-			return contracts.PartySnapshot{}, parseErr
-		}
-		mapUUID, parseErr := profileUUID(mapID)
-		if parseErr != nil {
-			_ = tx.Rollback(ctx)
-			cancel()
-			return contracts.PartySnapshot{}, parseErr
-		}
-		q := db.New(tx)
-		err = q.CreateParty(ctx, db.CreatePartyParams{ID: partyUUID, InviteCode: inviteCode, OwnerUserID: ownerUUID, Mode: db.GdMatchMode(mode), MapScope: mapScope, ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true}, MapID: mapUUID})
-		if err != nil {
-			_ = tx.Rollback(ctx)
-			cancel()
-			if attempt == 4 {
-				return contracts.PartySnapshot{}, fmt.Errorf("insert party: %w", err)
-			}
-			continue
-		}
-		if err := q.AddPartyOwner(ctx, db.AddPartyOwnerParams{PartyID: partyUUID, UserID: ownerUUID}); err != nil {
-			_ = tx.Rollback(ctx)
-			cancel()
-			return contracts.PartySnapshot{}, fmt.Errorf("insert party owner: %w", err)
-		}
-		if err := tx.Commit(ctx); err != nil {
-			cancel()
-			if snap, ok, readErr := s.GetPartyByID(partyID); readErr == nil && ok {
-				return snap, nil
-			}
-			return contracts.PartySnapshot{}, fmt.Errorf("commit create party tx: %w", err)
-		}
-		cancel()
-		snap, _, err := s.GetPartyByID(partyID)
-		if err != nil {
-			return contracts.PartySnapshot{}, fmt.Errorf("read created party: %w", err)
-		}
-		return snap, nil
-	}
-	return contracts.PartySnapshot{}, errors.New("could not allocate party invite code")
-}
+// --- snapshot reads (PartyReads) ---
 
-// GetCurrentParty never falls back to memberships predating an explicit selection.
-func (s *PGStore) GetCurrentParty(userID string) (*contracts.CurrentParty, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
+func (s *PGStore) GetCurrentParty(ctx context.Context, userID string) (*contracts.CurrentParty, error) {
 	id, err := profileUUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	row, err := s.db.GetCurrentParty(ctx, id)
+	row, err := s.q().GetCurrentParty(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -121,109 +38,25 @@ func (s *PGStore) GetCurrentParty(userID string) (*contracts.CurrentParty, error
 	return &contracts.CurrentParty{ID: row.ID.String(), InviteCode: row.InviteCode}, nil
 }
 
-func (s *PGStore) GetPartyByID(partyID string) (contracts.PartySnapshot, bool, error) {
+func (s *PGStore) GetPartyByID(ctx context.Context, partyID string) (contracts.PartySnapshot, bool, error) {
 	partyID = strings.TrimSpace(partyID)
 	if partyID == "" {
 		return contracts.PartySnapshot{}, false, nil
 	}
-	return s.getParty(func(ctx context.Context) (partySnapshotRow, error) {
+	return s.getParty(ctx, func(ctx context.Context) (partySnapshotRow, error) {
 		id, err := profileUUID(partyID)
 		if err != nil {
 			return partySnapshotRow{}, err
 		}
-		row, err := s.db.GetPartySnapshotByID(ctx, id)
+		row, err := s.q().GetPartySnapshotByID(ctx, id)
 		return toPartySnapshotRow(row), err
 	})
 }
 
-func (s *PGStore) SetPartyMode(partyID string, mode contracts.MatchMode) error {
-	partyID = strings.TrimSpace(partyID)
-	if partyID == "" || !contracts.IsPrivatePartyMode(mode) {
-		return errors.New("invalid party mode")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return err
-	}
-	q := db.New(tx)
-	currentMode, err := q.LockOpenPartyMode(ctx, partyUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("party is not open")
-		}
-		return err
-	}
-	if string(currentMode) != string(contracts.ModeTeamDuel) && mode == contracts.ModeTeamDuel {
-		if err := q.ShufflePartyTeams(ctx, partyUUID); err != nil {
-			return err
-		}
-	}
-	if err := q.SetPartyMode(ctx, db.SetPartyModeParams{ID: partyUUID, Mode: db.GdMatchMode(mode)}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (s *PGStore) SetPartyConfig(partyID string, cfg contracts.MatchConfig) (contracts.PartySnapshot, error) {
-	partyID = strings.TrimSpace(partyID)
-	cfg = contracts.NormalizeMatchConfig(cfg)
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	defer tx.Rollback(ctx)
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	q := db.New(tx)
-	ownerUUID, err := q.LockOpenPartyOwner(ctx, partyUUID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	canonicalMapID, _, err := mapsdomain.ResolveMapIdentity(ctx, tx, cfg.MapID)
-	if err != nil {
-		return contracts.PartySnapshot{}, ErrPartyMapUnavailable
-	}
-	cfg.MapID = canonicalMapID
-	mapUUID, err := profileUUID(cfg.MapID)
-	if err != nil {
-		return contracts.PartySnapshot{}, ErrPartyMapUnavailable
-	}
-	accessible, err := q.PartyMapAccessible(ctx, db.PartyMapAccessibleParams{ID: mapUUID, OwnerUserID: ownerUUID})
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if !accessible {
-		return contracts.PartySnapshot{}, ErrPartyMapUnavailable
-	}
-	body, _ := json.Marshal(cfg)
-	if err := q.SetPartyConfig(ctx, db.SetPartyConfigParams{PartyID: partyUUID, ConfigJson: body, MapID: mapUUID}); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := q.ResetPartyMembersReady(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
-}
-
-func (s *PGStore) GetPartyByInviteCode(inviteCode string) (contracts.PartySnapshot, bool, error) {
+func (s *PGStore) GetPartyByInviteCode(ctx context.Context, inviteCode string) (contracts.PartySnapshot, bool, error) {
 	code := strings.ToUpper(strings.TrimSpace(inviteCode))
-	return s.getParty(func(ctx context.Context) (partySnapshotRow, error) {
-		row, err := s.db.GetPartySnapshotByInviteCode(ctx, code)
+	return s.getParty(ctx, func(ctx context.Context) (partySnapshotRow, error) {
+		row, err := s.q().GetPartySnapshotByInviteCode(ctx, code)
 		return partySnapshotRow{
 			ID: row.ID, OwnerUserID: row.OwnerUserID, InviteCode: row.InviteCode,
 			State: string(row.State), Mode: string(row.Mode), MapScope: row.MapScope,
@@ -235,17 +68,17 @@ func (s *PGStore) GetPartyByInviteCode(inviteCode string) (contracts.PartySnapsh
 	})
 }
 
-func (s *PGStore) GetPartyByMatchID(matchID string) (contracts.PartySnapshot, bool, error) {
+func (s *PGStore) GetPartyByMatchID(ctx context.Context, matchID string) (contracts.PartySnapshot, bool, error) {
 	matchID = strings.TrimSpace(matchID)
 	if matchID == "" {
 		return contracts.PartySnapshot{}, false, nil
 	}
-	return s.getParty(func(ctx context.Context) (partySnapshotRow, error) {
+	return s.getParty(ctx, func(ctx context.Context) (partySnapshotRow, error) {
 		id, err := profileUUID(matchID)
 		if err != nil {
 			return partySnapshotRow{}, err
 		}
-		row, err := s.db.GetPartySnapshotByMatchID(ctx, id)
+		row, err := s.q().GetPartySnapshotByMatchID(ctx, id)
 		return partySnapshotRow{
 			ID: row.ID, OwnerUserID: row.OwnerUserID, InviteCode: row.InviteCode,
 			State: string(row.State), Mode: string(row.Mode), MapScope: row.MapScope,
@@ -257,177 +90,275 @@ func (s *PGStore) GetPartyByMatchID(matchID string) (contracts.PartySnapshot, bo
 	})
 }
 
-func (s *PGStore) JoinParty(partyID, userID string) (contracts.PartySnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	if err := s.ensurePartyJoinable(ctx, partyID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	partyUUID, userIDUUID, err := profileUUID2(partyID, userID)
+// --- state/ownership/membership reads (PartyState) ---
+
+func (s *PGStore) GetPartyStateAndOwner(ctx context.Context, partyID string) (PartyStateOwner, error) {
+	id, err := profileUUID(partyID)
 	if err != nil {
-		return contracts.PartySnapshot{}, err
+		return PartyStateOwner{}, err
 	}
-	activeMembers, err := s.db.CountActivePartyMembers(ctx, db.CountActivePartyMembersParams{PartyID: partyUUID, UserID: userIDUUID})
+	row, err := s.q().GetPartyStateAndOwner(ctx, id)
 	if err != nil {
-		return contracts.PartySnapshot{}, err
+		return PartyStateOwner{}, err
 	}
-	if activeMembers >= contracts.MaxPartyMembers {
-		return contracts.PartySnapshot{}, errors.New("party is full")
-	}
-	role := db.GdPartyRoleMember
-	if snap, ok, err := s.GetPartyByID(partyID); err != nil {
-		return contracts.PartySnapshot{}, err
-	} else if !ok {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	} else if snap.OwnerUserID == userID {
-		role = db.GdPartyRoleOwner
-	}
-	if err := s.db.JoinPartyMember(ctx, db.JoinPartyMemberParams{PartyID: partyUUID, UserID: userIDUUID, Role: role}); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := s.db.TouchPartyUpdated(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
+	return PartyStateOwner{State: contracts.PartyState(row.State), OwnerUserID: row.OwnerUserID.String()}, nil
 }
 
-func (s *PGStore) LeaveParty(partyID, userID string) (contracts.PartySnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
+func (s *PGStore) GetPartyStateAndExpiry(ctx context.Context, partyID string) (PartyStateExpiry, error) {
+	id, err := profileUUID(partyID)
 	if err != nil {
-		return contracts.PartySnapshot{}, err
+		return PartyStateExpiry{}, err
 	}
-	defer tx.Rollback(ctx)
-	partyUUID, err := profileUUID(partyID)
+	row, err := s.q().GetPartyStateAndExpiry(ctx, id)
 	if err != nil {
-		return contracts.PartySnapshot{}, err
+		return PartyStateExpiry{}, err
 	}
-	q := db.New(tx)
-	party, err := q.GetPartyOwnerAndState(ctx, partyUUID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	ownerUserID := party.OwnerUserID.String()
-	state := string(party.State)
-	if state != string(contracts.PartyOpen) && state != string(contracts.PartyInMatch) && state != string(contracts.PartyStarted) {
-		return contracts.PartySnapshot{}, errors.New("party is not joinable")
-	}
-	if ownerUserID == userID && state != string(contracts.PartyOpen) {
-		return contracts.PartySnapshot{}, errors.New("leader cannot leave the party while a game is in progress")
-	}
-	userUUID, err := profileUUID(userID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	tag, err := q.LeavePartyMember(ctx, db.LeavePartyMemberParams{PartyID: partyUUID, UserID: userUUID})
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if tag == 0 {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	}
-	if ownerUserID == userID {
-		nextOwner, err := q.NextPartyOwnerID(ctx, partyUUID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			if err := q.CloseParty(ctx, partyUUID); err != nil {
-				return contracts.PartySnapshot{}, err
-			}
-		} else if err != nil {
-			return contracts.PartySnapshot{}, err
-		} else {
-			if err := transferPartyOwnerTx(ctx, q, partyUUID, userUUID, nextOwner); err != nil {
-				return contracts.PartySnapshot{}, err
-			}
-		}
-	}
-	if err := q.TouchPartyUpdated(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	next, _, err := s.GetPartyByID(partyID)
-	return next, err
+	return PartyStateExpiry{State: contracts.PartyState(row.State), ExpiresAt: row.ExpiresAt.Time}, nil
 }
 
-func (s *PGStore) ShufflePartyTeams(partyID, ownerUserID string) (contracts.PartySnapshot, error) {
-	partyID = strings.TrimSpace(partyID)
-	ownerUserID = strings.TrimSpace(ownerUserID)
-	if partyID == "" || ownerUserID == "" {
-		return contracts.PartySnapshot{}, errors.New("invalid party")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	if err := s.ensurePartyOwner(ctx, partyID, ownerUserID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	snap, found, err := s.GetPartyByID(partyID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if !found {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	}
-	if snap.Mode != contracts.ModeTeamDuel {
-		return contracts.PartySnapshot{}, errors.New("shuffle is only available in team duels")
-	}
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := s.db.ShufflePartyTeams(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := s.db.TouchOpenParty(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	next, _, err := s.GetPartyByID(partyID)
-	return next, err
-}
-
-func (s *PGStore) SetPartyMemberTeam(partyID, userID, teamID string) (contracts.PartySnapshot, error) {
-	partyID = strings.TrimSpace(partyID)
-	userID = strings.TrimSpace(userID)
-	teamID = strings.ToLower(strings.TrimSpace(teamID))
-	if partyID == "" || userID == "" || (teamID != "a" && teamID != "b") {
-		return contracts.PartySnapshot{}, errors.New("invalid party team")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	if err := s.ensurePartyOpen(ctx, partyID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
+func (s *PGStore) PartyMemberActive(ctx context.Context, partyID, userID string) (bool, error) {
 	partyUUID, userUUID, err := profileUUID2(partyID, userID)
 	if err != nil {
-		return contracts.PartySnapshot{}, err
+		return false, err
 	}
-	tag, err := s.db.SetPartyMemberTeam(ctx, db.SetPartyMemberTeamParams{PartyID: partyUUID, UserID: userUUID, TeamID: db.GdTeamID(teamID)})
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if tag == 0 {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	}
-	if err := s.db.TouchOpenParty(ctx, partyUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
+	return s.q().PartyMemberActive(ctx, db.PartyMemberActiveParams{PartyID: partyUUID, UserID: userUUID})
 }
 
-func (s *PGStore) ExpireOpenParties() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	_, err := s.db.ExpireOpenParties(ctx)
+func (s *PGStore) CountActivePartyMembers(ctx context.Context, partyID, userID string) (int, error) {
+	partyUUID, userUUID, err := profileUUID2(partyID, userID)
+	if err != nil {
+		return 0, err
+	}
+	count, err := s.q().CountActivePartyMembers(ctx, db.CountActivePartyMembersParams{PartyID: partyUUID, UserID: userUUID})
+	return int(count), err
+}
+
+// --- mutations (PartyWrites) ---
+
+func (s *PGStore) InsertParty(ctx context.Context, input PartyInsert) error {
+	if _, err := s.requireTx(); err != nil {
+		return err
+	}
+	partyUUID, err := profileUUID(input.ID)
+	if err != nil {
+		return err
+	}
+	ownerUUID, err := profileUUID(input.OwnerUserID)
+	if err != nil {
+		return err
+	}
+	mapUUID, err := profileUUID(input.MapID)
+	if err != nil {
+		return err
+	}
+	q := s.q()
+	if err := q.CreateParty(ctx, db.CreatePartyParams{
+		ID: partyUUID, InviteCode: input.InviteCode, OwnerUserID: ownerUUID,
+		Mode: db.GdMatchMode(input.Mode), MapScope: input.MapScope,
+		ExpiresAt: pgtype.Timestamptz{Time: input.ExpiresAt, Valid: true}, MapID: mapUUID,
+	}); err != nil {
+		return err
+	}
+	return q.AddPartyOwner(ctx, db.AddPartyOwnerParams{PartyID: partyUUID, UserID: ownerUUID})
+}
+
+func (s *PGStore) LockOpenPartyMode(ctx context.Context, partyID string) (contracts.MatchMode, error) {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return "", partyStoreError(err)
+	}
+	mode, err := s.q().LockOpenPartyMode(ctx, id)
+	return contracts.MatchMode(mode), partyStoreError(err)
+}
+
+func (s *PGStore) ShufflePartyTeams(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().ShufflePartyTeams(ctx, id)
+}
+
+func (s *PGStore) SetPartyMode(ctx context.Context, partyID string, mode contracts.MatchMode) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().SetPartyMode(ctx, db.SetPartyModeParams{ID: id, Mode: db.GdMatchMode(mode)})
+}
+
+func (s *PGStore) LockOpenPartyOwner(ctx context.Context, partyID string) (string, error) {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return "", partyStoreError(err)
+	}
+	owner, err := s.q().LockOpenPartyOwner(ctx, id)
+	if err != nil {
+		return "", partyStoreError(err)
+	}
+	return owner.String(), nil
+}
+
+// ResolveMapIdentity canonicalizes a public map ID/alias to its database ID
+// using the caller's transaction so it is consistent with the write that
+// follows.
+func (s *PGStore) ResolveMapIdentity(ctx context.Context, requestedMapID string) (string, error) {
+	tx, err := s.requireTx()
+	if err != nil {
+		return "", err
+	}
+	id, _, err := mapsdomain.ResolveMapIdentity(ctx, tx, requestedMapID)
+	return id, err
+}
+
+func (s *PGStore) PartyMapAccessible(ctx context.Context, mapID, ownerUserID string) (bool, error) {
+	mapUUID, err := profileUUID(mapID)
+	if err != nil {
+		return false, ErrPartyMapUnavailable
+	}
+	ownerUUID, err := profileUUID(ownerUserID)
+	if err != nil {
+		return false, err
+	}
+	return s.q().PartyMapAccessible(ctx, db.PartyMapAccessibleParams{ID: mapUUID, OwnerUserID: ownerUUID})
+}
+
+func (s *PGStore) SetPartyConfig(ctx context.Context, partyID string, configJSON []byte, mapID string) error {
+	partyUUID, mapUUID, err := profileUUID2(partyID, mapID)
+	if err != nil {
+		return ErrPartyMapUnavailable
+	}
+	return s.q().SetPartyConfig(ctx, db.SetPartyConfigParams{PartyID: partyUUID, ConfigJson: configJSON, MapID: mapUUID})
+}
+
+func (s *PGStore) ResetPartyMembersReady(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().ResetPartyMembersReady(ctx, id)
+}
+
+func (s *PGStore) JoinPartyMember(ctx context.Context, partyID, userID string, role MemberRole) error {
+	partyUUID, userUUID, err := profileUUID2(partyID, userID)
+	if err != nil {
+		return err
+	}
+	dbRole := db.GdPartyRoleMember
+	if role == MemberRoleOwner {
+		dbRole = db.GdPartyRoleOwner
+	}
+	return s.q().JoinPartyMember(ctx, db.JoinPartyMemberParams{PartyID: partyUUID, UserID: userUUID, Role: dbRole})
+}
+
+func (s *PGStore) LeavePartyMember(ctx context.Context, partyID, userID string) (int64, error) {
+	partyUUID, userUUID, err := profileUUID2(partyID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.q().LeavePartyMember(ctx, db.LeavePartyMemberParams{PartyID: partyUUID, UserID: userUUID})
+}
+
+func (s *PGStore) NextPartyOwnerID(ctx context.Context, partyID string) (string, error) {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return "", partyStoreError(err)
+	}
+	next, err := s.q().NextPartyOwnerID(ctx, id)
+	if err != nil {
+		return "", partyStoreError(err)
+	}
+	return next.String(), nil
+}
+
+func (s *PGStore) CloseParty(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().CloseParty(ctx, id)
+}
+
+func (s *PGStore) TransferPartyOwner(ctx context.Context, partyID, targetUserID string) error {
+	partyUUID, targetUUID, err := profileUUID2(partyID, targetUserID)
+	if err != nil {
+		return err
+	}
+	return s.q().TransferPartyOwner(ctx, db.TransferPartyOwnerParams{ID: partyUUID, OwnerUserID: targetUUID})
+}
+
+func (s *PGStore) ReassignPartyRoles(ctx context.Context, partyID, targetUserID string) error {
+	partyUUID, targetUUID, err := profileUUID2(partyID, targetUserID)
+	if err != nil {
+		return err
+	}
+	return s.q().ReassignPartyRoles(ctx, db.ReassignPartyRolesParams{PartyID: partyUUID, UserID: targetUUID})
+}
+
+func (s *PGStore) KickPartyMember(ctx context.Context, partyID, targetUserID string) (int64, error) {
+	partyUUID, targetUUID, err := profileUUID2(partyID, targetUserID)
+	if err != nil {
+		return 0, err
+	}
+	return s.q().KickPartyMember(ctx, db.KickPartyMemberParams{PartyID: partyUUID, UserID: targetUUID})
+}
+
+func (s *PGStore) SetPartyMemberTeam(ctx context.Context, partyID, userID, teamID string) (int64, error) {
+	partyUUID, userUUID, err := profileUUID2(partyID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.q().SetPartyMemberTeam(ctx, db.SetPartyMemberTeamParams{PartyID: partyUUID, UserID: userUUID, TeamID: db.GdTeamID(teamID)})
+}
+
+func (s *PGStore) TouchPartyUpdated(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().TouchPartyUpdated(ctx, id)
+}
+
+func (s *PGStore) TouchOpenParty(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().TouchOpenParty(ctx, id)
+}
+
+func (s *PGStore) MarkPartyInMatch(ctx context.Context, partyID, matchID string) error {
+	partyUUID, matchUUID, err := profileUUID2(partyID, matchID)
+	if err != nil {
+		return err
+	}
+	affected, err := s.q().MarkPartyInMatch(ctx, db.MarkPartyInMatchParams{ID: partyUUID, ActiveMatchID: matchUUID})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (s *PGStore) ExpireParty(ctx context.Context, partyID string) error {
+	id, err := profileUUID(partyID)
+	if err != nil {
+		return err
+	}
+	return s.q().ExpireParty(ctx, id)
+}
+
+// --- maintenance (PartyMaintenance) ---
+
+func (s *PGStore) ExpireOpenParties(ctx context.Context) error {
+	_, err := s.q().ExpireOpenParties(ctx)
 	return err
 }
 
-func (s *PGStore) ListOpenPartyIDs() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	rows, err := s.db.ListOpenPartyIDs(ctx)
+func (s *PGStore) ListOpenPartyIDs(ctx context.Context) ([]string, error) {
+	rows, err := s.q().ListOpenPartyIDs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -438,190 +369,28 @@ func (s *PGStore) ListOpenPartyIDs() ([]string, error) {
 	return ids, nil
 }
 
-func (s *PGStore) CloseInactiveOpenParties(partyIDs []string, inactiveFor time.Duration) (int64, error) {
+func (s *PGStore) CloseInactiveOpenParties(ctx context.Context, partyIDs []string, inactiveFor time.Duration) (int64, error) {
 	if len(partyIDs) == 0 || inactiveFor <= 0 {
 		return 0, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	return s.db.CloseInactiveOpenParties(ctx, db.CloseInactiveOpenPartiesParams{
+	return s.q().CloseInactiveOpenParties(ctx, db.CloseInactiveOpenPartiesParams{
 		PartyIds:        chatUUIDs(partyIDs),
 		InactiveSeconds: inactiveFor.Seconds(),
 	})
 }
 
-func (s *PGStore) KickPartyMember(partyID, ownerUserID, targetUserID string) (contracts.PartySnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	ownerUserID = strings.TrimSpace(ownerUserID)
-	targetUserID = strings.TrimSpace(targetUserID)
-	if ownerUserID == "" || targetUserID == "" || ownerUserID == targetUserID {
-		return contracts.PartySnapshot{}, errors.New("invalid party member")
-	}
-	if err := s.ensurePartyOwner(ctx, partyID, ownerUserID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	partyUUID, targetUUID, err := profileUUID2(partyID, targetUserID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	tag, err := s.db.KickPartyMember(ctx, db.KickPartyMemberParams{PartyID: partyUUID, UserID: targetUUID})
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if tag == 0 {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
-}
-
-func (s *PGStore) TransferPartyOwner(partyID, ownerUserID, targetUserID string) (contracts.PartySnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	defer tx.Rollback(ctx)
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	q := db.New(tx)
-	if err := ensurePartyOwnerTx(ctx, q, partyUUID, ownerUserID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	ownerUUID, err := profileUUID(ownerUserID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	targetUUID, err := profileUUID(targetUserID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := transferPartyOwnerTx(ctx, q, partyUUID, ownerUUID, targetUUID); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
-}
-
-func (s *PGStore) MarkPartyInMatch(partyID, matchID string) (contracts.PartySnapshot, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	partyUUID, matchUUID, err := profileUUID2(partyID, matchID)
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	tag, err := s.db.MarkPartyInMatch(ctx, db.MarkPartyInMatchParams{ID: partyUUID, ActiveMatchID: matchUUID})
-	if err != nil {
-		return contracts.PartySnapshot{}, err
-	}
-	if tag == 0 {
-		return contracts.PartySnapshot{}, pgx.ErrNoRows
-	}
-	snap, _, err := s.GetPartyByID(partyID)
-	return snap, err
-}
-
-func (s *PGStore) ReopenEndedParties() (int64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	tag, err := s.db.ReopenEndedParties(ctx, db.GdRuntimeState(contracts.MatchEnded))
+func (s *PGStore) ReopenEndedParties(ctx context.Context) (int64, error) {
+	tag, err := s.q().ReopenEndedParties(ctx, db.GdRuntimeState(contracts.MatchEnded))
 	if err != nil {
 		return 0, err
 	}
-	if err := s.db.EndSessionsForEndedRuntimeMatches(ctx, db.GdRuntimeState(contracts.MatchEnded)); err != nil {
+	if err := s.q().EndSessionsForEndedRuntimeMatches(ctx, db.GdRuntimeState(contracts.MatchEnded)); err != nil {
 		return 0, err
 	}
 	return tag, nil
 }
 
-func (s *PGStore) ensurePartyOpen(ctx context.Context, partyID string) error {
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return err
-	}
-	party, err := s.db.GetPartyStateAndExpiry(ctx, partyUUID)
-	if err != nil {
-		return err
-	}
-	if string(party.State) != string(contracts.PartyOpen) {
-		return errors.New("party is not open")
-	}
-	if time.Now().After(party.ExpiresAt.Time) {
-		_ = s.db.ExpireParty(ctx, partyUUID)
-		return errors.New("party expired")
-	}
-	return nil
-}
-
-func (s *PGStore) ensurePartyJoinable(ctx context.Context, partyID string) error {
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return err
-	}
-	party, err := s.db.GetPartyStateAndExpiry(ctx, partyUUID)
-	if err != nil {
-		return err
-	}
-	state := string(party.State)
-	if state != string(contracts.PartyOpen) && state != string(contracts.PartyInMatch) && state != string(contracts.PartyStarted) {
-		return errors.New("party is not joinable")
-	}
-	if time.Now().After(party.ExpiresAt.Time) {
-		return errors.New("party expired")
-	}
-	return nil
-}
-
-func (s *PGStore) ensurePartyOwner(ctx context.Context, partyID, ownerUserID string) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	partyUUID, err := profileUUID(partyID)
-	if err != nil {
-		return err
-	}
-	return ensurePartyOwnerTx(ctx, db.New(tx), partyUUID, ownerUserID)
-}
-
-func ensurePartyOwnerTx(ctx context.Context, q *db.Queries, partyUUID pgtype.UUID, ownerUserID string) error {
-	party, err := q.GetPartyStateAndOwner(ctx, partyUUID)
-	if err != nil {
-		return err
-	}
-	if string(party.State) != string(contracts.PartyOpen) {
-		return errors.New("party is not open")
-	}
-	if party.OwnerUserID.String() != ownerUserID {
-		return errors.New("forbidden")
-	}
-	return nil
-}
-
-func transferPartyOwnerTx(ctx context.Context, q *db.Queries, partyUUID, ownerUserID, targetUserID pgtype.UUID) error {
-	if !ownerUserID.Valid || !targetUserID.Valid || ownerUserID.String() == targetUserID.String() {
-		return errors.New("invalid party member")
-	}
-	targetActive, err := q.PartyMemberActive(ctx, db.PartyMemberActiveParams{PartyID: partyUUID, UserID: targetUserID})
-	if err != nil {
-		return err
-	}
-	if !targetActive {
-		return pgx.ErrNoRows
-	}
-	if err := q.TransferPartyOwner(ctx, db.TransferPartyOwnerParams{ID: partyUUID, OwnerUserID: targetUserID}); err != nil {
-		return err
-	}
-	return q.ReassignPartyRoles(ctx, db.ReassignPartyRolesParams{PartyID: partyUUID, UserID: targetUserID})
-}
+// --- snapshot shaping ---
 
 type partySnapshotRow struct {
 	ID, OwnerUserID                   pgtype.UUID
@@ -633,9 +402,7 @@ type partySnapshotRow struct {
 	MapLocationCount                  int32
 }
 
-func (s *PGStore) getParty(fetch func(ctx context.Context) (partySnapshotRow, error)) (contracts.PartySnapshot, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
+func (s *PGStore) getParty(ctx context.Context, fetch func(ctx context.Context) (partySnapshotRow, error)) (contracts.PartySnapshot, bool, error) {
 	var snap contracts.PartySnapshot
 	row, err := fetch(ctx)
 	if err != nil {
@@ -682,7 +449,7 @@ func (s *PGStore) listPartyMembers(ctx context.Context, partyID string) ([]contr
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.ListPartyMembers(ctx, partyUUID)
+	rows, err := s.q().ListPartyMembers(ctx, partyUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -702,12 +469,12 @@ func (s *PGStore) listPartyMembers(ctx context.Context, partyID string) ([]contr
 		selected[member.UserID] = badges.IDFromCode(row.SelectedBadgeCode)
 		out = append(out, member)
 	}
-	badges, err := s.selectedPartyBadges(ctx, selected)
+	selectedBadges, err := s.selectedPartyBadges(ctx, selected)
 	if err != nil {
 		return nil, err
 	}
 	for i := range out {
-		out[i].SelectedBadge = badges[out[i].UserID]
+		out[i].SelectedBadge = selectedBadges[out[i].UserID]
 	}
 	return out, nil
 }
@@ -725,7 +492,7 @@ func (s *PGStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 	if len(userIDs) == 0 {
 		return map[string]*contracts.PlayerBadge{}, nil
 	}
-	rows, err := s.db.ListPartyMemberBadges(ctx, userIDs)
+	rows, err := s.q().ListPartyMemberBadges(ctx, userIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -753,6 +520,8 @@ func (s *PGStore) selectedPartyBadges(ctx context.Context, selected map[string]s
 	}
 	return out, nil
 }
+
+// --- helpers ---
 
 func anyText(v any) string {
 	switch value := v.(type) {
@@ -788,16 +557,25 @@ func newPartyID() string {
 	return entityid.New()
 }
 
-func newPartyCode() string {
+// newPartyCode generates a random invite code. The clock is injected so the
+// package never reads time directly.
+func newPartyCode(now time.Time) string {
 	const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 	buf := make([]byte, 6)
 	random := make([]byte, 6)
 	if _, err := rand.Read(random); err != nil {
-		fallback := strings.ToUpper(time.Now().Format("150405"))
+		fallback := strings.ToUpper(now.Format("150405"))
 		return fallback[:6]
 	}
 	for i, b := range random {
 		buf[i] = alphabet[int(b)%len(alphabet)]
 	}
 	return string(buf)
+}
+
+func partyStoreError(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }

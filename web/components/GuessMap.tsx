@@ -1,3 +1,4 @@
+import { avatarImage } from "../lib/avatar";
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
@@ -461,38 +462,31 @@ function createAvatarMarkerIcon({
   borderColor?: string;
   size: number;
 }) {
-  const normalizedFallback = (fallback || 'P').slice(0, 1).toUpperCase();
-  const pinClass = avatarUrl ? 'guessAvatarPin' : 'guessAvatarPin fallback';
-  const safeUrl = avatarUrl ? avatarUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;') : '';
-  const safeBorderColor = normalizePinBorderColor(borderColor);
-  const borderStyle = safeBorderColor ? `;--pin-border:${safeBorderColor}` : '';
-  const avatarHtml = avatarUrl
-    ? `<img src="${safeUrl}" alt="Player avatar" />`
-    : normalizedFallback;
-
-  return L.divIcon({
-    className: 'guess-avatar-marker',
-    html: `<div class="${pinClass}" style="--pin-size:${size}px${borderStyle}">${avatarHtml}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2]
-  });
+  const pin=document.createElement("div");pin.className="guessAvatarPin";pin.style.setProperty("--pin-size",`${size}px`);
+  const safeBorderColor=normalizePinBorderColor(borderColor);if(safeBorderColor)pin.style.setProperty("--pin-border",safeBorderColor);
+  pin.append(avatarImage(avatarUrl));
+  return L.divIcon({className:"guess-avatar-marker",html:pin,iconSize:[size,size],iconAnchor:[size/2,size/2]});
 }
 
 function normalizePinBorderColor(color?: string) {
   if (!color) return '';
   const trimmed = color.trim();
-  return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(trimmed) ? trimmed : '';
+  return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(trimmed) || /^rgb\(var\(--gd-status-(danger|info)\)\)$/.test(trimmed) ? trimmed : ''; 
 }
 
 const TEAM_PING_SIZE = 96;
 
-export function createTeamPingIcon() {
-  return L.divIcon({
-    className: 'team-ping-marker',
-    html: '<div class="team-ping" aria-hidden="true"><span class="team-ping-ring"></span><span class="team-ping-ring"></span><span class="team-ping-core">!</span></div>',
-    iconSize: [TEAM_PING_SIZE, TEAM_PING_SIZE],
-    iconAnchor: [TEAM_PING_SIZE / 2, TEAM_PING_SIZE / 2]
-  });
+export function createTeamPingIcon(avatarUrl?:string,expiresAt?:number) {
+ const root=document.createElement("div");root.className="team-ping";root.setAttribute("aria-hidden","true");
+ if(expiresAt)root.style.animationDelay=`-${Math.max(0,5000-(expiresAt-Date.now()))}ms`;
+ for(let i=0;i<2;i++){const ring=document.createElement("span");ring.className="team-ping-ring";root.append(ring);}
+ const portrait=avatarImage(avatarUrl);portrait.className="team-ping-avatar";root.append(portrait);
+ const core=document.createElement("span");core.className="team-ping-core";core.textContent="!";root.append(core);
+ return L.divIcon({className:"team-ping-marker",html:root,iconSize:[TEAM_PING_SIZE,TEAM_PING_SIZE],iconAnchor:[TEAM_PING_SIZE/2,TEAM_PING_SIZE/2]});
+}
+function TeamPingMarker({ping,avatarUrl}:{ping:TeamPing;avatarUrl?:string}) {
+ const icon=useMemo(()=>createTeamPingIcon(avatarUrl,ping.expiresAt),[ping.id,ping.expiresAt,avatarUrl]);
+ return <Marker position={[ping.lat,ping.lng]} icon={icon} interactive={false}/>;
 }
 
 export function createActualLocationIcon(lat: number, lng: number, roundNumber?: number) {
@@ -575,7 +569,7 @@ export default function GuessMap({
         <Marker key={`teammate-${userId}`} position={[point.lat, point.lng]} icon={createAvatarMarkerIcon({ avatarUrl: playerAvatars[userId], fallback: playerFallbacks[userId] || '?', size: 38 / 1.25 })} />
       )) : null}
       {mode === 'guess' ? teamPings.map((ping) => (
-        <Marker key={ping.id} position={[ping.lat, ping.lng]} icon={createTeamPingIcon()} interactive={false} />
+        <TeamPingMarker key={ping.id} ping={ping} avatarUrl={playerAvatars[ping.senderUserId]}/>
       )) : null}
       {mode === 'result' && result ? <FitToResult result={result} /> : null}
       {mode === 'result' && !result && results?.length ? <FitToResults results={results} /> : null}

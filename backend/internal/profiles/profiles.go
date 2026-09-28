@@ -84,7 +84,7 @@ func (s *PGStore) GetProfile(userID string) (Profile, error) {
 	var selectedBadgeCode int16
 	p.DisplayName, p.AvatarURL, p.MMR, p.RatingRD = row.DisplayName.String, row.AvatarUrl, int(row.Mmr), row.RatingRd
 	p.GamesPlayed, p.Wins, p.RankedGamesPlayed, p.RankedWins = int(row.GamesPlayed.(int32)), int(row.Wins.(int32)), int(row.RankedGamesPlayed), int(row.RankedWins)
-	p.IsGuest, p.IsAdmin, p.IsModerator, p.IsBanned, p.BanReason = row.IsGuest.(bool), row.IsAdmin, row.IsModerator, row.IsBanned.(bool), row.BanReason
+	p.IsGuest, p.IsAdmin, p.IsModerator, p.IsBanned, p.BanReason = row.IsGuest.Bool, row.IsAdmin, row.IsModerator, row.IsBanned, row.BanReason
 	selectedBadgeCode = row.SelectedBadgeCode
 	badges, selected, err := s.profileBadges(ctx, userID, badgekit.IDFromCode(selectedBadgeCode))
 	if err != nil {
@@ -118,7 +118,7 @@ func (s *PGStore) GetPublicPlayerProfileByNickname(nickname string) (PublicPlaye
 		if e != nil {
 			return e
 		}
-		p.UserID, p.DisplayName, p.AvatarURL, p.MMR, p.RatingRD, p.GamesPlayed, p.Wins, p.RankedGamesPlayed, p.RankedWins, selectedBadgeCode = storekit.UUIDVal(row.UserID), row.DisplayName.String, row.AvatarUrl, int(row.Mmr), row.RatingRd, int(row.GamesPlayed), int(row.Wins), int(row.RankedGamesPlayed), int(row.RankedWins), row.SelectedBadgeCode
+		p.UserID, p.DisplayName, p.AvatarURL, p.MMR, p.RatingRD, p.GamesPlayed, p.Wins, p.RankedGamesPlayed, p.RankedWins, selectedBadgeCode = storekit.UUIDVal(row.UserID), row.DisplayName, row.AvatarUrl, int(row.Mmr), row.RatingRd, int(row.GamesPlayed), int(row.Wins), int(row.RankedGamesPlayed), int(row.RankedWins), row.SelectedBadgeCode
 		return nil
 	}()
 	if err != nil {

@@ -42,6 +42,7 @@ export function ParticipantAvatar({
   const avatar = (
     <AvatarBadge
       avatarUrl={participant.kind === "player" ? participant.avatarUrl : undefined}
+      kind={participant.kind === "team" ? participant.id === "b" ? "team-blue" : "team-red" : "player"}
       fallback={participant.avatarFallback}
       alt={participant.name}
       opponent={opponent}

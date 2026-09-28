@@ -36,62 +36,61 @@ export const profileMetrics = {
 
 export function ProfileBadgeCollection({
   badges,
-  editing = false,
+  interactive = false,
   selectedBadgeId,
   onSelect,
+  pending = false,
 }: {
   badges: PlayerBadgeInfo[];
-  editing?: boolean;
+  interactive?: boolean;
   selectedBadgeId?: string;
   onSelect?: (badgeId: string) => void;
+  pending?: boolean;
 }) {
   if (!badges.length) {
-    return <p className="text-body-sm font-semibold text-content-secondary">No badges earned yet.</p>;
+    return (
+      <p className="text-body-sm font-semibold text-content-secondary">
+        {interactive ? "No badges available yet." : "No badges earned yet."}
+      </p>
+    );
   }
 
   return (
     <div className="flex flex-wrap gap-3">
-      {editing ? (
-        <Button
-          variant="ghost"
-          type="button"
-          onClick={() => onSelect?.("")}
-          className={cn(
-            "flex h-16 w-16 items-center justify-center rounded-xl border text-label font-strong uppercase transition",
-            !selectedBadgeId
-              ? "border-status-success/70 bg-status-success/15 text-content-primary"
-              : "border-border-default bg-surface-grouped text-content-secondary hover:border-border-strong hover:bg-surface-fill",
-          )}
-        >
-          None
-        </Button>
-      ) : null}
       {badges.map((badge) => {
-        const selected = selectedBadgeId === badge.id;
-        const medal = editing ? (
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => onSelect?.(badge.id)}
-            aria-label={`Display ${badge.label}`}
-            className={cn(
-              "flex h-16 w-16 items-center justify-center rounded-xl border transition",
-              selected
-                ? "border-status-success/70 bg-status-success/15 shadow-elev-1"
-                : "border-border-default bg-surface-grouped hover:border-border-strong hover:bg-surface-fill",
-            )}
-          >
-            <PlayerBadge badge={badge} size="lg" />
-          </Button>
-        ) : (
-          <span
-            tabIndex={0}
-            aria-label={badgeTitle(badge)}
-            className="flex h-16 w-16 items-center justify-center rounded-xl border border-border-default bg-surface-fill outline-none focus:border-border-focus"
-          >
-            <PlayerBadge badge={badge} size="lg" />
-          </span>
-        );
+        const locked = badge.owned === false;
+        const selected = !locked && selectedBadgeId === badge.id;
+        const medal =
+          interactive && !locked ? (
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => onSelect?.(badge.id)}
+              disabled={pending}
+              aria-pressed={selected}
+              aria-label={
+                selected
+                  ? `Remove displayed ${badge.label}`
+                  : `Display ${badge.label}`
+              }
+              className={cn(
+                "flex h-16 w-16 items-center justify-center rounded-xl border transition",
+                selected
+                  ? "border-status-success/70 bg-status-success/15 shadow-elev-1"
+                  : "border-border-default bg-surface-grouped hover:border-border-strong hover:bg-surface-fill",
+              )}
+            >
+              <PlayerBadge badge={badge} size="lg" />
+            </Button>
+          ) : (
+            <span
+              tabIndex={0}
+              aria-label={badgeTitle(badge)}
+              className="flex h-16 w-16 items-center justify-center rounded-xl border border-border-default bg-surface-fill outline-none focus:border-border-focus"
+            >
+              <PlayerBadge badge={badge} size="lg" muted={locked} />
+            </span>
+          );
         return (
           <Tooltip key={badge.id} content={
             <span>
@@ -100,6 +99,9 @@ export function ProfileBadgeCollection({
                 <span className="mt-0.5 block text-content-secondary">
                   {badge.description}
                 </span>
+              ) : null}
+              {locked ? (
+                <span className="mt-0.5 block text-content-secondary">Locked</span>
               ) : null}
             </span>
           } side="bottom">

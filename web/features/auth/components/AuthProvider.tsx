@@ -1,3 +1,4 @@
+import { staffRoles, type StaffRole } from "../roles";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRuntimeConfig } from "../../../lib/runtime-config-context";
 import {
@@ -24,10 +25,13 @@ export type AuthState = {
   isRegistered: boolean;
   isAdmin: boolean;
   isModerator: boolean;
+  isJudge: boolean;
+  roles: StaffRole[];
   displayName: string;
   avatarUrl: string;
   email: string;
   mmr?: number;
+  badges?: PlayerBadgeInfo[];
   selectedBadge?: PlayerBadgeInfo | null;
   canPlayUnranked: boolean;
   canPlayRanked: boolean;
@@ -57,6 +61,8 @@ const anonymousState: AuthState = {
   isRegistered: false,
   isAdmin: false,
   isModerator: false,
+  isJudge: false,
+  roles: [],
   displayName: "",
   avatarUrl: "",
   email: "",
@@ -114,6 +120,7 @@ export function deriveAuthState(
     viewer?.displayName || stringValue(profile, "display_name") ||
     user.display_name || user.email || (isGuest ? "Guest" : "Player");
   const avatarUrl = viewer?.avatarUrl || stringValue(profile, "avatar_url") || user.avatar_url || "";
+  const roles = staffRoles(viewer || user);
   const profileMmr = viewer?.mmr ?? profileValue(profile, "mmr");
   return {
     status: isGuest ? "guest" : "registered",
@@ -122,12 +129,17 @@ export function deriveAuthState(
     userId: user.id || "",
     isGuest,
     isRegistered,
-    isAdmin: !!(viewer?.isAdmin ?? profileValue(profile, "isAdmin") ?? user.isAdmin),
-    isModerator: !!(viewer?.isModerator ?? profileValue(profile, "isModerator") ?? user.isModerator),
+    roles,
+    isAdmin: roles.includes("admin"),
+    isJudge: roles.includes("judge"),
+    isModerator: roles.includes("moderator"),
     displayName,
     avatarUrl,
     email: user.email || stringValue(profile, "email"),
     mmr: typeof profileMmr === "number" ? profileMmr : undefined,
+    badges: Array.isArray(viewer?.badges)
+      ? (viewer.badges as PlayerBadgeInfo[])
+      : undefined,
     selectedBadge: (viewer?.selectedBadge as PlayerBadgeInfo | null | undefined) || (profileValue(profile, "selectedBadge") as PlayerBadgeInfo | null | undefined) || null,
     canPlayUnranked: canPlay,
     canPlayRanked: isRegistered && canPlay,

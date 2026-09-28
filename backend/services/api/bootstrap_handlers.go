@@ -59,13 +59,13 @@ func (a *api) bootstrapVersion(c echo.Context, version int) error {
 		accountType = "guest"
 	}
 	response.Viewer = &contracts.BootstrapViewer{
-		ID: profile.UserID, Email: identity.Email, DisplayName: profile.DisplayName,
+		Roles: identity.Roles, ID: profile.UserID, Email: identity.Email, DisplayName: profile.DisplayName,
 		AvatarURL: profile.AvatarURL, AccountType: accountType, MMR: profile.MMR,
 		RatingRD: profile.RatingRD, GamesPlayed: profile.GamesPlayed, Wins: profile.Wins,
 		RankedGamesPlayed: profile.RankedGamesPlayed, RankedWins: profile.RankedWins,
 		IsAdmin: profile.IsAdmin, IsModerator: profile.IsModerator, IsBanned: profile.IsBanned,
 		BanReason: profile.BanReason, LinkedProviders: identity.LinkedProviders,
-		SelectedBadge: profile.SelectedBadge,
+		Badges: profile.Badges, SelectedBadge: profile.SelectedBadge,
 	}
 	if a.preferences != nil {
 		if preferences, err := a.preferences.Get(r.Context(), record.UserID); err == nil {

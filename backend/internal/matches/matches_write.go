@@ -99,13 +99,15 @@ func (s *PGStore) FinalizeMatch(snap contracts.MatchSnapshot, ownerEpoch int64) 
 	if err := recordRuntimeMatchEndedTx(ctx, q, matchUUID, ownerEpoch); err != nil {
 		return snap, err
 	}
+	// Integrity evaluation is durable: a River job is enqueued in this
+	// transaction and runs after commit.
+	if snap.Mode == contracts.ModeDuel && !snap.Unranked && s.analyze != nil {
+		if err := s.analyze(ctx, tx, snap.MatchID); err != nil {
+			return snap, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return snap, err
-	}
-	if snap.Mode == contracts.ModeDuel && !snap.Unranked {
-		go func(matchID string) {
-			_ = s.evaluateCheatBans(matchID)
-		}(snap.MatchID)
 	}
 	return snap, nil
 }

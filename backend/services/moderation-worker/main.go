@@ -7,14 +7,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/riverqueue/river"
+
+	"geoduels/internal/accounts"
 	"geoduels/internal/content"
-	"geoduels/internal/notifications"
+	"geoduels/internal/jobs"
+	"geoduels/internal/seasons"
+	staffctx "geoduels/internal/staff"
+	"geoduels/internal/storage"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
+	db "geoduels/pkg/persistence/sqlc/db"
 )
 
 const (
@@ -22,14 +30,12 @@ const (
 	workerShutdownTimeout = 10 * time.Second
 )
 
-// workerPersistence is the narrow persistence surface the moderation worker
-// needs; satisfied by the sqlc-backed persistence store.
+// worker owns the long-lived dependencies of the job worker.
 type worker struct {
-	db                  *persistence.DB
-	content             content.Store
-	notificationService *notifications.Service
-	httpClient          *http.Client
-	draining            atomic.Bool
+	db         *persistence.DB
+	jobs       *jobs.Client
+	httpClient *http.Client
+	draining   atomic.Bool
 }
 
 func main() {
@@ -41,7 +47,9 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	w.startReportNotificationWorker(ctx)
+	if err := w.jobs.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
 
 	r := http.NewServeMux()
 	r.HandleFunc("/health/live", w.healthLive)
@@ -69,11 +77,53 @@ func newWorker() (*worker, error) {
 	if err != nil {
 		return nil, err
 	}
+	pool := store.Pool()
+
+	// Insert-only client for producers inside this process.
+	producer, err := jobs.NewClient(pool, nil, nil)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	contentStore := content.NewPGStore(pool, producer)
+	staffStore := staffctx.NewPGStore(pool, contentStore, nil, nil, nil, nil, producer)
+	staffService := staffctx.NewService(staffStore, staffctx.NewRiskEngineFromEnv())
+	accountsStore := accounts.NewPGStore(pool, producer)
+	accountsService := accounts.NewService(accountsStore)
+	storageStore := storage.NewPGStore(pool)
+	seasonsStore := seasons.NewPGStore(pool)
+
+	workers := river.NewWorkers()
+	river.AddWorker(workers, &matchAnalyzeWorker{staff: staffService})
+	river.AddWorker(workers, &moderationNotifyWorker{queries: db.New(pool), content: contentStore, httpClient: &http.Client{Timeout: 3 * time.Second}})
+	river.AddWorker(workers, &guestCleanupWorker{
+		accounts: accountsService,
+		ttl:      getenvDuration("GUEST_ACCOUNT_TTL", 24*time.Hour),
+		batch:    getenvInt("GUEST_ACCOUNT_CLEANUP_BATCH_SIZE", 1000),
+	})
+	river.AddWorker(workers, &storageCleanupWorker{
+		storage: storageStore,
+		grace:   getenvDuration("STALE_MATCH_GRACE", 30*time.Minute),
+		batch:   getenvInt("STORAGE_CLEANUP_BATCH_SIZE", 1000),
+	})
+	river.AddWorker(workers, &seasonResetWorker{seasons: seasonsStore})
+	river.AddWorker(workers, &curationSweepWorker{staff: staffService})
+
+	periodic := jobs.PeriodicJobs(jobs.PeriodicConfig{
+		GuestCleanupInterval:   getenvDuration("GUEST_ACCOUNT_CLEANUP_INTERVAL", time.Hour),
+		StorageCleanupInterval: getenvDuration("STORAGE_CLEANUP_INTERVAL", time.Hour),
+		SeasonResetInterval:    time.Minute,
+		CurationInterval:       time.Minute,
+	})
+	jobsClient, err := jobs.NewClient(pool, workers, periodic)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
 	return &worker{
-		db:                  store,
-		content:             content.NewPGStore(store.Pool()),
-		notificationService: notifications.NewService(notifications.NewPGStore(store.Pool())),
-		httpClient:          &http.Client{Timeout: 3 * time.Second},
+		db:         store,
+		jobs:       jobsClient,
+		httpClient: &http.Client{Timeout: 3 * time.Second},
 	}, nil
 }
 
@@ -109,6 +159,11 @@ func handleWorkerShutdown(w *worker, srv *http.Server, cancel context.CancelFunc
 
 	ctx, shutdownCancel := context.WithTimeout(context.Background(), workerShutdownTimeout)
 	defer shutdownCancel()
+	if w.jobs != nil {
+		if err := w.jobs.Stop(ctx); err != nil {
+			log.Printf("moderation worker job stop failed: %v", err)
+		}
+	}
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("moderation worker shutdown failed: %v", err)
 	}
@@ -117,6 +172,24 @@ func handleWorkerShutdown(w *worker, srv *http.Server, cancel context.CancelFunc
 func getenv(k, fallback string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getenvInt(k string, fallback int) int {
+	if v := os.Getenv(k); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func getenvDuration(k string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(k); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			return parsed
+		}
 	}
 	return fallback
 }

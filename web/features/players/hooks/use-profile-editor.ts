@@ -10,14 +10,11 @@ export function useProfileEditor(
   const actions = useProfileOwnerActions(accessToken);
   const [editingName, setEditingName] = useState(false);
   const [nickname, setNickname] = useState(profile?.displayName || "");
-  const [choosingBadge, setChoosingBadge] = useState(false);
-  const [badgeId, setBadgeId] = useState(profile?.selectedBadge?.id || "");
 
   useEffect(() => {
     if (!profile) return;
     if (!editingName) setNickname(profile.displayName);
-    if (!choosingBadge) setBadgeId(profile.selectedBadge?.id || "");
-  }, [choosingBadge, editingName, profile]);
+  }, [editingName, profile]);
 
   const cancelName = () => {
     setNickname(profile?.displayName || "");
@@ -30,14 +27,11 @@ export function useProfileEditor(
         onNicknameSaved?.(nickname.trim());
       },
     });
-  const cancelBadge = () => {
-    setBadgeId(profile?.selectedBadge?.id || "");
-    setChoosingBadge(false);
-  };
-  const saveBadge = () =>
-    actions.badgeMutation.mutate(badgeId, {
-      onSuccess: () => setChoosingBadge(false),
-    });
+  // Selecting the currently displayed badge clears the selection.
+  const selectBadge = (badgeId: string) =>
+    actions.badgeMutation.mutate(
+      profile?.selectedBadge?.id === badgeId ? "" : badgeId,
+    );
 
   return {
     ...actions,
@@ -47,11 +41,6 @@ export function useProfileEditor(
     setNickname,
     cancelName,
     saveName,
-    choosingBadge,
-    setChoosingBadge,
-    badgeId,
-    setBadgeId,
-    cancelBadge,
-    saveBadge,
+    selectBadge,
   };
 }

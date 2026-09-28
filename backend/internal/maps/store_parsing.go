@@ -307,7 +307,7 @@ func normalizeMapVisibility(v string) string {
 
 func normalizeMapScope(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "official", "community", "favorites", "mine":
+	case "official", "community", "favorites", "mine", "awarded":
 		return strings.ToLower(strings.TrimSpace(v))
 	default:
 		return ""

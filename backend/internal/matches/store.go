@@ -10,27 +10,18 @@ import (
 	db "geoduels/pkg/persistence/sqlc/db"
 )
 
-// CheatBanEvaluator is the moderation hook run after a match is persisted.
-type CheatBanEvaluator interface {
-	EvaluateAutoCheatBansForMatch(matchID string) error
-}
+// MatchAnalyzeEnqueuer inserts an integrity-analysis job in the caller's tx.
+type MatchAnalyzeEnqueuer func(ctx context.Context, tx pgx.Tx, matchID string) error
 
 // PGStore owns PostgreSQL access for this feature.
 type PGStore struct {
-	pool      *pgxpool.Pool
-	db        *db.Queries
-	CheatBans CheatBanEvaluator
+	pool    *pgxpool.Pool
+	db      *db.Queries
+	analyze MatchAnalyzeEnqueuer
 }
 
-func NewPGStore(pool *pgxpool.Pool) *PGStore {
-	return &PGStore{pool: pool, db: db.New(pool)}
-}
-
-func (s *PGStore) evaluateCheatBans(matchID string) error {
-	if s == nil || s.CheatBans == nil {
-		return nil
-	}
-	return s.CheatBans.EvaluateAutoCheatBansForMatch(matchID)
+func NewPGStore(pool *pgxpool.Pool, analyze MatchAnalyzeEnqueuer) *PGStore {
+	return &PGStore{pool: pool, db: db.New(pool), analyze: analyze}
 }
 
 func (s *PGStore) withTx(ctx context.Context, fn func(pgx.Tx) error) error {

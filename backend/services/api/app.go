@@ -14,22 +14,20 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"geoduels/internal/accounts"
-	"geoduels/internal/admin"
 	"geoduels/internal/authsession"
 	"geoduels/internal/badges"
-	"geoduels/internal/chat"
 	"geoduels/internal/content"
+	"geoduels/internal/jobs"
 	"geoduels/internal/leaderboard"
 	"geoduels/internal/maps"
 	"geoduels/internal/matches"
-	"geoduels/internal/moderation"
 	"geoduels/internal/notifications"
 	"geoduels/internal/parties"
 	preferencesdomain "geoduels/internal/preferences"
 	"geoduels/internal/profiles"
 	"geoduels/internal/seasons"
 	socialdomain "geoduels/internal/social"
-	"geoduels/internal/storage"
+	staffctx "geoduels/internal/staff"
 	"geoduels/pkg/auth"
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/coordinator"
@@ -38,73 +36,64 @@ import (
 )
 
 type api struct {
-	matchCoordinator        string
-	db                      *persistence.DB
-	accounts                accounts.Store
-	sessions                authsession.Store
-	profiles                profiles.Store
-	badges                  badges.Store
-	matchStore              matches.Store
-	moderation              moderation.Store
-	admin                   admin.Store
-	content                 content.Store
-	seasons                 seasons.Store
-	gameplayMaps            maps.Store
-	runtimeStore            matches.Store
-	chatStore               chat.Store
-	parties                 parties.Store
-	storage                 storage.Store
-	social                  *socialdomain.Service
-	maps                    *maps.Service
-	mapsStore               *maps.PGStore
-	preferences             *preferencesdomain.Service
-	leaderboardService      *leaderboard.Service
-	notificationService     *notifications.Service
-	authSessionService      *authsession.Service
-	coord                   *coordinator.Store
-	redis                   *redis.Client
-	httpClient              *http.Client
-	googleVerifier          *auth.GoogleVerifier
-	googleClientID          string
-	googleSecret            string
-	discordClientID         string
-	discordSecret           string
-	stripeMode              string
-	stripeTestPaymentLink   string
-	stripeLivePaymentLink   string
-	stripeLegacyPaymentURL  string
-	stripeTestWebhook       string
-	stripeLiveWebhook       string
-	stripeLegacyWebhook     string
-	appAuthSecret           []byte
-	ticketAuth              []byte
-	internalSecret          string
-	accessTokenTTL          time.Duration
-	refreshTokenTTL         time.Duration
-	refreshCookieName       string
-	refreshCookieDomain     string
-	refreshCookieSameSite   http.SameSite
-	guestSignupIPLimit      int
-	guestSignupIPWindow     time.Duration
-	guestSignupDailyLimit   int
-	guestSignupDailyWindow  time.Duration
-	guestAccountTTL         time.Duration
-	guestCleanupInterval    time.Duration
-	guestCleanupBatchSize   int
-	storageCleanupInterval  time.Duration
-	storageCleanupBatchSize int
-	staleMatchGrace         time.Duration
-	turnstileSecret         string
-	turnstileVerifyURL      string
-	turnstileHostname       string
-	guestTurnstileRequired  bool
-	trustedProxyCIDRs       []*net.IPNet
-	adminBootstrapEmails    map[string]struct{}
-	metrics                 *observability.APIMetrics
-	globalStatus            *globalStatusHub
-	live                    *liveHub
-	lastSeen                lastSeenWriter
-	draining                atomic.Bool
+	staff                  *staffctx.Service
+	matchCoordinator       string
+	db                     *persistence.DB
+	accounts               *accounts.Service
+	sessions               authsession.Store
+	profiles               profiles.Store
+	badges                 badges.Store
+	matchStore             matches.Store
+	content                content.Store
+	seasons                seasons.Store
+	gameplayMaps           maps.Store
+	runtimeStore           matches.Store
+	parties                *parties.Service
+	social                 *socialdomain.Service
+	maps                   *maps.Service
+	mapsStore              *maps.PGStore
+	preferences            *preferencesdomain.Service
+	leaderboardService     *leaderboard.Service
+	notificationService    *notifications.Service
+	authSessionService     *authsession.Service
+	coord                  *coordinator.Store
+	redis                  *redis.Client
+	httpClient             *http.Client
+	googleVerifier         *auth.GoogleVerifier
+	googleClientID         string
+	googleSecret           string
+	discordClientID        string
+	discordSecret          string
+	stripeMode             string
+	stripeTestPaymentLink  string
+	stripeLivePaymentLink  string
+	stripeLegacyPaymentURL string
+	stripeTestWebhook      string
+	stripeLiveWebhook      string
+	stripeLegacyWebhook    string
+	appAuthSecret          []byte
+	ticketAuth             []byte
+	internalSecret         string
+	accessTokenTTL         time.Duration
+	refreshTokenTTL        time.Duration
+	refreshCookieName      string
+	refreshCookieDomain    string
+	refreshCookieSameSite  http.SameSite
+	guestSignupIPLimit     int
+	guestSignupIPWindow    time.Duration
+	guestSignupDailyLimit  int
+	guestSignupDailyWindow time.Duration
+	turnstileSecret        string
+	turnstileVerifyURL     string
+	turnstileHostname      string
+	guestTurnstileRequired bool
+	trustedProxyCIDRs      []*net.IPNet
+	adminBootstrapEmails   map[string]struct{}
+	metrics                *observability.APIMetrics
+	globalStatus           *globalStatusHub
+	live                   *liveHub
+	lastSeen               lastSeenWriter
+	draining               atomic.Bool
 }
 
 func newAPI() (*api, error) {
@@ -165,84 +154,87 @@ func newAPI() (*api, error) {
 	singleplayerTTL := getenvDuration("SINGLEPLAYER_SESSION_TTL", 24*time.Hour)
 	pool := store.Pool()
 	mapsStore := maps.NewPGStore(pool)
-	matchStore := matches.NewPGStore(pool)
-	moderationStore := moderation.NewPGStore(pool)
-	matchStore.CheatBans = moderationStore
+	matchStore := matches.NewPGStore(pool, nil)
 	partyStore := parties.NewPGStore(pool, mapsStore)
+	partyService := parties.NewService(partyStore)
 	if err := matchStore.ExpireStaleRuntimeMatches(context.Background(), string(contracts.ModeSingleplayer), singleplayerTTL); err != nil {
 		store.Close()
 		return nil, err
 	}
-	if err := partyStore.ExpireOpenParties(); err != nil {
+	if err := partyService.ExpireOpenParties(); err != nil {
 		store.Close()
 		return nil, err
 	}
 	socialStore := socialdomain.NewPGStore(pool)
+	jobsClient, err := jobs.NewClient(pool, nil, nil)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	contentStore := content.NewPGStore(pool, jobsClient)
+	seasonStore := seasons.NewPGStore(pool)
+	badgeStore := badges.NewPGStore(pool, jobsClient)
+	accountsStore := accounts.NewPGStore(pool, jobsClient)
+	accountsService := accounts.NewService(accountsStore)
+	mapsService := maps.NewService(mapsStore)
+	staffStore := staffctx.NewPGStore(pool, contentStore, seasonStore, mapsStore, badgeStore, rdb, jobsClient)
+	staffService := staffctx.NewService(staffStore, staffctx.NewRiskEngineFromEnv())
 	instance := &api{
-		matchCoordinator:        getenv("MATCH_COORDINATOR_URL", getenv("QUEUE_COORDINATOR_URL", "http://localhost:8090")),
-		db:                      store,
-		accounts:                accounts.NewPGStore(pool),
-		sessions:                authsession.NewPGStore(pool),
-		profiles:                profiles.NewPGStore(pool),
-		badges:                  badges.NewPGStore(pool),
-		matchStore:              matchStore,
-		moderation:              moderationStore,
-		admin:                   admin.NewPGStore(pool),
-		content:                 content.NewPGStore(pool),
-		seasons:                 seasons.NewPGStore(pool),
-		gameplayMaps:            mapsStore,
-		runtimeStore:            matchStore,
-		chatStore:               chat.NewPGStore(pool),
-		parties:                 partyStore,
-		storage:                 storage.NewPGStore(pool),
-		social:                  socialdomain.NewService(socialStore),
-		maps:                    maps.NewService(mapsStore),
-		mapsStore:               mapsStore,
-		lastSeen:                socialStore,
-		preferences:             preferencesdomain.NewService(preferencesdomain.NewPGStore(pool)),
-		leaderboardService:      leaderboard.NewService(leaderboard.NewPGStore(pool)),
-		notificationService:     notifications.NewService(notifications.NewPGStore(pool)),
-		authSessionService:      authsession.NewService(authsession.NewPGStore(pool)),
-		coord:                   coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
-		redis:                   rdb,
-		httpClient:              &http.Client{Timeout: 3 * time.Second},
-		googleVerifier:          googleVerifier,
-		googleClientID:          googleClientID,
-		googleSecret:            googleSecret,
-		discordClientID:         discordClientID,
-		discordSecret:           discordSecret,
-		stripeMode:              stripeMode,
-		stripeTestPaymentLink:   stripeTestPaymentLink,
-		stripeLivePaymentLink:   stripeLivePaymentLink,
-		stripeLegacyPaymentURL:  stripeLegacyPaymentURL,
-		stripeTestWebhook:       stripeTestWebhook,
-		stripeLiveWebhook:       stripeLiveWebhook,
-		stripeLegacyWebhook:     stripeLegacyWebhook,
-		appAuthSecret:           appAuthSecret,
-		ticketAuth:              ticketAuth,
-		internalSecret:          internalSecret,
-		accessTokenTTL:          getenvDuration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
-		refreshTokenTTL:         getenvDuration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
-		refreshCookieName:       getenv("APP_REFRESH_COOKIE_NAME", "geoduels_refresh"),
-		refreshCookieDomain:     strings.TrimSpace(os.Getenv("APP_REFRESH_COOKIE_DOMAIN")),
-		refreshCookieSameSite:   getenvSameSite("APP_REFRESH_COOKIE_SAMESITE", http.SameSiteLaxMode),
-		guestSignupIPLimit:      getenvInt("GUEST_SIGNUP_IP_LIMIT", 5),
-		guestSignupIPWindow:     getenvDuration("GUEST_SIGNUP_IP_WINDOW", 10*time.Minute),
-		guestSignupDailyLimit:   getenvInt("GUEST_SIGNUP_IP_DAILY_LIMIT", 10),
-		guestSignupDailyWindow:  getenvDuration("GUEST_SIGNUP_IP_DAILY_WINDOW", 24*time.Hour),
-		guestAccountTTL:         getenvDuration("GUEST_ACCOUNT_TTL", 24*time.Hour),
-		guestCleanupInterval:    getenvDuration("GUEST_ACCOUNT_CLEANUP_INTERVAL", time.Hour),
-		guestCleanupBatchSize:   getenvInt("GUEST_ACCOUNT_CLEANUP_BATCH_SIZE", 1000),
-		storageCleanupInterval:  getenvDuration("STORAGE_CLEANUP_INTERVAL", time.Minute),
-		storageCleanupBatchSize: getenvInt("STORAGE_CLEANUP_BATCH_SIZE", 1000),
-		staleMatchGrace:         getenvDuration("MATCH_SESSION_STALE_GRACE", 5*time.Minute),
-		turnstileSecret:         turnstileSecret,
-		turnstileVerifyURL:      getenv("TURNSTILE_VERIFY_URL", turnstileSiteverifyURL),
-		turnstileHostname:       strings.TrimSpace(os.Getenv("TURNSTILE_EXPECTED_HOSTNAME")),
-		guestTurnstileRequired:  guestTurnstileRequired,
-		trustedProxyCIDRs:       trustedProxyCIDRs,
-		adminBootstrapEmails:    parseEmailAllowlist(os.Getenv("ADMIN_BOOTSTRAP_EMAILS")),
-		metrics:                 observability.NewAPIMetrics(),
+		staff:                  staffService,
+		matchCoordinator:       getenv("MATCH_COORDINATOR_URL", getenv("QUEUE_COORDINATOR_URL", "http://localhost:8090")),
+		db:                     store,
+		accounts:               accountsService,
+		sessions:               authsession.NewPGStore(pool),
+		profiles:               profiles.NewPGStore(pool),
+		badges:                 badgeStore,
+		matchStore:             matchStore,
+		content:                contentStore,
+		seasons:                seasonStore,
+		gameplayMaps:           mapsStore,
+		runtimeStore:           matchStore,
+		parties:                partyService,
+		social:                 socialdomain.NewService(socialStore),
+		maps:                   mapsService,
+		mapsStore:              mapsStore,
+		lastSeen:               socialStore,
+		preferences:            preferencesdomain.NewService(preferencesdomain.NewPGStore(pool)),
+		leaderboardService:     leaderboard.NewService(leaderboard.NewPGStore(pool)),
+		notificationService:    notifications.NewService(notifications.NewPGStore(pool)),
+		authSessionService:     authsession.NewService(authsession.NewPGStore(pool)),
+		coord:                  coordinator.NewStore(rdb, getenvDuration("GAMEPLAY_NODE_TTL", 10*time.Second), 2*time.Hour, singleplayerTTL, 5*time.Second),
+		redis:                  rdb,
+		httpClient:             &http.Client{Timeout: 3 * time.Second},
+		googleVerifier:         googleVerifier,
+		googleClientID:         googleClientID,
+		googleSecret:           googleSecret,
+		discordClientID:        discordClientID,
+		discordSecret:          discordSecret,
+		stripeMode:             stripeMode,
+		stripeTestPaymentLink:  stripeTestPaymentLink,
+		stripeLivePaymentLink:  stripeLivePaymentLink,
+		stripeLegacyPaymentURL: stripeLegacyPaymentURL,
+		stripeTestWebhook:      stripeTestWebhook,
+		stripeLiveWebhook:      stripeLiveWebhook,
+		stripeLegacyWebhook:    stripeLegacyWebhook,
+		appAuthSecret:          appAuthSecret,
+		ticketAuth:             ticketAuth,
+		internalSecret:         internalSecret,
+		accessTokenTTL:         getenvDuration("APP_ACCESS_TOKEN_TTL", 15*time.Minute),
+		refreshTokenTTL:        getenvDuration("APP_REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		refreshCookieName:      getenv("APP_REFRESH_COOKIE_NAME", "geoduels_refresh"),
+		refreshCookieDomain:    strings.TrimSpace(os.Getenv("APP_REFRESH_COOKIE_DOMAIN")),
+		refreshCookieSameSite:  getenvSameSite("APP_REFRESH_COOKIE_SAMESITE", http.SameSiteLaxMode),
+		guestSignupIPLimit:     getenvInt("GUEST_SIGNUP_IP_LIMIT", 5),
+		guestSignupIPWindow:    getenvDuration("GUEST_SIGNUP_IP_WINDOW", 10*time.Minute),
+		guestSignupDailyLimit:  getenvInt("GUEST_SIGNUP_IP_DAILY_LIMIT", 10),
+		guestSignupDailyWindow: getenvDuration("GUEST_SIGNUP_IP_DAILY_WINDOW", 24*time.Hour),
+		turnstileSecret:        turnstileSecret,
+		turnstileVerifyURL:     getenv("TURNSTILE_VERIFY_URL", turnstileSiteverifyURL),
+		turnstileHostname:      strings.TrimSpace(os.Getenv("TURNSTILE_EXPECTED_HOSTNAME")),
+		guestTurnstileRequired: guestTurnstileRequired,
+		trustedProxyCIDRs:      trustedProxyCIDRs,
+		adminBootstrapEmails:   parseEmailAllowlist(os.Getenv("ADMIN_BOOTSTRAP_EMAILS")),
+		metrics:                observability.NewAPIMetrics(),
 	}
 	instance.globalStatus = newGlobalStatusHub(instance)
 	instance.globalStatus.start()
@@ -288,7 +280,7 @@ func routes(a *api) *echo.Echo {
 	e.POST("/v1/auth/logout", a.logout)
 	e.POST("/v1/auth/logout-all", a.logoutAll)
 	e.GET("/v1/status", a.publicGlobalStatus)
-	e.POST("/v1/admin/bootstrap", a.adminBootstrap)
+	e.POST("/staff/bootstrap", a.adminBootstrap)
 	e.PATCH("/v1/me/badge", a.updateSelectedBadge, a.active)
 	e.PUT("/v1/me/nickname", a.updateNickname, a.active)
 	e.PATCH("/v1/me/nickname", a.updateNickname, a.active)
@@ -332,6 +324,8 @@ func routes(a *api) *echo.Echo {
 	e.POST("/v1/matches/:id/reports", a.createMatchReport, a.active)
 	e.POST("/v1/sessions", a.startSession, a.active)
 	e.POST("/v1/singleplayer/session", a.startSingleplayerSession, a.active)
+	e.GET("/v2/maps", a.listMaps)
+	e.GET("/v2/maps/:id", a.getMap)
 	e.GET("/v1/maps", a.listMaps)
 	e.POST("/v1/maps", a.createMap, a.active)
 	e.GET("/v1/maps/quota", a.mapUploadQuota)
@@ -350,48 +344,46 @@ func routes(a *api) *echo.Echo {
 	e.POST("/v1/maps/:id/comments/:commentId/like", a.likeMapComment, a.active)
 	e.DELETE("/v1/maps/:id/comments/:commentId/like", a.unlikeMapComment, a.active)
 	e.PUT("/v1/maps/:id/locations", a.replaceMapLocations, a.active)
-	e.GET("/v1/admin/players", a.adminPlayers)
-	e.GET("/v1/admin/players/:id", a.adminPlayerDetail)
-	e.GET("/v1/admin/players/:id/matches", a.adminPlayerMatches)
-	e.POST("/v1/admin/players/:id/ban", a.adminBanPlayer)
-	e.POST("/v1/admin/players/:id/unban", a.adminUnbanPlayer)
-	e.DELETE("/v1/admin/players/:id/report-mute", a.adminClearReporterMute)
-	e.GET("/v1/admin/moderation/community-pardon", a.adminCommunityPardonPreview)
-	e.POST("/v1/admin/moderation/community-pardon", a.adminCommunityPardon)
-	e.POST("/v1/admin/players/:id/moderator", a.adminPromoteModerator)
-	e.DELETE("/v1/admin/players/:id/moderator", a.adminDemoteModerator)
-	e.PUT("/v1/admin/players/:id/map-tier", a.adminSetMapCreatorTier)
-	e.GET("/v1/admin/roles", a.adminListRoles)
-	e.POST("/v1/admin/roles", a.adminGrantRole)
-	e.DELETE("/v1/admin/roles/:id/:role", a.adminRevokeRole)
-	e.GET("/v1/admin/badges", a.adminBadgeDefinitions)
-	e.POST("/v1/admin/badges/grant", a.adminGrantBadge)
-	e.GET("/v1/admin/matches/:id/chat", a.adminMatchChat)
-	e.GET("/v1/moderator/subjects/:userId", a.moderatorSubject)
-	e.POST("/v1/moderator/subjects/:userId/cheating-ban", a.moderatorSubjectCheatingBan)
-	e.POST("/v1/moderator/subjects/:userId/unban", a.moderatorSubjectUnban)
-	e.POST("/v1/moderator/subjects/:userId/mutes/:kind", a.moderatorSubjectMute)
-	e.DELETE("/v1/moderator/subjects/:userId/mutes/:kind", a.moderatorSubjectUnmute)
-	e.GET("/v1/moderator/signals", a.moderatorSignals)
-	e.GET("/v1/moderator/log", a.moderatorLog)
-	e.GET("/v1/admin/ip-signup-bans", a.adminListSignupIPBans)
-	e.POST("/v1/admin/ip-signup-bans", a.adminAddSignupIPBan)
-	e.DELETE("/v1/admin/ip-signup-bans/:ip", a.adminRemoveSignupIPBan)
-	e.GET("/v1/admin/maintenance", a.adminGetMaintenance)
-	e.PUT("/v1/admin/maintenance", a.adminPutMaintenance)
-	e.DELETE("/v1/admin/maintenance", a.adminClearMaintenance)
-	e.GET("/v1/admin/moderation/settings", a.adminGetModerationSettings)
-	e.PUT("/v1/admin/moderation/settings", a.adminPutModerationSettings)
-	e.GET("/v1/admin/integrations/discord", a.adminGetDiscordIntegrationSettings)
-	e.PUT("/v1/admin/integrations/discord", a.adminPutDiscordIntegrationSettings)
-	e.GET("/v1/admin/seasons", a.adminGetRankedSeason)
-	e.PUT("/v1/admin/seasons/reset-rule", a.adminPutRankedSeasonResetRule)
-	e.GET("/v1/admin/changelog", a.adminGetChangelog)
-	e.POST("/v1/admin/changelog", a.adminCreateChangelogPost)
-	e.PUT("/v1/admin/changelog/:id", a.adminUpdateChangelogPost)
-	e.POST("/v1/admin/maps/official/import", a.adminImportOfficialMap)
-	e.POST("/v1/admin/maps/current/upload", a.adminUploadCurrentMap)
-	e.POST("/v1/admin/maps/:mapKey/upload", a.adminUploadMap)
+	e.GET("/staff/players", a.adminPlayers)
+	e.GET("/staff/players/:id", a.adminPlayerDetail)
+	e.POST("/staff/players/:id/ban", a.adminBanPlayer)
+	e.POST("/staff/players/:id/unban", a.adminUnbanPlayer)
+	e.POST("/staff/players/:id/mutes/:kind", a.moderatorSubjectMute)
+	e.DELETE("/staff/players/:id/mutes/:kind", a.moderatorSubjectUnmute)
+	e.DELETE("/staff/players/:id/report-mute", a.adminClearReporterMute)
+	e.PUT("/staff/players/:id/map-tier", a.adminSetMapCreatorTier)
+	e.POST("/staff/players/:id/roles/:role", a.adminGrantRoleByParam)
+	e.DELETE("/staff/players/:id/roles/:role", a.adminRevokeRole)
+	e.GET("/staff/players/:id/review", a.moderatorSubject)
+	e.GET("/staff/reports", a.moderatorSignals)
+	e.GET("/staff/audit", a.moderatorLog)
+	e.GET("/staff/roles", a.adminListRoles)
+	e.POST("/staff/roles", a.adminGrantRole)
+	e.DELETE("/staff/roles/:id/:role", a.adminRevokeRole)
+	e.GET("/staff/badges", a.adminBadgeDefinitions)
+	e.POST("/staff/badges/grant", a.adminGrantBadge)
+	e.GET("/staff/community-pardon", a.adminCommunityPardonPreview)
+	e.POST("/staff/community-pardon", a.adminCommunityPardon)
+	e.GET("/staff/ip-bans", a.adminListSignupIPBans)
+	e.POST("/staff/ip-bans", a.adminAddSignupIPBan)
+	e.DELETE("/staff/ip-bans/:ip", a.adminRemoveSignupIPBan)
+	e.GET("/staff/maintenance", a.adminGetMaintenance)
+	e.PUT("/staff/maintenance", a.adminPutMaintenance)
+	e.DELETE("/staff/maintenance", a.adminClearMaintenance)
+	e.GET("/staff/settings/moderation", a.adminGetModerationSettings)
+	e.PUT("/staff/settings/moderation", a.adminPutModerationSettings)
+	e.GET("/staff/settings/discord", a.adminGetDiscordIntegrationSettings)
+	e.PUT("/staff/settings/discord", a.adminPutDiscordIntegrationSettings)
+	e.GET("/staff/seasons", a.adminGetRankedSeason)
+	e.PUT("/staff/seasons/reset-rule", a.adminPutRankedSeasonResetRule)
+	e.GET("/staff/changelog", a.adminGetChangelog)
+	e.POST("/staff/changelog", a.adminCreateChangelogPost)
+	e.PUT("/staff/changelog/:id", a.adminUpdateChangelogPost)
+	e.POST("/staff/maps/official/import", a.adminImportOfficialMap)
+	e.POST("/staff/maps/:mapKey/upload", a.adminUploadMap)
+	e.GET("/staff/motw", a.motwNominations)
+	e.POST("/staff/motw/maps/:id", a.nominateMOTW)
+	e.PUT("/staff/motw/nominations/:id/like", a.likeMOTW)
 	if a.metrics != nil {
 		e.GET("/metrics", echo.WrapHandler(observability.Handler(a.metrics.Registry)))
 	}

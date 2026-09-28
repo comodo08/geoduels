@@ -81,7 +81,6 @@ func (s *PGStore) SetMapCreatorTierOverride(userID string, tier *int) (contracts
 func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (contracts.MapUploadQuota, error) {
 	q := db.New(tx)
 	var (
-		accountType  string
 		createdAt    time.Time
 		bannedAt     *time.Time
 		banExpiresAt *time.Time
@@ -92,7 +91,6 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 	if err != nil {
 		return contracts.MapUploadQuota{}, err
 	}
-	accountType = string(u.AccountType)
 	createdAt = u.CreatedAt.Time
 	if u.BannedAt.Valid {
 		bannedAt = &u.BannedAt.Time
@@ -122,7 +120,7 @@ func refreshMapCreatorTrust(ctx context.Context, tx pgx.Tx, userID string) (cont
 
 	accountAgeDays := max(0, int(time.Since(createdAt).Hours()/24))
 	activeBan := bannedAt != nil && (banExpiresAt == nil || banExpiresAt.After(time.Now()))
-	restricted := accountType != "registered" || activeBan || deletedAt != nil || activeSanction
+	restricted := !u.HasIdentity || activeBan || deletedAt != nil || activeSanction
 	tier := automaticMapCreatorTier(accountAgeDays, qualifiedFavorites, restricted)
 	if override != nil && !restricted {
 		tier = *override

@@ -36,6 +36,7 @@ const initialState: GameState = {
 };
 
 export class GameController extends ObservableStore<GameState> {
+  private lastTeamPingAt = 0;
   private readonly config: RuntimeConfig;
   private state: GameState = initialState;
   private readonly matchController: MatchController;
@@ -620,6 +621,9 @@ export class GameController extends ObservableStore<GameState> {
     const snapshot = this.matchController.getState().snapshot;
     const userId = this.sessionController.getState().userId;
     if (snapshot?.mode !== 'team_duel' || snapshot.phase !== 'live' || snapshot.roundPhase !== 'round_live' || !snapshot.currentRound || !snapshot.players[userId]?.finalized) return;
+    const now = performance.now();
+    if (now - this.lastTeamPingAt < 500) return;
+    this.lastTeamPingAt = now;
     this.matchController.sendGameCommand(
       'team.ping',
       { roundId: snapshot.currentRound.roundId, lat, lng }

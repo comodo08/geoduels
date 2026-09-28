@@ -75,7 +75,7 @@ func (a *api) resolveOAuthIdentity(r *http.Request, state oauthStateClaims, prov
 		if err != nil {
 			return accounts.Identity{}, err
 		}
-		if identity.AccountType != "guest" {
+		if !identity.IsGuest {
 			return accounts.Identity{}, errors.New("guest upgrade requires guest account")
 		}
 		// Mixed merge/login: attach a brand-new provider to this guest, or
@@ -83,7 +83,7 @@ func (a *api) resolveOAuthIdentity(r *http.Request, state oauthStateClaims, prov
 		return a.accounts.UpsertProviderIdentity(provider, providerUserID, email, displayName, avatarURL, state.LinkSub)
 	}
 	if !identityExists {
-		if banned, err := a.moderation.IsSignupIPBanned(a.clientIP(r)); err != nil {
+		if banned, err := a.staff.IsSignupIPBanned(r.Context(), a.clientIP(r)); err != nil {
 			return accounts.Identity{}, errors.New("signup unavailable")
 		} else if banned {
 			return accounts.Identity{}, errors.New("signup unavailable")
@@ -113,7 +113,7 @@ func (a *api) oauthSessionPayload(provider, accessToken string, identity account
 			"display_name": defaultStr(identity.DisplayName, suggestedNick),
 			"avatar_url":   identity.AvatarURL,
 			"email":        identity.Email,
-			"isGuest":      identity.AccountType == "guest",
+			"isGuest":      identity.IsGuest,
 			"isAdmin":      identity.IsAdmin,
 			"isModerator":  identity.IsModerator,
 		},

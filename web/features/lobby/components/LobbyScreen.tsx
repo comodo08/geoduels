@@ -30,7 +30,7 @@ import { LobbyScreenModals } from "./LobbyScreenModals";
 import { useLobbyScreenState, type LobbyPartyView } from "../hooks/useLobbyScreenState";
 import { useMapList } from "../../maps/lib/map-hooks";
 import { useRuntimeConfig } from "../../../lib/runtime-config-context";
-import { createSeededRandom, featuredMapDay, selectFeaturedOfficialMaps } from "../lib/featured-maps";
+import { createSeededRandom, featuredMapDay, selectHomepageMaps } from "../lib/featured-maps";
 import { useShowAppNoticeOnValue } from "../../../components/ui/AppNotice";
 
 export type { LobbyContentRoute } from "../lib/lobby-ui";
@@ -176,14 +176,11 @@ export default function LobbyScreen({
     "",
     { enabled: contentRoute === "play" },
   );
+  const awardedMapsQuery = useMapList(useRuntimeConfig(), accessToken, userId, "awarded", "trending", "", {enabled:contentRoute === "play"});
   const dailyFeaturedMapKey = featuredMapDay();
   const featuredOfficialMaps = React.useMemo(
-    () => selectFeaturedOfficialMaps(
-      [...(trendingMapsQuery.data || [])].sort((left, right) => left.id.localeCompare(right.id)),
-      10,
-      createSeededRandom(`geoduels-featured-maps:${dailyFeaturedMapKey}`),
-    ),
-    [dailyFeaturedMapKey, trendingMapsQuery.data],
+    () => selectHomepageMaps(trendingMapsQuery.data || [], awardedMapsQuery.data || [], 10, createSeededRandom(`geoduels-featured-maps:${dailyFeaturedMapKey}`)),
+    [dailyFeaturedMapKey,trendingMapsQuery.data,awardedMapsQuery.data],
   );
 
   const newsPanel = (
@@ -310,7 +307,7 @@ export default function LobbyScreen({
       maintenanceIsActive={maintenanceIsActive}
       primaryButtonLabel={primaryButtonLabel}
       trendingMaps={featuredOfficialMaps}
-      trendingMapsLoading={trendingMapsQuery.isLoading}
+      trendingMapsLoading={trendingMapsQuery.isLoading || awardedMapsQuery.isLoading}
       changelogCard={newsPanel}
       donateCard={donateCard}
       socialCard={socialCard}

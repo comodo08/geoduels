@@ -17,7 +17,7 @@ export async function requestAdminBootstrap(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/bootstrap`, {
+  const resp = await apiFetch(config, `/staff/bootstrap`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -37,7 +37,7 @@ export async function requestAdminPlayers(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players?query=${encodeURIComponent(query)}`,
+    `/staff/players?query=${encodeURIComponent(query)}`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
@@ -52,7 +52,7 @@ export async function requestAdminBadgeDefinitions(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/badges`, {
+  const resp = await apiFetch(config, `/staff/badges`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -66,7 +66,7 @@ export async function requestAdminGrantBadge(
   accessToken: string,
   payload: { nickname: string; badgeId: string },
 ) {
-  const resp = await apiFetch(config, `/v1/admin/badges/grant`, {
+  const resp = await apiFetch(config, `/staff/badges/grant`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -87,29 +87,13 @@ export async function requestAdminPlayerDetail(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}`,
+    `/staff/players/${encodeURIComponent(userId)}`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
   );
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load player detail"));
-  }
-  return resp.json();
-}
-
-export async function requestAdminPlayerMatches(
-  config: RuntimeConfig,
-  accessToken: string,
-  userId: string,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/matches`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load match history"));
   }
   return resp.json();
 }
@@ -122,7 +106,7 @@ export async function requestAdminBanPlayer(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/ban`,
+    `/staff/players/${encodeURIComponent(userId)}/ban`,
     {
       method: "POST",
       headers: {
@@ -145,7 +129,7 @@ export async function requestAdminUnbanPlayer(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/unban`,
+    `/staff/players/${encodeURIComponent(userId)}/unban`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -157,7 +141,7 @@ export async function requestAdminUnbanPlayer(
 }
 
 export async function requestAdminCommunityPardonPreview(config: RuntimeConfig, accessToken: string) {
-  const resp = await apiFetch(config, `/v1/admin/moderation/community-pardon`, {
+  const resp = await apiFetch(config, `/staff/community-pardon`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) throw new Error(await readError(resp, "Failed to preview community pardon"));
@@ -165,7 +149,7 @@ export async function requestAdminCommunityPardonPreview(config: RuntimeConfig, 
 }
 
 export async function requestAdminCommunityPardon(config: RuntimeConfig, accessToken: string) {
-  const resp = await apiFetch(config, `/v1/admin/moderation/community-pardon`, {
+  const resp = await apiFetch(config, `/staff/community-pardon`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -184,7 +168,7 @@ export async function requestAdminClearReporterMute(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/report-mute`,
+    `/staff/players/${encodeURIComponent(userId)}/report-mute`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -202,7 +186,7 @@ export async function requestAdminPromoteModerator(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
+    `/staff/players/${encodeURIComponent(userId)}/roles/judge`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -220,7 +204,7 @@ export async function requestAdminDemoteModerator(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/players/${encodeURIComponent(userId)}/moderator`,
+    `/staff/players/${encodeURIComponent(userId)}/roles/judge`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -231,27 +215,11 @@ export async function requestAdminDemoteModerator(
   }
 }
 
-export async function requestAdminMatchChat(
-  config: RuntimeConfig,
-  accessToken: string,
-  matchId: string,
-) {
-  const resp = await apiFetch(
-    config,
-    `/v1/admin/matches/${encodeURIComponent(matchId)}/chat`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!resp.ok) {
-    throw new Error(await readError(resp, "Failed to load match chat"));
-  }
-  return resp.json();
-}
-
 export async function requestAdminRoles(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/roles`, {
+  const resp = await apiFetch(config, `/staff/roles`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -265,7 +233,7 @@ export async function requestAdminGrantRole(
   accessToken: string,
   payload: { userId: string; role: string; reason?: string },
 ) {
-  const resp = await apiFetch(config, `/v1/admin/roles`, {
+  const resp = await apiFetch(config, `/staff/roles`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -287,7 +255,7 @@ export async function requestAdminRevokeRole(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/roles/${encodeURIComponent(userId)}/${encodeURIComponent(role)}`,
+    `/staff/roles/${encodeURIComponent(userId)}/${encodeURIComponent(role)}`,
     {
       method: "DELETE",
       headers: {
@@ -306,7 +274,7 @@ export async function requestAdminIPSignupBans(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/ip-signup-bans`, {
+  const resp = await apiFetch(config, `/staff/ip-bans`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -321,7 +289,7 @@ export async function requestAdminAddIPSignupBan(
   ipAddress: string,
   reason: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/ip-signup-bans`, {
+  const resp = await apiFetch(config, `/staff/ip-bans`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -341,7 +309,7 @@ export async function requestAdminRemoveIPSignupBan(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/admin/ip-signup-bans/${encodeURIComponent(ipAddress)}`,
+    `/staff/ip-bans/${encodeURIComponent(ipAddress)}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -356,7 +324,7 @@ export async function requestAdminMaintenance(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/staff/maintenance`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -390,7 +358,7 @@ export async function requestAdminModerationSettings(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/moderation/settings`, {
+  const resp = await apiFetch(config, `/staff/settings/moderation`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -406,7 +374,7 @@ export async function requestAdminPutModerationSettings(
   accessToken: string,
   settings: AdminModerationSettings,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/moderation/settings`, {
+  const resp = await apiFetch(config, `/staff/settings/moderation`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -426,7 +394,7 @@ export async function requestAdminDiscordIntegrationSettings(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/integrations/discord`, {
+  const resp = await apiFetch(config, `/staff/settings/discord`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -440,7 +408,7 @@ export async function requestAdminPutDiscordIntegrationSettings(
   accessToken: string,
   settings: AdminDiscordIntegrationSettings,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/integrations/discord`, {
+  const resp = await apiFetch(config, `/staff/settings/discord`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -458,7 +426,7 @@ export async function requestAdminRankedSeason(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/seasons`, {
+  const resp = await apiFetch(config, `/staff/seasons`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -472,7 +440,7 @@ export async function requestAdminSetRankedSeasonResetRule(
   accessToken: string,
   monthlyResetDay: number,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/seasons/reset-rule`, {
+  const resp = await apiFetch(config, `/staff/seasons/reset-rule`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -491,7 +459,7 @@ export async function requestAdminPutMaintenance(
   accessToken: string,
   status: MaintenanceStatus,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/staff/maintenance`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -509,7 +477,7 @@ export async function requestAdminClearMaintenance(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/maintenance`, {
+  const resp = await apiFetch(config, `/staff/maintenance`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -522,7 +490,7 @@ export async function requestAdminGetChangelog(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/changelog`, {
+  const resp = await apiFetch(config, `/staff/changelog`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -536,7 +504,7 @@ export async function requestAdminCreateChangelogPost(
   accessToken: string,
   content: ChangelogPostInput,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/changelog`, {
+  const resp = await apiFetch(config, `/staff/changelog`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -556,7 +524,7 @@ export async function requestAdminUpdateChangelogPost(
   id: number,
   content: ChangelogPostInput,
 ) {
-  const resp = await apiFetch(config, `/v1/admin/changelog/${encodeURIComponent(String(id))}`, {
+  const resp = await apiFetch(config, `/staff/changelog/${encodeURIComponent(String(id))}`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -580,7 +548,7 @@ export async function requestAdminUploadCurrentMap(
   body.append("file", file);
   const resp = await apiFetch(
     config,
-    `/v1/admin/maps/${encodeURIComponent(mapKey)}/upload`,
+    `/staff/maps/${encodeURIComponent(mapKey)}/upload`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },

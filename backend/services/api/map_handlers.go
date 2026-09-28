@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"geoduels/pkg/contracts"
+	pkgstaff "geoduels/pkg/staff"
 )
 
 const maxMapUploadBytes = int64(128 << 20)
@@ -267,11 +268,11 @@ func (a *api) publishMap(c echo.Context) error {
 }
 
 func (a *api) setMapOfficial(c echo.Context) error {
-	admin, err := a.adminIdentity(c.Request())
+	actor, err := a.requireStaff(c.Request(), pkgstaff.CapManageMaps)
 	if err != nil {
-		return plainTextError(c, http.StatusForbidden, "forbidden")
+		return staffError(c, err)
 	}
-	item, err := a.maps.SetMapOfficial(admin.Sub, resolveCompactEntityID(c.Param("id")), true)
+	item, err := a.maps.SetMapOfficial(actor.ID, resolveCompactEntityID(c.Param("id")), true)
 	if errors.Is(err, ErrNoRows) {
 		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
@@ -282,11 +283,11 @@ func (a *api) setMapOfficial(c echo.Context) error {
 }
 
 func (a *api) unsetMapOfficial(c echo.Context) error {
-	admin, err := a.adminIdentity(c.Request())
+	actor, err := a.requireStaff(c.Request(), pkgstaff.CapManageMaps)
 	if err != nil {
-		return plainTextError(c, http.StatusForbidden, "forbidden")
+		return staffError(c, err)
 	}
-	item, err := a.maps.SetMapOfficial(admin.Sub, resolveCompactEntityID(c.Param("id")), false)
+	item, err := a.maps.SetMapOfficial(actor.ID, resolveCompactEntityID(c.Param("id")), false)
 	if errors.Is(err, ErrNoRows) {
 		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}
@@ -297,11 +298,11 @@ func (a *api) unsetMapOfficial(c echo.Context) error {
 }
 
 func (a *api) setGameplayMapRole(c echo.Context) error {
-	admin, err := a.adminIdentity(c.Request())
+	actor, err := a.requireStaff(c.Request(), pkgstaff.CapManageMaps)
 	if err != nil {
-		return plainTextError(c, http.StatusForbidden, "forbidden")
+		return staffError(c, err)
 	}
-	item, err := a.maps.SetGameplayMapRole(admin.Sub, resolveCompactEntityID(c.Param("id")), c.Param("role"))
+	item, err := a.maps.SetGameplayMapRole(actor.ID, resolveCompactEntityID(c.Param("id")), c.Param("role"))
 	if errors.Is(err, ErrNoRows) {
 		return plainTextError(c, http.StatusNotFound, "404 page not found")
 	}

@@ -52,8 +52,8 @@ FROM jsonb_to_recordset(convert_from(sqlc.arg(player_ids_json), 'UTF8')::jsonb) 
 ON CONFLICT (user_id) DO NOTHING;
 
 -- name: EnsureMatchUsers :exec
-INSERT INTO users (id, email, display_name, avatar_url, account_type)
-SELECT input.user_id, NULL, input.display_name, NULL, 'guest'
+INSERT INTO users (id, email, display_name, avatar_url)
+SELECT input.user_id, NULL, input.display_name, NULL
 FROM jsonb_to_recordset(convert_from(sqlc.arg(players_json), 'UTF8')::jsonb) AS input(user_id uuid, display_name text)
 ON CONFLICT (id) DO NOTHING;
 
@@ -75,7 +75,7 @@ SELECT source_party_id AS source_party_id
 FROM match_sessions WHERE match_id = $1;
 
 -- name: LockDuelRatings :many
-SELECT u.id, u.account_type = 'guest' AS is_guest, r.mmr, r.rd, r.updated_at
+SELECT u.id, gd_is_guest(u.id) AS is_guest, r.mmr, r.rd, r.updated_at
 FROM unnest(ARRAY[sqlc.arg(user1_id)::uuid, sqlc.arg(user2_id)::uuid]) WITH ORDINALITY requested(user_id, position)
 JOIN users u ON u.id = requested.user_id
 JOIN ranks r

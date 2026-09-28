@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"geoduels/internal/storekit"
@@ -118,69 +117,9 @@ func (s *PGStore) MarkAllUserNotificationsRead(userID string) error {
 	return s.q().MarkAllUserNotificationsRead(context.Background(), u)
 }
 
-func (s *PGStore) ClaimPendingNotification(notificationType string, now time.Time) (contracts.NotificationOutboxItem, bool, error) {
-	notificationType = strings.TrimSpace(notificationType)
-	if notificationType == "" {
-		return contracts.NotificationOutboxItem{}, false, errors.New("notification type required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return contracts.NotificationOutboxItem{}, false, err
-	}
-	defer tx.Rollback(ctx)
-	q := db.New(tx)
-	row, scanErr := q.ClaimPendingNotification(ctx, db.ClaimPendingNotificationParams{LeaseUntil: storekit.Timestamptz(now.Add(5 * time.Minute)), NotificationType: db.GdNotificationOutboxType(notificationType), Now: storekit.Timestamptz(now)})
-	if scanErr != nil {
-		if errors.Is(scanErr, pgx.ErrNoRows) {
-			return contracts.NotificationOutboxItem{}, false, nil
-		}
-		return contracts.NotificationOutboxItem{}, false, scanErr
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return contracts.NotificationOutboxItem{}, false, err
-	}
-	return notificationItem(row), true, nil
-}
-
-func (s *PGStore) MarkNotificationSent(id int64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	value, err := requireNotificationID(id)
-	if err != nil {
-		return err
-	}
-	return s.q().MarkNotificationSent(ctx, value)
-}
-
-func (s *PGStore) MarkNotificationFailed(id int64, nextAttemptAt time.Time, lastError string) error {
-	if id <= 0 {
-		return errors.New("notification id required")
-	}
-	lastError = strings.TrimSpace(lastError)
-	if len(lastError) > 1000 {
-		lastError = lastError[:1000]
-	}
-	if nextAttemptAt.IsZero() {
-		nextAttemptAt = time.Now().Add(time.Minute)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	value, err := requireNotificationID(id)
-	if err != nil {
-		return err
-	}
-	return s.q().MarkNotificationFailed(ctx, db.MarkNotificationFailedParams{NextAttemptAt: storekit.Timestamptz(nextAttemptAt), LastError: lastError, OutboxID: value})
-}
-
 func requireNotificationID(id int64) (int64, error) {
 	if id <= 0 {
 		return 0, errors.New("notification id required")
 	}
 	return id, nil
-}
-
-func notificationItem(row db.ClaimPendingNotificationRow) contracts.NotificationOutboxItem {
-	return contracts.NotificationOutboxItem{ID: row.ID, Type: string(row.Type), PayloadJSON: json.RawMessage(row.PayloadJson), Attempts: int(row.Attempts)}
 }

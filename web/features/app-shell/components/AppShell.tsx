@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ClipboardList, Settings, Shield } from "lucide-react";
+import { Settings, Shield } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import AvatarBadge from "../../players/components/AvatarBadge";
@@ -104,27 +104,10 @@ function AppShellHeader({
               className="h-auto w-[112px] sm:w-[140px]"
             />
           </Link>
-          {auth.status === "registered" && auth.isAdmin ? (
-            <Tooltip content="Admin" side="bottom">
-              <AppChromeIconLink
-                href="/admin"
-                prefetch={false}
-                aria-label="Admin"
-                className="hidden sm:inline-flex"
-              >
+          {auth.status === "registered" && auth.roles.length > 0 ? (
+            <Tooltip content="Staff" side="bottom">
+              <AppChromeIconLink href="/admin" prefetch={false} aria-label="Staff" className="hidden sm:inline-flex">
                 <Shield size={17} aria-hidden="true" />
-              </AppChromeIconLink>
-            </Tooltip>
-          ) : null}
-          {auth.status === "registered" && (auth.isAdmin || auth.isModerator) ? (
-            <Tooltip content="Moderator" side="bottom">
-              <AppChromeIconLink
-                href="/moderator"
-                prefetch={false}
-                aria-label="Moderator"
-                className="hidden sm:inline-flex"
-              >
-                <ClipboardList size={17} aria-hidden="true" />
               </AppChromeIconLink>
             </Tooltip>
           ) : null}

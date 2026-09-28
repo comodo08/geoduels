@@ -23,6 +23,7 @@ import (
 
 	"geoduels/internal/envcfg"
 	"geoduels/internal/httpx"
+	"geoduels/internal/jobs"
 	"geoduels/internal/maps"
 	"geoduels/internal/matches"
 	"geoduels/pkg/contracts"
@@ -101,7 +102,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	store := matches.NewPGStore(db.Pool())
+	jobsClient, err := jobs.NewClient(db.Pool(), nil, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	store := matches.NewPGStore(db.Pool(), jobsClient.EnqueueMatchAnalyze)
 	mapStore := maps.NewPGStore(db.Pool())
 	// Dev-only: import the bundled sample dataset when a required playable
 	// map is missing; production nodes leave DEV_MAP_DATASET unset.
@@ -510,7 +515,7 @@ func (g *gameplayNode) sendTeamPing(userID, matchID, roundID string, lat, lng fl
 	}
 	now := time.Now()
 	g.mu.Lock()
-	if last := g.lastTeamPing[userID]; !last.IsZero() && now.Sub(last) < time.Second {
+	if last := g.lastTeamPing[userID]; !last.IsZero() && now.Sub(last) < 500*time.Millisecond {
 		g.mu.Unlock()
 		return errors.New("pinging too quickly")
 	}

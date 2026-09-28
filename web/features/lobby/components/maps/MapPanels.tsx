@@ -1,3 +1,5 @@
+import { MapOfTheWeekBadge } from "../../../maps/components/MapOfTheWeekBadge";
+import { MapModeratorOperations } from "./MapModeratorOperations";
 import React, { useState } from "react";
 import { ArrowLeft, ChartNoAxesColumnIncreasing, Check, Clock3, Flame, Heart, Map as MapIcon, Pencil, Play, Search, Star, Trophy, Upload, X } from "lucide-react";
 import PlayerProfileLink from "../../../players/components/PlayerProfileLink";
@@ -200,7 +202,7 @@ export function MapCard({
 
       <div className="absolute inset-x-0 bottom-0 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 p-4">
         <div className="min-w-0">
-          <h3 className="truncate text-heading-sm font-strong leading-heading text-content-primary">{item.displayName}</h3>
+          <h3 className="truncate text-heading-sm font-strong leading-heading text-content-primary">{item.displayName} <MapOfTheWeekBadge map={item}/></h3>
           {showAuthor ? (
             <p className="mt-1.5 truncate text-label font-strong text-content-secondary">{item.authorName || "GeoDuels"}</p>
           ) : null}
@@ -470,7 +472,7 @@ export function MapDetailsPanel({
             <div className="absolute inset-0 bg-scrim" />
             <div className="relative flex min-h-[280px] flex-col justify-end p-5 sm:p-6">
               <div className="max-w-[720px]">
-                <h2 className="text-display-md font-strong leading-heading tracking-heading text-content-primary">{map.displayName}</h2>
+                <h2 className="text-display-md font-strong leading-heading tracking-heading text-content-primary">{map.displayName} <MapOfTheWeekBadge map={map}/></h2>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-body-sm font-strong text-content-primary">
                   <span>
                     By{" "}
@@ -560,6 +562,7 @@ export function MapDetailsPanel({
           </SectionCard>
         ) : null}
 
+        <MapModeratorOperations map={map}/>
         {isAdmin ? (
           <MapAdminOperations
             map={map}

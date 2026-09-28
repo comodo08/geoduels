@@ -1,6 +1,3 @@
--- name: ClaimDiscordSync :one
-WITH candidate AS (SELECT d.id FROM discord_sync_outbox d WHERE d.processed_at IS NULL AND d.next_attempt_at <= $1 ORDER BY d.next_attempt_at,d.id LIMIT 1 FOR UPDATE SKIP LOCKED) UPDATE discord_sync_outbox o SET attempts=o.attempts+1,next_attempt_at=sqlc.arg(new_next_attempt_at),last_error=NULL FROM candidate WHERE o.id=candidate.id RETURNING o.id,o.action,o.discord_user_id,o.attempts;
-
 -- name: ClaimDonation :one
 UPDATE support_donation_refs SET completed_at=COALESCE(completed_at,now()) WHERE ref=$1 RETURNING user_id;
 
@@ -38,16 +35,10 @@ SELECT level, COALESCE(extra, 0)::smallint AS extra FROM user_badges WHERE user_
 SELECT COALESCE(extra,0)::smallint + 1 AS count FROM user_badges WHERE user_id=sqlc.arg(user_id)::uuid AND badge_code=sqlc.arg(badge_code) FOR UPDATE;
 
 -- name: LoginBadgeInfo :one
-SELECT COALESCE(u.account_type='guest',false) AS is_guest, COALESCE(u.is_admin,false) OR COALESCE(u.is_moderator,false) AS is_staff, COALESCE(r.mmr,sqlc.arg(default_mmr))::int AS mmr FROM users u LEFT JOIN ranks r ON r.user_id=u.id AND r.mode=sqlc.arg(mode) AND r.season_id=sqlc.arg(season_id) WHERE u.id=sqlc.arg(user_id)::uuid;
+SELECT gd_is_guest(u.id) AS is_guest, EXISTS(SELECT 1 FROM user_roles ur WHERE ur.user_id=u.id) AS is_staff, COALESCE(r.mmr,sqlc.arg(default_mmr))::int AS mmr FROM users u LEFT JOIN ranks r ON r.user_id=u.id AND r.mode=sqlc.arg(mode) AND r.season_id=sqlc.arg(season_id) WHERE u.id=sqlc.arg(user_id)::uuid;
 
 -- name: LoginDiscordSyncInfo :one
-SELECT ui.user_id, ui.provider_user_id, COALESCE(max(CASE ub.badge_code WHEN sqlc.arg(elo2000_code) THEN 2000 WHEN sqlc.arg(elo1500_code) THEN 1500 WHEN sqlc.arg(elo1000_code) THEN 1000 ELSE 0 END),0)::int AS highest_elo_badge_mmr FROM user_identities ui JOIN users u ON u.id=ui.user_id LEFT JOIN user_badges ub ON ub.user_id=ui.user_id AND ub.badge_code IN (sqlc.arg(elo2000_code),sqlc.arg(elo1500_code),sqlc.arg(elo1000_code)) WHERE ui.provider=sqlc.arg(provider) AND ui.provider_user_id=sqlc.arg(provider_user_id) AND COALESCE(u.account_type,'registered')<>'guest' AND u.deleted_at IS NULL GROUP BY ui.user_id,ui.provider_user_id;
-
--- name: MarkDiscordSyncFailed :exec
-UPDATE discord_sync_outbox SET next_attempt_at=sqlc.arg(next_attempt_at),last_error=NULLIF(sqlc.arg(last_error),'') WHERE id=sqlc.arg(outbox_id) AND processed_at IS NULL;
-
--- name: MarkDiscordSyncProcessed :exec
-UPDATE discord_sync_outbox SET processed_at=now(),last_error=NULL WHERE id=$1;
+SELECT ui.user_id, ui.provider_user_id, COALESCE(max(CASE ub.badge_code WHEN sqlc.arg(elo2000_code) THEN 2000 WHEN sqlc.arg(elo1500_code) THEN 1500 WHEN sqlc.arg(elo1000_code) THEN 1000 ELSE 0 END),0)::int AS highest_elo_badge_mmr FROM user_identities ui JOIN users u ON u.id=ui.user_id LEFT JOIN user_badges ub ON ub.user_id=ui.user_id AND ub.badge_code IN (sqlc.arg(elo2000_code),sqlc.arg(elo1500_code),sqlc.arg(elo1000_code)) WHERE ui.provider=sqlc.arg(provider) AND ui.provider_user_id=sqlc.arg(provider_user_id) AND u.deleted_at IS NULL GROUP BY ui.user_id,ui.provider_user_id;
 
 -- name: UpdateBadge :exec
 UPDATE user_badges SET level=sqlc.arg(level), extra=NULLIF(sqlc.arg(extra),0), updated_at=now() WHERE user_id=sqlc.arg(user_id)::uuid AND badge_code=sqlc.arg(badge_code);

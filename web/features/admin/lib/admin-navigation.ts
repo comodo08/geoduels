@@ -5,6 +5,8 @@ import {
   Award,
   FileText,
   Gavel,
+  Flame,
+  Calendar,
   History,
   KeyRound,
   MessageCircle,
@@ -37,13 +39,13 @@ export const moderatorNav = [
   {
     title: "Review",
     items: [
-      { href: "/moderator/subjects", label: "Subjects", icon: Search },
-      { href: "/moderator/signals", label: "Signals", icon: Gavel },
+      { href: "/admin/judge/subjects", label: "Subjects", icon: Search },
+      { href: "/admin/judge/signals", label: "Signals", icon: Gavel },
     ],
   },
   {
     title: "History",
-    items: [{ href: "/moderator/log", label: "Moderation Log", icon: History }],
+    items: [{ href: "/admin/judge/log", label: "Moderation Log", icon: History }],
   },
 ];
 
@@ -61,4 +63,13 @@ export function moderatorPathFromRouter(router: NextRouter) {
   const tab = router.query.tab;
   if (typeof tab === "string") return [tab];
 	return ["subjects"];
+}
+
+export function staffNavigation(roles: readonly string[]) {
+ return [
+  { role: "admin", title: "Admin", items: adminNav.flatMap(group => group.items) },
+  { role: "judge", title: "Judge", items: moderatorNav.flatMap(group => group.items) },
+  { role: "moderator", title: "Moderator", items: [{ href: "/admin/moderator/map-of-the-week", label: "Map of the Week", icon: Flame }] },
+  { role: "lanista", title: "Lanista", items: [{ href: "/admin/lanista/events", label: "Events", icon: Calendar }] },
+ ].filter(group => roles.includes(group.role));
 }

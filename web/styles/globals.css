@@ -578,3 +578,11 @@ img {
 .minimap-interactive .leaflet-interactive {
   cursor: crosshair !important;
 }
+
+.team-ping-avatar {
+ position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;opacity:.58;object-fit:cover;
+ box-shadow:0 0 0 2px rgb(var(--gd-accent-pink) / .65);animation:team-ping-enter .2s ease-out both;
+}
+.team-ping-core {left:70%;top:70%;width:20px;height:20px;margin:-10px;font-size:13px;line-height:20px;}
+@keyframes team-ping-enter {from {transform:scale(.65);opacity:0} to {transform:scale(1);opacity:.58}}
+@media(prefers-reduced-motion:reduce){.team-ping-avatar{animation:none}}

@@ -17,6 +17,7 @@ import (
 	"geoduels/pkg/contracts"
 	"geoduels/pkg/entityid"
 	"geoduels/pkg/observability"
+	pkgstaff "geoduels/pkg/staff"
 )
 
 const (
@@ -30,6 +31,9 @@ type chatScope struct {
 	Kind           string
 	ID             string
 	MatchID        string
+	// ReadOnly is set for staff reviewers who are not participants: they may
+	// read (team chat only after the match ended) but never send.
+	ReadOnly bool
 }
 
 type chatClientCommand struct {
@@ -39,11 +43,12 @@ type chatClientCommand struct {
 
 func (q *matchCoordinator) chatWS(c echo.Context) error {
 	r := c.Request()
-	claims, _, err := q.requireActiveAccount(c)
+	claims, identity, err := q.requireActiveAccount(c)
 	if err != nil {
 		return err
 	}
-	scope, err := q.authorizeChatConversation(r.Context(), strings.TrimSpace(c.QueryParam("conversationId")), claims.Sub)
+	staffViewer := identity.StaffActor().Can(pkgstaff.CapReviewReports) || identity.StaffActor().Can(pkgstaff.CapManageAccess)
+	scope, err := q.authorizeChatConversation(r.Context(), strings.TrimSpace(c.QueryParam("conversationId")), claims.Sub, staffViewer)
 	if err != nil {
 		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
@@ -66,15 +71,24 @@ func (q *matchCoordinator) chatWS(c echo.Context) error {
 	})
 
 	var writeMu sync.Mutex
-	if messages, err := q.chat.ListChatMessagesForUser(scope.ConversationID, claims.Sub, 100); err == nil && len(messages) > 0 {
+	// Staff reviewers only see team chat after the match has ended; live team
+	// messages are never revealed.
+	revealTeam := false
+	if scope.ReadOnly {
+		if ended, endedErr := q.chat.MatchEnded(r.Context(), scope.MatchID); endedErr == nil && ended {
+			revealTeam = true
+		}
+	}
+	if messages, err := q.chat.ListChatMessagesForUser(scope.ConversationID, claims.Sub, 100, revealTeam); err == nil && len(messages) > 0 {
 		q.writeQueueMessage(conn, &writeMu, "chat.history", map[string]any{
 			"conversationId": scope.ConversationID,
 			"messages":       messages,
+			"readOnly":       scope.ReadOnly,
 		})
 	}
 
 	var chatEvents <-chan *redis.Message
-	if q.redis != nil {
+	if q.redis != nil && !scope.ReadOnly {
 		pubsub := q.redis.Subscribe(ctx, chatChannel(scope.ConversationID))
 		defer pubsub.Close()
 		if _, err := pubsub.Receive(ctx); err != nil {
@@ -92,6 +106,10 @@ func (q *matchCoordinator) chatWS(c echo.Context) error {
 				return
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(70 * time.Second))
+			if scope.ReadOnly {
+				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "chat is read-only for reviewers"})
+				continue
+			}
 			restriction, restricted, err := q.chat.GetActiveChatRestriction(claims.Sub)
 			if err != nil {
 				observability.Log("warn", "chat restriction lookup failed", map[string]any{
@@ -121,7 +139,17 @@ func (q *matchCoordinator) chatWS(c echo.Context) error {
 					q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "team chat is only available during a team duel"})
 					continue
 				}
-				message.MatchID, message.TeamID = matchID, teamID
+				message.MatchID, message.TeamID, message.SenderTeamID = matchID, teamID, teamID
+			}
+			if message.Audience == contracts.ChatAudienceAll {
+				_, teamID, ok, err := q.resolveChatTeam(scope, claims.Sub)
+				if err != nil {
+					q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "chat unavailable"})
+					continue
+				}
+				if ok {
+					message.SenderTeamID = teamID
+				}
 			}
 			if !q.allowChatSend(scope.ConversationID, claims.Sub, time.Now()) {
 				q.writeQueueMessage(conn, &writeMu, "chat.error", map[string]string{"message": "chat is moving too fast"})
@@ -174,7 +202,7 @@ func (q *matchCoordinator) chatWS(c echo.Context) error {
 	}
 }
 
-func (q *matchCoordinator) authorizeChatConversation(ctx context.Context, conversationID, userID string) (chatScope, error) {
+func (q *matchCoordinator) authorizeChatConversation(ctx context.Context, conversationID, userID string, staffViewer bool) (chatScope, error) {
 	kind, id, ok := strings.Cut(conversationID, ":")
 	if !ok || strings.TrimSpace(id) == "" {
 		return chatScope{}, errors.New("invalid conversation")
@@ -197,6 +225,10 @@ func (q *matchCoordinator) authorizeChatConversation(ctx context.Context, conver
 			}
 		}
 		if participated, err := q.matches.PlayerParticipatedInMatch(userID, id); err == nil && participated {
+			return scope, nil
+		}
+		if staffViewer {
+			scope.ReadOnly = true
 			return scope, nil
 		}
 		return chatScope{}, errors.New("forbidden")

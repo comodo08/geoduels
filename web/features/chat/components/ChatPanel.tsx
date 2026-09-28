@@ -197,7 +197,7 @@ export default function ChatPanel({
                     {message.audience === 'team' ? (
                       <span className="mr-1 font-strong">({teamChatLabel(message.teamId)})</span>
                     ) : null}
-                    <PlayerProfileLink userId={message.senderUserId} nickname={message.senderDisplayName} stopPropagation className={`mr-1 font-strong hover:underline ${self ? 'text-status-success' : 'text-brand-blue'}`}>
+                    <PlayerProfileLink userId={message.senderUserId} nickname={message.senderDisplayName} stopPropagation className={`mr-1 font-strong hover:underline ${message.senderTeamId ? getTeamPresentation(message.senderTeamId).textClassName : self ? 'text-status-success' : 'text-brand-blue'}`}>
                       {message.senderDisplayName}
                     </PlayerProfileLink>
                     <span className={message.kind === 'emote' ? 'text-heading-sm leading-collapsed' : ''}>

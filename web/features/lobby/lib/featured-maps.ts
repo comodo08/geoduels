@@ -49,3 +49,17 @@ export function selectFeaturedOfficialMaps(
     .slice(0, Math.max(0, limit))
     .map(({ map }) => map);
 }
+
+export function selectHomepageMaps(official: CustomMap[], awarded: CustomMap[], limit: number, random: () => number) {
+ const unique=(maps:CustomMap[])=>[...new Map(maps.map(map=>[map.id,map])).values()];
+ const shuffle=(maps:CustomMap[])=>{const items=[...maps];for(let i=items.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[items[i],items[j]]=[items[j],items[i]];}return items;};
+ const eligible=(map:CustomMap)=>map.status==="ready";
+ const winners=unique(awarded.filter(eligible));
+ const current=winners.find(map=>map.motwCurrent);
+ const cap=Math.floor(limit/2);
+ const selectedWinners=[...(current&&cap>0?[current]:[]),...shuffle(winners.filter(map=>map.id!==current?.id))].slice(0,cap);
+ const selectedIDs=new Set(selectedWinners.map(map=>map.id));
+ const regular=shuffle(unique(official.filter(map=>eligible(map)&&!map.motwCount&&!selectedIDs.has(map.id))));
+ const rest=shuffle([...selectedWinners.filter(map=>map.id!==current?.id),...regular.slice(0,Math.max(0,limit-selectedWinners.length))]);
+ return [...(current&&selectedIDs.has(current.id)?[current]:[]),...rest].slice(0,limit);
+}

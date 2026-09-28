@@ -1,15 +1,6 @@
 -- name: CreateChangelogPost :one
 INSERT INTO changelog_posts(slug,title,markdown,published,updated_at) VALUES($1,$2,$3,$4,now()) RETURNING id,slug,title,markdown,published,created_at,updated_at;
 
--- name: EnqueueDiscordSyncAll :exec
-INSERT INTO discord_sync_outbox(action, discord_user_id)
-SELECT $1, provider_user_id
-FROM user_identities
-WHERE provider = $2
-ON CONFLICT (action, discord_user_id) WHERE processed_at IS NULL DO UPDATE SET
-  next_attempt_at = least(discord_sync_outbox.next_attempt_at, excluded.next_attempt_at),
-  last_error = NULL;
-
 -- name: GetChangelogPost :one
 SELECT id,slug,title,markdown,published,created_at,updated_at FROM changelog_posts WHERE slug=sqlc.arg(slug) AND (sqlc.arg(include_unpublished)::boolean=false OR published=true);
 

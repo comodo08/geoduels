@@ -88,7 +88,7 @@ function buildHistoryOverlay(
     fallbackSelf: {
       id: userId || "self",
       name: selfPlayer?.displayName || displayName || "You",
-      avatarUrl: selfPlayer?.avatarUrl || userAvatar,
+      avatarUrl: selfPlayer?.avatarUrl || (selfPlayer?.userId === userId ? userAvatar : undefined),
       avatarFallback: (
         selfPlayer?.displayName ||
         displayName ||
@@ -143,7 +143,7 @@ function buildHistoryOverlay(
     fallbackSelf: {
       id: userId || "self",
       name: selfPlayer?.displayName || displayName || "You",
-      avatarUrl: selfPlayer?.avatarUrl || userAvatar,
+      avatarUrl: selfPlayer?.avatarUrl || (selfPlayer?.userId === userId ? userAvatar : undefined),
       avatarFallback: (
         selfPlayer?.displayName ||
         displayName ||

@@ -14,26 +14,29 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/riverqueue/river"
 
 	"geoduels/internal/badges"
 	"geoduels/internal/content"
+	"geoduels/internal/jobs"
 	"geoduels/pkg/observability"
 	"geoduels/pkg/persistence"
+	db "geoduels/pkg/persistence/sqlc/db"
 )
 
 const (
 	workerDrainTimeout    = 5 * time.Second
 	workerShutdownTimeout = 10 * time.Second
-	discordSyncInterval   = 15 * time.Second
-	discordSyncBatch      = 10
 )
 
 // discordPersistence is the narrow persistence surface the discord worker
 // needs; satisfied by the sqlc-backed persistence store.
 type worker struct {
 	db       *persistence.DB
+	queries  *db.Queries
 	badges   badges.Store
 	content  content.Store
+	jobs     *jobs.Client
 	session  *discordgo.Session
 	configMu sync.RWMutex
 	config   content.DiscordIntegrationSettings
@@ -56,7 +59,9 @@ func main() {
 	}
 	w.startConfigRefresh(ctx)
 	w.startReconciliation(ctx)
-	w.startDiscordSyncWorker(ctx)
+	if err := w.jobs.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
 
 	r := http.NewServeMux()
 	r.HandleFunc("/health/live", w.healthLive)
@@ -84,25 +89,47 @@ func newWorker() (*worker, error) {
 	if token == "" {
 		return nil, errors.New("DISCORD_BOT_TOKEN is required")
 	}
-	db, err := persistence.NewFromEnv()
+	store, err := persistence.NewFromEnv()
 	if err != nil {
 		return nil, err
 	}
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
-		db.Close()
+		store.Close()
 		return nil, err
 	}
-	contentStore := content.NewPGStore(db.Pool())
+	producer, err := jobs.NewClient(store.Pool(), nil, nil)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	contentStore := content.NewPGStore(store.Pool(), producer)
 	settings, err := contentStore.GetDiscordIntegrationSettings()
 	if err != nil {
-		db.Close()
+		store.Close()
 		return nil, err
 	}
-	w := &worker{db: db, badges: badges.NewPGStore(db.Pool()), content: contentStore, config: settings, session: session}
+	w := &worker{
+		db:      store,
+		queries: db.New(store.Pool()),
+		badges:  badges.NewPGStore(store.Pool(), producer),
+		content: contentStore,
+		config:  settings,
+		session: session,
+	}
 	session.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages
 	session.AddHandler(w.onGuildMemberAdd)
 	session.AddHandler(w.onMessageCreate)
+
+	workers := river.NewWorkers()
+	river.AddWorker(workers, &discordSyncWorker{w: w})
+	river.AddWorker(workers, &discordSyncAllWorker{w: w})
+	jobsClient, err := jobs.NewClient(store.Pool(), workers, nil)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	w.jobs = jobsClient
 	return w, nil
 }
 
@@ -241,67 +268,53 @@ func (w *worker) reconcileMembers(ctx context.Context) {
 	}
 }
 
-func (w *worker) startDiscordSyncWorker(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(discordSyncInterval)
-		defer ticker.Stop()
-		for {
-			w.drainDiscordSync(ctx)
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-	}()
+// discordSyncWorker syncs one Discord identity's managed roles.
+type discordSyncWorker struct {
+	river.WorkerDefaults[jobs.DiscordSyncArgs]
+	w *worker
 }
 
-func (w *worker) drainDiscordSync(ctx context.Context) {
-	for i := 0; i < discordSyncBatch; i++ {
-		if ctx.Err() != nil {
-			return
-		}
-		processed, err := w.processOneDiscordSync()
-		if err != nil {
-			observability.Log("warn", "discord sync processing failed", map[string]any{"error": err.Error()})
-			return
-		}
-		if !processed {
-			return
-		}
-	}
+func (x *discordSyncWorker) Work(ctx context.Context, job *river.Job[jobs.DiscordSyncArgs]) error {
+	return x.w.processDiscordSync(job.Args.Action, job.Args.DiscordUserID)
 }
 
-func (w *worker) processOneDiscordSync() (bool, error) {
-	item, ok, err := w.badges.ClaimPendingDiscordSync(time.Now())
-	if err != nil || !ok {
-		return false, err
+// discordSyncAllWorker fans a role sync across every linked Discord identity.
+type discordSyncAllWorker struct {
+	river.WorkerDefaults[jobs.DiscordSyncAllArgs]
+	w *worker
+}
+
+func (x *discordSyncAllWorker) Work(ctx context.Context, _ *river.Job[jobs.DiscordSyncAllArgs]) error {
+	ids, err := x.w.queries.ListAllDiscordIdentityIDs(ctx)
+	if err != nil {
+		return err
 	}
-	var processErr error
-	switch item.Action {
+	for _, id := range ids {
+		if err := x.w.processDiscordSync(badges.DiscordSyncActionSync, id); err != nil {
+			observability.Log("warn", "discord sync all entry failed", map[string]any{"discord_user_id": id, "error": err.Error()})
+		}
+	}
+	return nil
+}
+
+func (w *worker) processDiscordSync(action, discordUserID string) error {
+	switch action {
 	case badges.DiscordSyncActionCleanupRoles:
 		// Cleanup jobs can outlive an unlink/relink sequence. Re-resolve the
 		// identity so a stale cleanup cannot remove a newly valid role.
-		_, linked, lookupErr := w.badges.GetDiscordLinkedUser(item.DiscordUserID)
-		if lookupErr != nil {
-			processErr = lookupErr
-		} else if discordSyncActionForLinkState(item.Action, linked) == badges.DiscordSyncActionSync {
-			processErr = w.syncRankRoles(item.DiscordUserID)
-		} else {
-			processErr = w.cleanupRankRoles(item.DiscordUserID)
+		_, linked, err := w.badges.GetDiscordLinkedUser(discordUserID)
+		if err != nil {
+			return err
 		}
+		if discordSyncActionForLinkState(action, linked) == badges.DiscordSyncActionSync {
+			return w.syncRankRoles(discordUserID)
+		}
+		return w.cleanupRankRoles(discordUserID)
 	case badges.DiscordSyncActionSync:
-		processErr = w.syncDiscordUser(item.DiscordUserID)
+		return w.syncDiscordUser(discordUserID)
 	default:
-		processErr = errors.New("unknown discord sync action")
+		return errors.New("unknown discord sync action")
 	}
-	if processErr != nil {
-		return true, w.badges.MarkDiscordSyncFailed(item.ID, nextDiscordSyncAttempt(item.Attempts), processErr.Error())
-	}
-	if err := w.badges.MarkDiscordSyncProcessed(item.ID); err != nil {
-		return true, err
-	}
-	return true, nil
 }
 
 func discordSyncActionForLinkState(requested string, linked bool) string {
@@ -309,25 +322,6 @@ func discordSyncActionForLinkState(requested string, linked bool) string {
 		return badges.DiscordSyncActionSync
 	}
 	return requested
-}
-
-func nextDiscordSyncAttempt(attempts int) time.Time {
-	if attempts <= 0 {
-		attempts = 1
-	}
-	delays := []time.Duration{
-		15 * time.Second,
-		30 * time.Second,
-		time.Minute,
-		2 * time.Minute,
-		5 * time.Minute,
-		10 * time.Minute,
-	}
-	idx := attempts - 1
-	if idx >= len(delays) {
-		idx = len(delays) - 1
-	}
-	return time.Now().Add(delays[idx])
 }
 
 func (w *worker) syncDiscordUser(discordUserID string) error {
@@ -479,6 +473,11 @@ func handleWorkerShutdown(w *worker, srv *http.Server, cancel context.CancelFunc
 
 	ctx, shutdownCancel := context.WithTimeout(context.Background(), workerShutdownTimeout)
 	defer shutdownCancel()
+	if w.jobs != nil {
+		if err := w.jobs.Stop(ctx); err != nil {
+			log.Printf("discord worker job stop failed: %v", err)
+		}
+	}
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("discord worker shutdown failed: %v", err)
 	}

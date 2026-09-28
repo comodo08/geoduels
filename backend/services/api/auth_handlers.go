@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,7 +38,7 @@ func (a *api) guestLogin(c echo.Context) error {
 	if err := decodeJSONBody(r, &req); err != nil {
 		return plainTextError(c, http.StatusBadRequest, "invalid payload")
 	}
-	if banned, err := a.moderation.IsSignupIPBanned(a.clientIP(r)); err != nil {
+	if banned, err := a.staff.IsSignupIPBanned(r.Context(), a.clientIP(r)); err != nil {
 		return plainTextError(c, http.StatusInternalServerError, "signup unavailable (101)")
 	} else if banned {
 		return plainTextError(c, http.StatusForbidden, "signup unavailable (102)")
@@ -78,7 +79,7 @@ func (a *api) updateNickname(c echo.Context) error {
 	if err != nil {
 		return plainTextError(c, http.StatusUnauthorized, "identity not found")
 	}
-	if identity.AccountType == "guest" {
+	if identity.IsGuest {
 		return plainTextError(c, http.StatusForbidden, "guest nicknames cannot be changed")
 	}
 	var req struct {
@@ -352,7 +353,7 @@ func (a *api) autoBootstrapAdmin(identity Identity) (Identity, error) {
 	if _, ok := a.adminBootstrapEmails[email]; !ok {
 		return identity, nil
 	}
-	if err := a.accounts.SetUserAdmin(identity.Sub, true); err != nil {
+	if err := a.staff.BootstrapAdmin(context.Background(), identity.Sub); err != nil {
 		return Identity{}, err
 	}
 	return a.accounts.GetIdentity(identity.Sub)
@@ -361,10 +362,11 @@ func (a *api) autoBootstrapAdmin(identity Identity) (Identity, error) {
 func sessionUser(identity Identity) contracts.AuthUser {
 	return contracts.AuthUser{
 		ID:          identity.Sub,
+		Roles:       identity.Roles,
 		Email:       identity.Email,
 		DisplayName: defaultStr(identity.DisplayName, identity.ProviderName),
 		AvatarURL:   identity.AvatarURL,
-		IsGuest:     identity.AccountType == "guest",
+		IsGuest:     identity.IsGuest,
 		IsAdmin:     identity.IsAdmin,
 		IsModerator: identity.IsModerator,
 	}

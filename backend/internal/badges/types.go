@@ -21,22 +21,7 @@ const (
 	badgeCodeEventWinner2026     = int16(12)
 )
 
-type AdminBadgeDefinition struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	ImageURL    string `json:"imageUrl"`
-	Rarity      string `json:"rarity,omitempty"`
-	MaxLevel    int    `json:"maxLevel"`
-}
-
-type DiscordSyncOutboxItem struct {
-	ID            int64
-	Action        string
-	DiscordUserID string
-	Attempts      int
-}
+type AdminBadgeDefinition = contracts.AdminBadgeDefinition
 
 type DiscordLinkedUser struct {
 	UserID             string

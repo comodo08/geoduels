@@ -41,6 +41,7 @@ type badgeDefinition struct {
 }
 
 var badgeDefinitions = []badgeDefinition{
+	{ID: "map-of-the-week", Code: 13, Kind: "achievement", Label: "Map of the Week", Description: "Created a map selected as GeoDuels Map of the Week.", ImageURL: "/badges/map-winner-badge.v1.webp", Rarity: "epic", MaxLevel: 1},
 	{
 		ID: "discord-member", Code: badgeCodeDiscordMember, Kind: "community",
 		Label: "Discord Member", Description: "Retired badge previously awarded for linking Discord to your GeoDuels account.",
@@ -274,6 +275,23 @@ func AwardBadgeTx(ctx context.Context, tx pgx.Tx, userID, badgeID string) (bool,
 }
 
 func (s *PGStore) GrantBadgeToUser(nickname, badgeID, actorUserID string) (contracts.PlayerBadge, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	var badge contracts.PlayerBadge
+	var changed bool
+	err := storekit.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		badge, changed, err = GrantBadgeToUserTx(ctx, tx, nickname, badgeID, actorUserID)
+		return err
+	})
+	if err != nil {
+		return contracts.PlayerBadge{}, false, err
+	}
+	return badge, changed, nil
+}
+
+// GrantBadgeToUserTx writes the badge, notification and audit in the caller's transaction.
+func GrantBadgeToUserTx(ctx context.Context, tx pgx.Tx, nickname, badgeID, actorUserID string) (contracts.PlayerBadge, bool, error) {
 	nickname = strings.TrimSpace(nickname)
 	actorUserID = strings.TrimSpace(actorUserID)
 	def, ok := badgeDefinitionByID(badgeID)
@@ -283,13 +301,6 @@ func (s *PGStore) GrantBadgeToUser(nickname, badgeID, actorUserID string) (contr
 	if !ok || !def.AdminGrantable {
 		return contracts.PlayerBadge{}, false, ErrBadgeUnavailable
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return contracts.PlayerBadge{}, false, err
-	}
-	defer tx.Rollback(ctx)
 	userUUID, err := db.New(tx).FindClaimedUser(ctx, nickname)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return contracts.PlayerBadge{}, false, err
@@ -309,9 +320,6 @@ func (s *PGStore) GrantBadgeToUser(nickname, badgeID, actorUserID string) (contr
 	}
 	level, extra = badge.Level, badge.Extra
 	if err := db.New(tx).InsertBadgeGrantLog(ctx, db.InsertBadgeGrantLogParams{SubjectUserID: chatUUID(userID), ActorUserID: actorUserID, BadgeID: def.ID}); err != nil {
-		return contracts.PlayerBadge{}, false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return contracts.PlayerBadge{}, false, err
 	}
 	return FromParts(def.Code, level, extra, true), changed, nil
@@ -373,10 +381,10 @@ func (s *PGStore) SyncLoginBadges(userID string) error {
 		}
 		return err
 	}
-	if v, ok := info.IsGuest.(bool); ok {
-		isGuest = v
+	if info.IsGuest {
+		isGuest = true
 	}
-	hasTeamRole = info.IsStaff.Bool
+	hasTeamRole = info.IsStaff
 	mmr = int(info.Mmr)
 	if hasTeamRole {
 		if _, err := AwardBadgeTx(ctx, tx, userID, "geoduels-team"); err != nil {
@@ -388,8 +396,10 @@ func (s *PGStore) SyncLoginBadges(userID string) error {
 			return err
 		}
 	}
-	if err := accounts.EnqueueDiscordSyncForUserTx(ctx, tx, userID); err != nil {
-		return err
+	if s.jobs != nil {
+		if err := s.jobs.EnqueueDiscordSyncForUser(ctx, tx, userID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }
@@ -403,19 +413,11 @@ func AwardEloBadgesTx(ctx context.Context, tx pgx.Tx, userID string, mmr int) er
 		{1500, "elo-1500"},
 		{2000, "elo-2000"},
 	}
-	awardedAny := false
 	for _, threshold := range thresholds {
 		if mmr >= threshold.mmr {
-			awarded, err := AwardBadgeTx(ctx, tx, userID, threshold.badgeID)
-			if err != nil {
+			if _, err := AwardBadgeTx(ctx, tx, userID, threshold.badgeID); err != nil {
 				return err
 			}
-			awardedAny = awardedAny || awarded
-		}
-	}
-	if awardedAny {
-		if err := accounts.EnqueueDiscordSyncForUserTx(ctx, tx, userID); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -445,57 +447,6 @@ func (s *PGStore) AwardDiscordServerMemberByDiscordID(discordUserID string) (boo
 		return false, err
 	}
 	return awarded, tx.Commit(ctx)
-}
-
-func (s *PGStore) ClaimPendingDiscordSync(now time.Time) (DiscordSyncOutboxItem, bool, error) {
-	if now.IsZero() {
-		now = time.Now()
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return DiscordSyncOutboxItem{}, false, err
-	}
-	defer tx.Rollback(ctx)
-	row, err := db.New(tx).ClaimDiscordSync(ctx, db.ClaimDiscordSyncParams{NextAttemptAt: timestamptz(now), NewNextAttemptAt: timestamptz(now.Add(5 * time.Minute))})
-	var item DiscordSyncOutboxItem
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return DiscordSyncOutboxItem{}, false, nil
-		}
-		return DiscordSyncOutboxItem{}, false, err
-	}
-	item = DiscordSyncOutboxItem{ID: row.ID, Action: string(row.Action), DiscordUserID: row.DiscordUserID, Attempts: int(row.Attempts)}
-	if err := tx.Commit(ctx); err != nil {
-		return DiscordSyncOutboxItem{}, false, err
-	}
-	return item, true, nil
-}
-
-func (s *PGStore) MarkDiscordSyncProcessed(id int64) error {
-	if id <= 0 {
-		return errors.New("discord sync id required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	return s.db.MarkDiscordSyncProcessed(ctx, id)
-}
-
-func (s *PGStore) MarkDiscordSyncFailed(id int64, nextAttemptAt time.Time, lastError string) error {
-	if id <= 0 {
-		return errors.New("discord sync id required")
-	}
-	lastError = strings.TrimSpace(lastError)
-	if len(lastError) > 1000 {
-		lastError = lastError[:1000]
-	}
-	if nextAttemptAt.IsZero() {
-		nextAttemptAt = time.Now().Add(time.Minute)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	return s.db.MarkDiscordSyncFailed(ctx, db.MarkDiscordSyncFailedParams{OutboxID: id, NextAttemptAt: timestamptz(nextAttemptAt), LastError: lastError})
 }
 
 func (s *PGStore) GetDiscordLinkedUser(discordUserID string) (DiscordLinkedUser, bool, error) {

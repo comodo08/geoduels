@@ -59,15 +59,24 @@ func (s *PGStore) RecordChatMessage(cid, scope, scopeID string, m ChatMessage) e
 		}
 		team = db.NullGdTeamID{GdTeamID: db.GdTeamID(m.TeamID), Valid: m.TeamID != ""}
 	}
-	return s.db.InsertMessage(ctx, db.InsertMessageParams{MessageID: chatUUID(m.ID), ConversationID: chatUUID(sid), TeamMatchID: match, SenderUserID: chatUUID(m.SenderUserID), SenderDisplayName: m.SenderDisplayName, Kind: db.GdChatKind(m.Kind), Body: chatText(m.Body), Emote: chatText(string(m.Emote)), Audience: db.GdChatAudience(m.Audience), TeamID: team, CreatedAt: pgtype.Timestamptz{Time: t, Valid: true}})
+	return s.db.InsertMessage(ctx, db.InsertMessageParams{MessageID: chatUUID(m.ID), ConversationID: chatUUID(sid), TeamMatchID: match, SenderUserID: chatUUID(m.SenderUserID), SenderDisplayName: m.SenderDisplayName, Kind: db.GdChatKind(m.Kind), Body: chatText(m.Body), Emote: chatText(string(m.Emote)), Audience: db.GdChatAudience(m.Audience), TeamID: team, SenderTeamID: db.NullGdTeamID{GdTeamID: db.GdTeamID(m.SenderTeamID), Valid: m.SenderTeamID != ""}, CreatedAt: pgtype.Timestamptz{Time: t, Valid: true}})
 }
 func (s *PGStore) ListChatMessages(id string, n int) ([]ChatMessage, error) {
-	return s.listChatMessages(id, "", n)
+	return s.listChatMessages(id, "", n, false)
 }
-func (s *PGStore) ListChatMessagesForUser(id, u string, n int) ([]ChatMessage, error) {
-	return s.listChatMessages(id, strings.TrimSpace(u), n)
+func (s *PGStore) ListChatMessagesForUser(id, u string, n int, revealTeam bool) ([]ChatMessage, error) {
+	return s.listChatMessages(id, strings.TrimSpace(u), n, revealTeam)
 }
-func (s *PGStore) listChatMessages(id, u string, n int) ([]ChatMessage, error) {
+func (s *PGStore) MatchEnded(ctx context.Context, matchID string) (bool, error) {
+	matchID = strings.TrimSpace(matchID)
+	if matchID == "" {
+		return false, nil
+	}
+	ctx, c := context.WithTimeout(ctx, 3*time.Second)
+	defer c()
+	return s.db.MatchEnded(ctx, chatUUID(matchID))
+}
+func (s *PGStore) listChatMessages(id, u string, n int, revealTeam bool) ([]ChatMessage, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, nil
@@ -77,7 +86,7 @@ func (s *PGStore) listChatMessages(id, u string, n int) ([]ChatMessage, error) {
 	}
 	ctx, c := context.WithTimeout(context.Background(), 4*time.Second)
 	defer c()
-	rs, e := s.db.ListMessages(ctx, db.ListMessagesParams{ConversationID: chatUUID(entityid.Derive("conversation", id)), ViewerUserID: u, RowLimit: int32(n)})
+	rs, e := s.db.ListMessages(ctx, db.ListMessagesParams{ConversationID: chatUUID(entityid.Derive("conversation", id)), ViewerUserID: u, RevealTeam: revealTeam, RowLimit: int32(n)})
 	if e != nil {
 		return nil, e
 	}
@@ -87,7 +96,7 @@ func (s *PGStore) listChatMessages(id, u string, n int) ([]ChatMessage, error) {
 		if r.TeamID.Valid {
 			teamID = string(r.TeamID.GdTeamID)
 		}
-		out = append(out, ChatMessage{ID: r.ID.String(), ConversationID: chatStr(r.ConversationID), MatchID: storekit.UUIDVal(r.MatchID), SenderUserID: r.SenderUserID.String(), SenderDisplayName: r.SenderDisplayName, Kind: contracts.ChatMessageKind(r.Kind), Body: r.Body, Emote: contracts.ChatEmote(r.Emote), Audience: contracts.ChatAudience(r.Audience), TeamID: teamID, CreatedAt: r.CreatedAt.Time})
+		out = append(out, ChatMessage{SenderTeamID: string(r.SenderTeamID.GdTeamID), ID: r.ID.String(), ConversationID: chatStr(r.ConversationID), MatchID: storekit.UUIDVal(r.MatchID), SenderUserID: r.SenderUserID.String(), SenderDisplayName: r.SenderDisplayName, Kind: contracts.ChatMessageKind(r.Kind), Body: r.Body, Emote: contracts.ChatEmote(r.Emote), Audience: contracts.ChatAudience(r.Audience), TeamID: teamID, CreatedAt: r.CreatedAt.Time})
 	}
 	return out, nil
 }

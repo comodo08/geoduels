@@ -120,7 +120,7 @@ ORDER BY ub.user_id ASC, ub.awarded_at DESC, ub.badge_code ASC;
 
 -- name: ListPartyMembers :many
 SELECT m.user_id, u.display_name, COALESCE(u.avatar_url, '') AS avatar_url,
-       u.account_type = 'guest' AS is_guest, COALESCE(u.is_admin, false) AS is_admin,
+       gd_is_guest(u.id) AS is_guest, gd_is_admin(u.id) AS is_admin,
        COALESCE(u.selected_badge_code, 0) AS selected_badge_code, m.team_id AS team_id,
        m.role, m.ready, m.joined_at
 FROM party_members m JOIN users u ON u.id = m.user_id

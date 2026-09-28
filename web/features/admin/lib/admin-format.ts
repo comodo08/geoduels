@@ -44,3 +44,17 @@ export function formatAdminDate(value?: string) {
     timeZoneName: "short",
   }).format(date);
 }
+
+export function formatDate(value?: string) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
+}
+
+export function formatUTCDate(value?: string) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString(undefined, { timeZone: "UTC", timeZoneName: "short" });
+}

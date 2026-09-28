@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"geoduels/internal/accounts"
 	"strings"
 	"time"
 
@@ -175,7 +174,10 @@ func (s *PGStore) SetDiscordIntegrationSettings(settings DiscordIntegrationSetti
 		if err := q.SetSetting(ctx, db.SetSettingParams{SettingKey: "discord_integration", ValueJson: payload}); err != nil {
 			return err
 		}
-		return q.EnqueueDiscordSyncAll(ctx, db.EnqueueDiscordSyncAllParams{Action: accounts.DiscordSyncActionSync, Provider: accounts.IdentityProviderDiscord})
+		if s.jobs == nil {
+			return nil
+		}
+		return s.jobs.EnqueueDiscordSyncAll(ctx, tx)
 	})
 }
 
