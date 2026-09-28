@@ -76,7 +76,7 @@ export function connectUserLive(
 
   const open = () => {
     if (closed || typeof WebSocket === "undefined") return;
-    const url = `${apiWSBase(config)}/v1/me/live?accessToken=${encodeURIComponent(accessToken)}`;
+    const url = `${apiWSBase(config)}/api/me/live?accessToken=${encodeURIComponent(accessToken)}`;
     const next = new WebSocket(url);
     socket = next;
     next.onmessage = (message) => {

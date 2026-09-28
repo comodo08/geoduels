@@ -292,7 +292,7 @@ export async function resolveMatchRoute(
   signal: AbortSignal,
   accessToken?: string
 ): Promise<MatchSessionResponse> {
-  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/route`, {
+  const resp = await apiFetch(config, `/api/matches/${encodeURIComponent(matchId)}/route`, {
     headers: authHeaders(accessToken),
     signal
   });
@@ -308,7 +308,7 @@ export async function fetchMatchSession(
   matchId: string,
   signal: AbortSignal
 ): Promise<MatchSessionResponse> {
-  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/session`, {
+  const resp = await apiFetch(config, `/api/matches/${encodeURIComponent(matchId)}/session`, {
     headers: authHeaders(accessToken),
     signal
   });
@@ -326,7 +326,7 @@ export async function bootstrapMatchSession(
   matchId: string,
   signal: AbortSignal
 ): Promise<MatchBootstrapResponse | null> {
-  const resp = await apiFetch(config, `/v1/matches/${encodeURIComponent(matchId)}/bootstrap`, {
+  const resp = await apiFetch(config, `/api/matches/${encodeURIComponent(matchId)}/bootstrap`, {
     credentials: 'include',
     signal
   });
@@ -359,7 +359,7 @@ export async function startSingleplayerSession(
   returnTarget?: MatchReturnTarget,
 ): Promise<{ matchId: string; mode?: string; ticket: string; node: string; wsPath: string; returnTarget?: MatchReturnTarget }> {
   const body = returnTarget ? JSON.stringify({ config: matchConfig || {}, returnTarget }) : matchConfig ? JSON.stringify(matchConfig) : undefined;
-  const resp = await apiFetch(config, '/v1/singleplayer/session', {
+  const resp = await apiFetch(config, '/api/singleplayer/session', {
     method: 'POST',
     headers: mergeHeaders(authHeaders(accessToken), body ? { 'Content-Type': 'application/json' } : undefined),
     body,

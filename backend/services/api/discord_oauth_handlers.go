@@ -185,7 +185,7 @@ func (a *api) discordRedirectURI(r *http.Request) string {
 	if host == "" {
 		host = r.Host
 	}
-	return fmt.Sprintf("%s://%s/v1/auth/discord/callback", scheme, host)
+	return fmt.Sprintf("%s://%s/api/auth/discord/callback", scheme, host)
 }
 
 func (a *api) fetchDiscordProfile(ctx context.Context, code, redirectURI string) (discordUser, error) {

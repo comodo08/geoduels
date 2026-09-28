@@ -76,7 +76,7 @@ export class AuthSessionError extends Error {
 
 export async function requestBootstrap(config: RuntimeConfig): Promise<AppBootstrapPayload> {
   // Older API deployments ignore the version parameter and return compatible v1 data.
-  const resp = await apiFetch(config, "/v1/bootstrap?version=2", { credentials: "include" });
+  const resp = await apiFetch(config, "/api/bootstrap?version=2", { credentials: "include" });
   if (!resp.ok) {
     throw new AuthSessionError(resp.status, await readError(resp, "Application bootstrap failed"));
   }
@@ -87,7 +87,7 @@ export async function requestGuestSession(
   config: RuntimeConfig,
   turnstileToken?: string,
 ): Promise<AuthSessionPayload> {
-  const resp = await apiFetch(config, "/v1/auth/guest", {
+  const resp = await apiFetch(config, "/api/auth/guest", {
     method: "POST",
     credentials: "include",
     headers: turnstileToken
@@ -104,7 +104,7 @@ export async function requestGuestSession(
 }
 
 export async function requestRefreshSession(config: RuntimeConfig): Promise<AuthSessionPayload | null> {
-  const resp = await apiFetch(config, "/v1/auth/refresh", {
+  const resp = await apiFetch(config, "/api/auth/refresh", {
     method: "POST",
     credentials: "include",
   });
@@ -158,7 +158,7 @@ export async function requestUserNotifications(
   if (options?.limit) query.set("limit", String(options.limit));
   if (options?.beforeId) query.set("beforeId", String(options.beforeId));
   const suffix = query.size ? `?${query.toString()}` : "";
-  const resp = await apiFetch(config, `/v1/me/notifications${suffix}`, {
+  const resp = await apiFetch(config, `/api/me/notifications${suffix}`, {
     headers: authHeaders(accessToken),
   });
   if (!resp.ok) {
@@ -171,7 +171,7 @@ export async function markAllUserNotificationsRead(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  await apiFetch(config, "/v1/me/notifications/read-all", {
+  await apiFetch(config, "/api/me/notifications/read-all", {
     method: "POST",
     headers: authHeaders(accessToken),
   });
@@ -184,7 +184,7 @@ export async function markUserNotificationRead(
 ) {
   await apiFetch(
     config,
-    `/v1/me/notifications/${encodeURIComponent(notificationId)}/read`,
+    `/api/me/notifications/${encodeURIComponent(notificationId)}/read`,
     {
       method: "POST",
       headers: authHeaders(accessToken),
@@ -196,7 +196,7 @@ export async function requestSupportDonation(
   config: RuntimeConfig,
   accessToken: string,
 ): Promise<{ donationUrl: string }> {
-  const resp = await apiFetch(config, "/v1/support/donate", {
+  const resp = await apiFetch(config, "/api/support/donate", {
     method: "POST",
     headers: authHeaders(accessToken),
   });
@@ -210,7 +210,7 @@ export async function requestLeaderboard(
   config: RuntimeConfig,
   accessToken?: string,
 ): Promise<LeaderboardSummary | null> {
-  const resp = await apiFetch(config, "/v1/leaderboard", {
+  const resp = await apiFetch(config, "/api/leaderboard", {
     headers: authHeaders(accessToken),
   });
   if (!resp.ok) {
@@ -220,7 +220,7 @@ export async function requestLeaderboard(
 }
 
 export async function requestLogout(config: RuntimeConfig) {
-  await apiFetch(config, "/v1/auth/logout", {
+  await apiFetch(config, "/api/auth/logout", {
     method: "POST",
     credentials: "include",
   });
@@ -231,7 +231,7 @@ export async function requestUpdateNickname(
   accessToken: string,
   nickname: string,
 ) {
-  const resp = await apiFetch(config, "/v1/me/nickname", {
+  const resp = await apiFetch(config, "/api/me/nickname", {
     method: "PUT",
     credentials: "include",
     headers: mergeHeaders({
@@ -250,7 +250,7 @@ export async function requestUpdateSelectedBadge(
   accessToken: string,
   badgeId: string,
 ) {
-  const resp = await apiFetch(config, "/v1/me/badge", {
+  const resp = await apiFetch(config, "/api/me/badge", {
     method: "PATCH",
     credentials: "include",
     headers: mergeHeaders({
@@ -272,7 +272,7 @@ export async function requestGoogleStart(
     returnTo?: string;
   } = {},
 ) {
-  const resp = await apiFetch(config, "/v1/auth/google/start", {
+  const resp = await apiFetch(config, "/api/auth/google/start", {
     method: "POST",
     credentials: "include",
     headers: mergeHeaders({
@@ -297,7 +297,7 @@ export async function requestDiscordStart(
     returnTo?: string;
   } = {},
 ) {
-  const resp = await apiFetch(config, "/v1/auth/discord/start", {
+  const resp = await apiFetch(config, "/api/auth/discord/start", {
     method: "POST",
     credentials: "include",
     headers: mergeHeaders({
@@ -321,7 +321,7 @@ export async function requestUnlinkAuthProvider(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/me/auth-providers/${encodeURIComponent(provider)}`,
+    `/api/me/auth-providers/${encodeURIComponent(provider)}`,
     {
       method: "DELETE",
       credentials: "include",
@@ -338,7 +338,7 @@ export async function requestDeleteAccount(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, "/v1/me", {
+  const resp = await apiFetch(config, "/api/me", {
     method: "DELETE",
     credentials: "include",
     headers: mergeHeaders({
@@ -352,7 +352,7 @@ export async function requestDeleteAccount(
 }
 
 export async function requestLobbyChangelog(config: RuntimeConfig) {
-  const resp = await apiFetch(config, "/v1/content/lobby-changelog");
+  const resp = await apiFetch(config, "/api/content/lobby-changelog");
   if (!resp.ok) {
     return null;
   }
@@ -375,7 +375,7 @@ export async function requestMatchReport(
 ) {
   const resp = await apiFetch(
     config,
-    `/v1/matches/${encodeURIComponent(matchId)}/reports`,
+    `/api/matches/${encodeURIComponent(matchId)}/reports`,
     {
       method: "POST",
       headers: mergeHeaders({

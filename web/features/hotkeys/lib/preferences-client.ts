@@ -8,7 +8,7 @@ export async function patchPreferences(
   preferences: HotkeyPreferences,
   revision: number,
 ) {
-  const response = await apiFetch(config, "/v1/me/preferences", {
+  const response = await apiFetch(config, "/api/me/preferences", {
     method: "PATCH",
     headers: mergeHeaders({ "content-type": "application/json" }, authHeaders(accessToken)),
     body: JSON.stringify({ preferences, revision }),

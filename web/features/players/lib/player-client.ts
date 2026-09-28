@@ -6,7 +6,7 @@ export async function requestPlayerProfile(
   config: RuntimeConfig,
   nickname: string,
 ): Promise<PublicPlayerProfile> {
-  const resp = await apiFetch(config, `/v1/players/${encodeURIComponent(nickname)}`);
+  const resp = await apiFetch(config, `/api/players/${encodeURIComponent(nickname)}`);
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load player profile"));
   }
@@ -25,7 +25,7 @@ export async function requestPlayerMatches(
   if (filter === "ranked") query.set("filter", "ranked");
   const resp = await apiFetch(
     config,
-    `/v1/players/${encodeURIComponent(nickname)}/matches?${query.toString()}`,
+    `/api/players/${encodeURIComponent(nickname)}/matches?${query.toString()}`,
   );
   if (!resp.ok) {
     throw new Error(await readError(resp, "Failed to load match history"));

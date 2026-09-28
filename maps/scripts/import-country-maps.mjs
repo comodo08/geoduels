@@ -30,7 +30,7 @@ Options:
 
 The script validates every file locally before import, resolves thumbnail keys
 from the generated thumbnail catalog by ISO country code, and posts each map as
-multipart/form-data to /v1/admin/maps/official/import.
+multipart/form-data to /api/staff/maps/official/import.
 `;
 }
 
@@ -192,7 +192,7 @@ async function importEntry(entry, options) {
   body.set("officialRegionType", entry.officialRegionType || "country");
   body.set("officialRegionCode", entry.officialRegionCode || entry.countryCode || "");
 
-  const response = await fetch(new URL("/v1/admin/maps/official/import", options.apiBase), {
+  const response = await fetch(new URL("/api/staff/maps/official/import", options.apiBase), {
     method: "POST",
     headers: { Authorization: `Bearer ${options.accessToken}` },
     body,

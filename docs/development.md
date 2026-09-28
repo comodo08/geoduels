@@ -15,32 +15,6 @@ go test ./...
 go vet ./...
 ```
 
-### Service and store boundaries
-
-Handlers decode requests and format responses. Services apply policies and
-coordinate operations; stores load facts and persist changes. Pure policies
-accept ordinary values. Simple service methods may delegate directly to a store.
-
-Accounts, parties, social, and staff services receive their `Store` interface
-through `NewService(store)`. Staff also receives its external risk detector.
-Production supplies `PGStore`; tests supply an in-memory store. Dependencies are
-fields on the service, without separate dependency or port bundles.
-
-For related writes, use `store.WithinTx(ctx, func(tx Store) error { ... })`.
-Use the supplied `tx` for every operation that belongs to that transaction.
-The PostgreSQL store makes a transaction-bound copy; it never changes the shared
-store's transaction field. Returning an error rolls back the database writes;
-commit errors must propagate to the caller. Do not start a separate transaction
-inside the callback. External HTTP calls happen outside database transactions;
-notification jobs are inserted in the same transaction as their source changes.
-
-Store methods may group related SQL operations, such as accepting a friend
-request and inserting the friendship. Database constraints and locking remain
-responsible for concurrent-write safety. Fake-based tests exercise the real
-service and policies, but do not validate SQL or PostgreSQL isolation behavior.
-Tests involving atomic operations use a fake that stages changes until success
-and discards them on failure.
-
 ## Frontend
 
 ```sh
@@ -51,17 +25,6 @@ npm --prefix web run build
 ```
 
 ## Local infrastructure
-
-Gameplay nodes begin draining new match admission within one registration interval
-(normally three seconds) when maintenance is Active or Pause play is enabled.
-Existing matches can finish, and the drain timeout starts when each node observes
-maintenance. A later SIGTERM uses the remaining timeout instead of starting a new
-one. Clearing maintenance restores admission and resets the timer unless shutdown
-has already begun. Warning announcements and Pause queue alone do not drain nodes.
-
-Maintenance does not stop the process or fail Kubernetes readiness, so ordered
-StatefulSet updates can proceed while maintenance remains enabled. SIGTERM still
-fails readiness and starts a normal drain when maintenance has not already done so.
 
 Apply database migrations with `./backend/scripts/migrate.sh up`.
 After changing Compose environment variables, recreate containers:

@@ -38,24 +38,24 @@ export const socialClient = {
       config,
       token,
       partyId
-        ? `/v1/me/friends-page?partyId=${encodeURIComponent(partyId)}`
-        : "/v1/me/friends-page",
+        ? `/api/me/friends-page?partyId=${encodeURIComponent(partyId)}`
+        : "/api/me/friends-page",
     ),
   search: (config: RuntimeConfig, token: string, query: string) =>
     socialFetch<{ players: CompactPlayer[] }>(
       config,
       token,
-      `/v1/player-search?q=${encodeURIComponent(query)}`,
+      `/api/player-search?q=${encodeURIComponent(query)}`,
     ),
   settings: (config: RuntimeConfig, token: string) =>
-    socialFetch<SocialSettings>(config, token, "/v1/me/social-settings"),
+    socialFetch<SocialSettings>(config, token, "/api/me/social-settings"),
   updateSettings: (config: RuntimeConfig, token: string, settings: SocialSettings) =>
-    socialFetch<SocialSettings>(config, token, "/v1/me/social-settings", {
+    socialFetch<SocialSettings>(config, token, "/api/me/social-settings", {
       method: "PATCH",
       body: JSON.stringify(settings),
     }),
   sendRequest: (config: RuntimeConfig, token: string, userId: string) =>
-    socialFetch(config, token, "/v1/friend-requests", {
+    socialFetch(config, token, "/api/friend-requests", {
       method: "POST",
       body: JSON.stringify({ userId }),
     }),
@@ -64,23 +64,23 @@ export const socialClient = {
     token: string,
     requestId: string,
     action: "accept" | "decline" | "cancel",
-  ) => socialFetch(config, token, `/v1/friend-requests/${requestId}/${action}`, { method: "POST" }),
+  ) => socialFetch(config, token, `/api/friend-requests/${requestId}/${action}`, { method: "POST" }),
   removeFriend: (config: RuntimeConfig, token: string, userId: string) =>
-    socialFetch(config, token, `/v1/friends/${userId}`, { method: "DELETE" }),
+    socialFetch(config, token, `/api/friends/${userId}`, { method: "DELETE" }),
   block: (config: RuntimeConfig, token: string, userId: string) =>
-    socialFetch(config, token, `/v1/blocks/${userId}`, { method: "POST" }),
+    socialFetch(config, token, `/api/blocks/${userId}`, { method: "POST" }),
   createCode: (config: RuntimeConfig, token: string) =>
-    socialFetch<{ code: string; expiresAt: string }>(config, token, "/v1/me/friend-code", {
+    socialFetch<{ code: string; expiresAt: string }>(config, token, "/api/me/friend-code", {
       method: "POST",
     }),
   resolveCode: (config: RuntimeConfig, token: string, code: string) =>
-    socialFetch<CompactPlayer>(config, token, `/v1/friend-codes/${encodeURIComponent(code)}`),
+    socialFetch<CompactPlayer>(config, token, `/api/friend-codes/${encodeURIComponent(code)}`),
   requestByCode: (config: RuntimeConfig, token: string, code: string) =>
-    socialFetch(config, token, `/v1/friend-codes/${encodeURIComponent(code)}/request`, {
+    socialFetch(config, token, `/api/friend-codes/${encodeURIComponent(code)}/request`, {
       method: "POST",
     }),
   inviteToParty: (config: RuntimeConfig, token: string, partyId: string, userId: string) =>
-    socialFetch<PartyInvitation>(config, token, `/v1/parties/${partyId}/invitations`, {
+    socialFetch<PartyInvitation>(config, token, `/api/parties/${partyId}/invitations`, {
       method: "POST",
       body: JSON.stringify({ userId }),
     }),
@@ -88,7 +88,7 @@ export const socialClient = {
     socialFetch<{ invitation: PartyInvitation; party: { inviteCode: string } }>(
       config,
       token,
-      "/v1/party-invitations",
+      "/api/party-invitations",
       { method: "POST", body: JSON.stringify({ userId }) },
     ),
   respondPartyInvite: (
@@ -99,13 +99,13 @@ export const socialClient = {
   ) => socialFetch<PartyInvitation>(
     config,
     token,
-    `/v1/party-invitations/${invitationId}/${action}`,
+    `/api/party-invitations/${invitationId}/${action}`,
     { method: "POST" },
   ),
   relationship: (config: RuntimeConfig, token: string, nickname: string) =>
     socialFetch<{ state: CompactPlayer["relationship"]; requestId?: string }>(
       config,
       token,
-      `/v1/players/${encodeURIComponent(nickname)}/relationship`,
+      `/api/players/${encodeURIComponent(nickname)}/relationship`,
     ),
 };

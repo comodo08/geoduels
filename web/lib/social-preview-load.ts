@@ -15,7 +15,7 @@ export async function loadPublicMapPreview(
 ): Promise<MapDetails | null> {
   if (!mapId) return null;
   try {
-    const resp = await apiFetch(config, `/v1/maps/${encodeURIComponent(mapId)}`, {
+    const resp = await apiFetch(config, `/api/maps/${encodeURIComponent(mapId)}`, {
       signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS),
     });
     if (!resp.ok) return null;
@@ -33,7 +33,7 @@ export async function loadPublicProfilePreview(
   try {
     const resp = await apiFetch(
       config,
-      `/v1/players/${encodeURIComponent(nickname)}`,
+      `/api/players/${encodeURIComponent(nickname)}`,
       { signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS) },
     );
     if (resp.status === 404) return { profile: null, missing: true };

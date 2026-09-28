@@ -306,7 +306,7 @@ func (a *api) googleRedirectURI(r *http.Request) string {
 	if host == "" {
 		host = r.Host
 	}
-	return fmt.Sprintf("%s://%s/v1/auth/google/callback", scheme, host)
+	return fmt.Sprintf("%s://%s/api/auth/google/callback", scheme, host)
 }
 
 func renderOAuthPopup(c echo.Context, targetOrigin string, payload map[string]any) {

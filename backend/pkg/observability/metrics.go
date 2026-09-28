@@ -103,7 +103,7 @@ func Handler(reg *prometheus.Registry) http.Handler {
 }
 
 // EchoMiddleware records request metrics keyed by the Echo route template
-// (for example /v1/matches/:id) rather than the concrete request path.
+// (for example /api/matches/:id) rather than the concrete request path.
 // Register it after httpx.CORS, mirroring the previous cors(metrics(...)) ordering.
 func (m *APIMetrics) EchoMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
