@@ -2,13 +2,45 @@ package staff
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	pkgstaff "geoduels/pkg/staff"
 )
+
+var ErrInvalidCurationTime = errors.New("promotion time must be in the future")
+var ErrCurationScheduleChanged = errors.New("promotion schedule changed or is already due; refresh the schedule and try again")
 
 type CurationCycle struct{ StartsAt, ClosesAt time.Time }
 type CurationWinner struct {
 	MapID, Name, CreatorID string
 	Likes                  int
+}
+
+// RescheduleCuration preserves the cycle's nominations and current award. The
+// same row lock used by selection prevents races with the promotion worker.
+func (s *Service) RescheduleCuration(ctx context.Context, actor Actor, expectedClosesAt, closesAt time.Time) error {
+	if err := s.require(actor, pkgstaff.CapCurate); err != nil {
+		return err
+	}
+	if s.store == nil {
+		return ErrUnavailable
+	}
+	return s.store.WithinTx(ctx, func(store Store) error {
+		cycle, err := store.LockCurationCycle(ctx)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		if !closesAt.After(now) || !closesAt.After(cycle.StartsAt) {
+			return ErrInvalidCurationTime
+		}
+		if !cycle.ClosesAt.Equal(expectedClosesAt) || !cycle.ClosesAt.After(now) {
+			return ErrCurationScheduleChanged
+		}
+		cycle.ClosesAt = closesAt.UTC()
+		return store.AdvanceCurationCycle(ctx, cycle, time.Time{})
+	})
 }
 
 // NextCurationCycle advances past downtime without inventing awards for unplayed weeks.

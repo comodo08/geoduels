@@ -8,7 +8,7 @@ export async function requestModeratorSubject(
 ) {
   const resp = await apiFetch(
     config,
-    `/staff/players/${encodeURIComponent(userId)}/review`,
+    `/v1/staff/players/${encodeURIComponent(userId)}/review`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!resp.ok) {
@@ -25,7 +25,7 @@ export async function requestModeratorCheatingBan(
 ) {
   const resp = await apiFetch(
     config,
-    `/staff/players/${encodeURIComponent(userId)}/ban`,
+    `/v1/staff/players/${encodeURIComponent(userId)}/ban`,
     {
       method: "POST",
       headers: {
@@ -49,7 +49,7 @@ export async function requestModeratorSubjectUnban(
 ) {
   const resp = await apiFetch(
     config,
-    `/staff/players/${encodeURIComponent(userId)}/unban`,
+    `/v1/staff/players/${encodeURIComponent(userId)}/unban`,
     {
       method: "POST",
       headers: {
@@ -72,7 +72,7 @@ export async function requestModeratorSubjectMute(
   reason: string,
   muted: boolean,
 ) {
-  const resp = await apiFetch(config, `/staff/players/${encodeURIComponent(userId)}/mutes/${kind}`, {
+  const resp = await apiFetch(config, `/v1/staff/players/${encodeURIComponent(userId)}/mutes/${kind}`, {
     method: muted ? "POST" : "DELETE",
     headers: {
       "content-type": "application/json",
@@ -87,7 +87,7 @@ export async function requestModeratorSignals(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/staff/reports`, {
+  const resp = await apiFetch(config, `/v1/staff/reports`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {
@@ -100,7 +100,7 @@ export async function requestModeratorLog(
   config: RuntimeConfig,
   accessToken: string,
 ) {
-  const resp = await apiFetch(config, `/staff/audit`, {
+  const resp = await apiFetch(config, `/v1/staff/audit`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!resp.ok) {

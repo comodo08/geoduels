@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -78,7 +77,7 @@ type gameplayNode struct {
 
 	metrics *observability.RuntimeMetrics
 
-	draining atomic.Bool
+	drain    gameplayDrain
 	drainTTL time.Duration
 }
 
@@ -168,6 +167,7 @@ func main() {
 	defer g.redisCleanup()
 	defer g.coord.RemoveNode(context.Background(), g.nodeID)
 
+	g.refreshMaintenanceDrain()
 	go g.registerLoop()
 	go g.matchLeaseLoop()
 	go g.tick()
@@ -222,7 +222,7 @@ func (g *gameplayNode) createMatch(c echo.Context) error {
 	if subtleHeader(req.Header.Get("X-Coordinator-Secret")) != g.coordAuth {
 		return httpx.PlainTextError(c, http.StatusForbidden, "forbidden")
 	}
-	if g.draining.Load() {
+	if g.drain.isDraining() {
 		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	var found contracts.MatchFound
@@ -658,14 +658,17 @@ func (g *gameplayNode) registerLoop() {
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	for {
-		err := g.coord.RegisterNode(context.Background(), coordinator.NodeRecord{
+		g.refreshMaintenanceDrain()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := g.coord.RegisterNode(ctx, coordinator.NodeRecord{
 			NodeID:        g.nodeID,
 			OwnerEpoch:    g.nodeEpoch,
 			PublicRoute:   g.publicRoute,
 			InternalURL:   g.internalURL,
 			ActiveMatches: g.activeMatchCount(),
-			Draining:      g.draining.Load(),
+			Draining:      g.drain.isDraining(),
 		})
+		cancel()
 		if err != nil {
 			log.Printf("node registration failed: %v", err)
 		}
@@ -836,7 +839,9 @@ func (g *gameplayNode) healthLive(c echo.Context) error {
 }
 
 func (g *gameplayNode) healthReady(c echo.Context) error {
-	if g.draining.Load() {
+	// Maintenance drains match admission, not pod readiness: the ordered
+	// StatefulSet rollout must be able to replace nodes during maintenance.
+	if g.drain.isStopping() {
 		return httpx.PlainTextError(c, http.StatusServiceUnavailable, "draining")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -855,8 +860,9 @@ func (g *gameplayNode) handleShutdown(srv *http.Server) {
 	defer signal.Stop(sigCh)
 
 	<-sigCh
-	g.draining.Store(true)
-	if err := g.coord.RegisterNode(context.Background(), coordinator.NodeRecord{
+	deadline := g.drain.startShutdown(time.Now()).Add(g.drainTTL)
+	registerCtx, registerCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	if err := g.coord.RegisterNode(registerCtx, coordinator.NodeRecord{
 		NodeID:        g.nodeID,
 		OwnerEpoch:    g.nodeEpoch,
 		PublicRoute:   g.publicRoute,
@@ -866,8 +872,8 @@ func (g *gameplayNode) handleShutdown(srv *http.Server) {
 	}); err != nil {
 		log.Printf("node drain registration failed: %v", err)
 	}
+	registerCancel()
 
-	deadline := time.Now().Add(g.drainTTL)
 	for time.Now().Before(deadline) {
 		if g.activeMatchCount() == 0 {
 			break

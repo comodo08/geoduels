@@ -83,6 +83,10 @@ func staffError(c echo.Context, err error) error {
 		return plainTextError(c, http.StatusNotFound, "not found")
 	case errors.Is(err, staffctx.ErrUnavailable):
 		return plainTextError(c, http.StatusNotFound, err.Error())
+	case errors.Is(err, staffctx.ErrInvalidCurationTime):
+		return plainTextError(c, http.StatusBadRequest, err.Error())
+	case errors.Is(err, staffctx.ErrCurationScheduleChanged):
+		return plainTextError(c, http.StatusConflict, err.Error())
 	default:
 		return plainTextError(c, http.StatusInternalServerError, err.Error())
 	}
@@ -861,6 +865,24 @@ func readUploadedFile(file multipart.File, _ *multipart.FileHeader) ([]byte, err
 }
 
 // ---- Map of the Week ----
+
+func (a *api) rescheduleMOTW(c echo.Context) error {
+	actor, err := a.staffActor(c.Request())
+	if err != nil {
+		return staffError(c, err)
+	}
+	var input struct {
+		ExpectedClosesAt time.Time `json:"expectedClosesAt"`
+		ClosesAt         time.Time `json:"closesAt"`
+	}
+	if err := decodeJSONBody(c.Request(), &input); err != nil || input.ExpectedClosesAt.IsZero() || input.ClosesAt.IsZero() {
+		return plainTextError(c, http.StatusBadRequest, "expectedClosesAt and closesAt must be valid timestamps with a timezone")
+	}
+	if err := a.staff.RescheduleCuration(c.Request().Context(), actor, input.ExpectedClosesAt, input.ClosesAt); err != nil {
+		return staffError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
 
 func (a *api) motwNominations(c echo.Context) error {
 	actor, err := a.staffActor(c.Request())
